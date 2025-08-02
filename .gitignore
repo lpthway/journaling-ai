@@ -204,6 +204,7 @@ data/backups/
 *.bin
 *.safetensors
 models/
+!backend/app/models
 
 # API keys and secrets
 secrets/

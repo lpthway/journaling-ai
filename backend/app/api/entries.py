@@ -23,17 +23,17 @@ async def create_entry(entry: EntryCreate):
         # Create entry in database
         db_entry = await db_service.create_entry(entry, mood, sentiment_score)
         
-        # Add to vector database for semantic search
+        # Prepare metadata for vector database
         metadata = {
             'entry_id': db_entry.id,
-            'title': db_entry.title,
+            'title': db_entry.title or '',
             'entry_type': db_entry.entry_type.value,
-            'topic_id': db_entry.topic_id,
-            'mood': db_entry.mood.value if db_entry.mood else None,
-            'sentiment_score': db_entry.sentiment_score,
+            'topic_id': db_entry.topic_id or '',
+            'mood': db_entry.mood.value if db_entry.mood else 'neutral',
+            'sentiment_score': db_entry.sentiment_score or 0.0,
             'created_at': db_entry.created_at.isoformat(),
-            'tags': db_entry.tags,
-            'word_count': db_entry.word_count
+            'tags': db_entry.tags or [],  # This will be handled by vector service
+            'word_count': db_entry.word_count or 0
         }
         
         await vector_service.add_entry(db_entry.id, db_entry.content, metadata)
@@ -110,14 +110,14 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
         content_to_index = entry_update.content or existing_entry.content
         metadata = {
             'entry_id': updated_entry.id,
-            'title': updated_entry.title,
+            'title': updated_entry.title or '',
             'entry_type': updated_entry.entry_type.value,
-            'topic_id': updated_entry.topic_id,
-            'mood': updated_entry.mood.value if updated_entry.mood else None,
-            'sentiment_score': updated_entry.sentiment_score,
+            'topic_id': updated_entry.topic_id or '',
+            'mood': updated_entry.mood.value if updated_entry.mood else 'neutral',
+            'sentiment_score': updated_entry.sentiment_score or 0.0,
             'created_at': updated_entry.created_at.isoformat(),
-            'tags': updated_entry.tags,
-            'word_count': updated_entry.word_count
+            'tags': updated_entry.tags or [],
+            'word_count': updated_entry.word_count or 0
         }
         
         await vector_service.update_entry(updated_entry.id, content_to_index, metadata)

@@ -22,18 +22,41 @@ class VectorService:
             metadata={"hnsw:space": "cosine"}
         )
     
+    def _prepare_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare metadata for ChromaDB by converting unsupported types"""
+        clean_metadata = {}
+        
+        for key, value in metadata.items():
+            if value is None:
+                continue
+            elif isinstance(value, (str, int, float, bool)):
+                clean_metadata[key] = value
+            elif isinstance(value, list):
+                # Convert lists to comma-separated strings
+                if value:  # Only if list is not empty
+                    clean_metadata[key] = ','.join(str(item) for item in value)
+                # Skip empty lists
+            else:
+                # Convert other types to string
+                clean_metadata[key] = str(value)
+        
+        return clean_metadata
+    
     async def add_entry(self, entry_id: str, content: str, metadata: Dict[str, Any]):
         """Add an entry to the vector database"""
         try:
             # Generate embedding
             embedding = self.embedding_model.encode(content).tolist()
             
+            # Prepare metadata for ChromaDB
+            clean_metadata = self._prepare_metadata(metadata)
+            
             # Add to collection
             self.collection.add(
                 ids=[entry_id],
                 embeddings=[embedding],
                 documents=[content],
-                metadatas=[metadata]
+                metadatas=[clean_metadata]
             )
             logger.info(f"Added entry {entry_id} to vector database")
         except Exception as e:
@@ -45,11 +68,14 @@ class VectorService:
         try:
             embedding = self.embedding_model.encode(content).tolist()
             
+            # Prepare metadata for ChromaDB
+            clean_metadata = self._prepare_metadata(metadata)
+            
             self.collection.update(
                 ids=[entry_id],
                 embeddings=[embedding],
                 documents=[content],
-                metadatas=[metadata]
+                metadatas=[clean_metadata]
             )
             logger.info(f"Updated entry {entry_id} in vector database")
         except Exception as e:
@@ -71,18 +97,29 @@ class VectorService:
         try:
             query_embedding = self.embedding_model.encode(query).tolist()
             
+            # Prepare filters for ChromaDB
+            where_clause = None
+            if filters:
+                where_clause = self._prepare_metadata(filters)
+            
             results = self.collection.query(
                 query_embeddings=[query_embedding],
                 n_results=limit,
-                where=filters
+                where=where_clause
             )
             
             search_results = []
             for i in range(len(results['ids'][0])):
+                metadata = results['metadatas'][0][i].copy()
+                
+                # Convert comma-separated strings back to lists for tags
+                if 'tags' in metadata and metadata['tags']:
+                    metadata['tags'] = metadata['tags'].split(',')
+                
                 search_results.append({
                     'id': results['ids'][0][i],
                     'content': results['documents'][0][i],
-                    'metadata': results['metadatas'][0][i],
+                    'metadata': metadata,
                     'distance': results['distances'][0][i]
                 })
             
@@ -98,10 +135,16 @@ class VectorService:
             entries = []
             
             for i in range(len(results['ids'])):
+                metadata = results['metadatas'][i].copy()
+                
+                # Convert comma-separated strings back to lists for tags
+                if 'tags' in metadata and metadata['tags']:
+                    metadata['tags'] = metadata['tags'].split(',')
+                
                 entries.append({
                     'id': results['ids'][i],
                     'content': results['documents'][i],
-                    'metadata': results['metadatas'][i]
+                    'metadata': metadata
                 })
             
             return entries

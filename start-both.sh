@@ -1,73 +1,56 @@
 #!/bin/bash
 
-# Function to cleanup background processes
 cleanup() {
     echo ""
     echo "🛑 Shutting down services..."
     pkill -f "python run.py" 2>/dev/null || true
     pkill -f "react-scripts start" 2>/dev/null || true
-    echo "✅ Cleanup completed"
+    echo "✅ Services stopped"
     exit 0
 }
 
-# Set up signal trap
 trap cleanup SIGINT SIGTERM
 
-echo "🌟 Starting Journaling Assistant - Full Stack"
-echo "=============================================="
+echo "🌟 Starting Journaling Assistant"
+echo "================================"
 
 # Check prerequisites
 if [ ! -d "backend/venv" ]; then
-    echo "❌ Backend virtual environment not found"
-    echo "Please run './start.sh' first to set up the environment"
+    echo "❌ Backend environment not set up"
     exit 1
 fi
 
 if [ ! -d "frontend/node_modules" ]; then
-    echo "❌ Frontend dependencies not found"
-    echo "Please run './start.sh' first to set up the environment"
+    echo "❌ Frontend dependencies not installed"
     exit 1
 fi
 
-# Start backend with proper environment activation
+# Start backend
 echo "🚀 Starting backend..."
 cd backend
 source venv/bin/activate
 
-# Verify activation worked
 if [ -z "$VIRTUAL_ENV" ]; then
-    echo "❌ Failed to activate virtual environment"
+    echo "❌ Virtual environment activation failed"
     exit 1
 fi
 
-echo "✅ Virtual environment activated: $VIRTUAL_ENV"
-
-# Check if uvicorn is available
-if ! python -c "import uvicorn" 2>/dev/null; then
-    echo "⚠️  Installing missing dependencies..."
-    pip install -r requirements.txt
-fi
-
-# Start backend in background
-echo "📡 Starting backend server..."
 python run.py &
 BACKEND_PID=$!
 cd ..
 
-# Wait for backend to start
-echo "⏳ Waiting for backend to initialize..."
+# Wait for backend
+echo "⏳ Waiting for backend to start..."
 sleep 8
 
-# Check if backend is running
+# Check backend health
 if ! kill -0 $BACKEND_PID 2>/dev/null; then
     echo "❌ Backend failed to start"
-    echo "Check the backend logs above for errors"
     exit 1
 fi
 
-# Test backend health
 if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "✅ Backend is running and healthy!"
+    echo "✅ Backend running and healthy"
 else
     echo "⚠️  Backend started but health check failed"
 fi
@@ -83,17 +66,16 @@ echo ""
 echo "🎉 Services started successfully!"
 echo "================================="
 echo "📱 Frontend: http://localhost:3000"
-echo "📡 Backend API: http://localhost:8000"
-echo "📚 API Documentation: http://localhost:8000/docs"
-echo "🔍 Health Check: http://localhost:8000/health"
+echo "📡 Backend: http://localhost:8000"
+echo "📚 API Docs: http://localhost:8000/docs"
 echo ""
-echo "💡 Tips:"
-echo "   - Frontend may take 30-60 seconds to compile"
-echo "   - Backend AI features require Ollama to be running"
-echo "   - Use Ctrl+C to stop both services"
-echo ""
-echo "🛑 Press Ctrl+C to stop all services"
+if [ "$AI_WORKING" != true ]; then
+    echo "💡 AI features limited. For full functionality:"
+    echo "   ollama serve"
+    echo "   ollama pull llama3.2"
+    echo ""
+fi
+echo "🛑 Press Ctrl+C to stop both services"
 echo ""
 
-# Wait for both processes
 wait $BACKEND_PID $FRONTEND_PID
