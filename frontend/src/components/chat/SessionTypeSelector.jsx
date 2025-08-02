@@ -102,7 +102,40 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
                 : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <div className="flex items-center space-x-3">
+            <div className="flex items-start space-x-3">
+              <div className="text-2xl">{type.icon}</div>
+              <div className="flex-1">
+                <h3 className="font-medium text-gray-900 mb-1">{type.name}</h3>
+                <p className="text-sm text-gray-600 mb-3">{type.description}</p>
+                
+                {/* Tags */}
+                <div className="flex flex-wrap gap-1">
+                  {type.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          {selectedType ? (
+            <span>✨ Ready to start a <strong>{selectedType.name}</strong> session</span>
+          ) : (
+            <span>Select a conversation type to get started</span>
+          )}
+        </div>
+        
+        <div className="flex items-center space-x-3">
           {onCancel && (
             <button
               onClick={onCancel}
@@ -137,37 +170,4 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
   );
 };
 
-export default SessionTypeSelector;="flex items-start space-x-3">
-              <div className="text-2xl">{type.icon}</div>
-              <div className="flex-1">
-                <h3 className="font-medium text-gray-900 mb-1">{type.name}</h3>
-                <p className="text-sm text-gray-600 mb-3">{type.description}</p>
-                
-                {/* Tags */}
-                <div className="flex flex-wrap gap-1">
-                  {type.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-500">
-          {selectedType ? (
-            <span>✨ Ready to start a <strong>{selectedType.name}</strong> session</span>
-          ) : (
-            <span>Select a conversation type to get started</span>
-          )}
-        </div>
-        
-        <div className
+export default SessionTypeSelector;
