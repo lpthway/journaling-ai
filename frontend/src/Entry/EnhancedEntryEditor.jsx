@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { validateEntry, getWordCount } from '../../utils/helpers';
 import LoadingSpinner from '../Common/LoadingSpinner';
-import ChatInterface from '../Chat/ChatInterface';
+import ChatInterface from '../components/chat/ChatInterface';
 
 const EnhancedEntryEditor = ({ 
   entry = null, 
