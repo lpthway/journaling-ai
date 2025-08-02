@@ -1,3 +1,5 @@
+// frontend/src/App.js - Updated with chat routes
+
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -5,6 +7,7 @@ import Layout from './components/Layout/Layout';
 import Journal from './pages/Journal';
 import Topics from './pages/Topics';
 import Insights from './pages/Insights';
+import Chat from './pages/Chat';  // New import
 import { healthCheck } from './services/api';
 
 function App() {
@@ -56,6 +59,17 @@ function App() {
             <Route 
               path="insights" 
               element={<Insights />}
+              loader={clearSearch}
+            />
+            {/* New Chat Routes */}
+            <Route 
+              path="chat" 
+              element={<Chat />}
+              loader={clearSearch}
+            />
+            <Route 
+              path="chat/:sessionId" 
+              element={<Chat />}
               loader={clearSearch}
             />
             <Route path="*" element={<Navigate to="/" replace />} />

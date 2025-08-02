@@ -9,6 +9,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.api import entries, topics, insights
+from app.api import entries, topics, insights, sessions
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +40,7 @@ app.add_middleware(
 app.include_router(entries.router, prefix=f"{settings.API_V1_STR}/entries", tags=["entries"])
 app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=["topics"])
 app.include_router(insights.router, prefix=f"{settings.API_V1_STR}/insights", tags=["insights"])
+app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"]) 
 
 # Health check endpoint
 @app.get("/health")

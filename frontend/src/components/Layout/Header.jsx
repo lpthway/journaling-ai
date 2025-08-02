@@ -1,9 +1,12 @@
+// frontend/src/components/Layout/Header.jsx - Updated with chat navigation
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   BookOpenIcon, 
   TagIcon, 
   ChartBarIcon, 
+  ChatBubbleLeftRightIcon,  // New import
   MagnifyingGlassIcon,
   Bars3Icon,
   XMarkIcon 
@@ -16,6 +19,7 @@ const Header = ({ onSearch }) => {
 
   const navigation = [
     { name: 'Journal', href: '/', icon: BookOpenIcon },
+    { name: 'AI Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },  // New chat link
     { name: 'Topics', href: '/topics', icon: TagIcon },
     { name: 'Insights', href: '/insights', icon: ChartBarIcon },
   ];

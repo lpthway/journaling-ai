@@ -63,6 +63,35 @@ export const insightsAPI = {
   getMoodTrends: (days = 30) => api.get('/insights/trends/mood', { params: { days } }),
 };
 
+// Session API - Add this to your existing api.js file
+export const sessionAPI = {
+  // Session management
+  createSession: (sessionData) => api.post('/sessions/', sessionData),
+  
+  getSession: (sessionId) => api.get(`/sessions/${sessionId}`),
+  
+  getSessions: (params = {}) => api.get('/sessions/', { params }),
+  
+  updateSession: (sessionId, updateData) => api.put(`/sessions/${sessionId}`, updateData),
+  
+  deleteSession: (sessionId) => api.delete(`/sessions/${sessionId}`),
+  
+  // Session actions
+  pauseSession: (sessionId) => api.post(`/sessions/${sessionId}/pause`),
+  
+  resumeSession: (sessionId) => api.post(`/sessions/${sessionId}/resume`),
+  
+  // Messages
+  sendMessage: (sessionId, messageData) => api.post(`/sessions/${sessionId}/messages`, messageData),
+  
+  getMessages: (sessionId, params = {}) => api.get(`/sessions/${sessionId}/messages`, { params }),
+  
+  getSuggestions: (sessionId) => api.get(`/sessions/${sessionId}/suggestions`),
+  
+  // Session types
+  getAvailableTypes: () => api.get('/sessions/types/available'),
+};
+
 // Health check
 export const healthCheck = () => api.get('/health');
 
