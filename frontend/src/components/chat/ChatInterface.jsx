@@ -42,7 +42,8 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
       setIsLoading(true);
       const response = await sessionAPI.getSession(id);
       setSession(response.data);
-      setMessages(response.data.recent_messages || []);
+      const validMessages = (response.data.recent_messages || []).filter(msg => msg && msg.id);
+      setMessages(validMessages);
       setShowTypeSelector(false);
       
       // Load suggestions
@@ -65,7 +66,8 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
       
       const newSession = response.data;
       setSession(newSession);
-      setMessages(newSession.recent_messages || []);
+      const validMessages = (newSession.recent_messages || []).filter(msg => msg && msg.id);
+      setMessages(validMessages);
       setShowTypeSelector(false);
       
       if (onSessionChange) {
@@ -104,7 +106,9 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
       });
 
       // Add AI response
-      setMessages(prev => [...prev, response.data]);
+      if (response.data && response.data.id) {
+        setMessages(prev => [...prev, response.data]);
+      }
       
       // Refresh suggestions
       loadSuggestions(session.id);
@@ -151,7 +155,7 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
       setSession(prev => ({ ...prev, status: 'active' }));
       
       // Add resume message if provided
-      if (response.data.resume_message) {
+      if (response.data.resume_message && response.data.resume_message.id) {
         setMessages(prev => [...prev, response.data.resume_message]);
       }
       
@@ -225,7 +229,7 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
         className="flex-1 overflow-y-auto p-4 space-y-4"
         style={{ minHeight: '400px', maxHeight: '600px' }}
       >
-        {messages.map((message) => (
+        {messages.filter(message => message && message.id).map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}
         

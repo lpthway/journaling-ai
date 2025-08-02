@@ -5,8 +5,13 @@ import { UserIcon, SparklesIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { formatTime } from '../../utils/helpers';
 
 const ChatMessage = ({ message, isTyping = false }) => {
-  const isUser = message.role === 'user';
-  const isAssistant = message.role === 'assistant';
+  // Safety check - return null if message is undefined
+  if (!message && !isTyping) {
+    return null;
+  }
+
+  const isUser = message?.role === 'user';
+  const isAssistant = message?.role === 'assistant';
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -38,12 +43,12 @@ const ChatMessage = ({ message, isTyping = false }) => {
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
             ) : (
-              <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+              <p className="whitespace-pre-wrap leading-relaxed">{message?.content || ''}</p>
             )}
           </div>
           
           {/* Timestamp */}
-          {!isTyping && message.timestamp && (
+          {!isTyping && message?.timestamp && (
             <div className={`flex items-center mt-1 text-xs text-gray-500 ${isUser ? 'justify-end' : 'justify-start'}`}>
               <ClockIcon className="w-3 h-3 mr-1" />
               {formatTime(message.timestamp)}

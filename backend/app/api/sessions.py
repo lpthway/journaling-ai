@@ -24,14 +24,13 @@ async def create_session(session_data: SessionCreate):
         # Generate opening message from AI
         opening_message = await conversation_service.generate_opening_message(
             session.session_type, 
-            session.context
+            session.metadata
         )
         
         # Add opening message to session
         await session_service.add_message(
             session.id,
-            MessageCreate(content=opening_message),
-            MessageRole.ASSISTANT
+            MessageCreate(content=opening_message, role=MessageRole.ASSISTANT)
         )
         
         # Get session with recent messages for response
@@ -141,8 +140,7 @@ async def send_message(session_id: str, message_data: MessageCreate):
         # Add user message
         user_message = await session_service.add_message(
             session_id, 
-            message_data, 
-            MessageRole.USER
+            MessageCreate(content=message_data.content, role=MessageRole.USER, metadata=message_data.metadata)
         )
         
         # Get conversation history for context
@@ -153,14 +151,13 @@ async def send_message(session_id: str, message_data: MessageCreate):
             session.session_type,
             message_data.content,
             conversation_history,
-            session.context
+            session.metadata
         )
         
         # Add AI response message
         ai_message = await session_service.add_message(
             session_id,
-            MessageCreate(content=ai_response),
-            MessageRole.ASSISTANT
+            MessageCreate(content=ai_response, role=MessageRole.ASSISTANT)
         )
         
         return MessageResponse(**ai_message.model_dump())
@@ -256,8 +253,7 @@ async def resume_session(session_id: str):
         # Add resume message
         ai_message = await session_service.add_message(
             session_id,
-            MessageCreate(content=resume_message),
-            MessageRole.ASSISTANT
+            MessageCreate(content=resume_message, role=MessageRole.ASSISTANT)
         )
         
         # Update session status
