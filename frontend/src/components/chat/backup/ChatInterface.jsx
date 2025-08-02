@@ -37,41 +37,12 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
     }
   }, [sessionId]);
 
-  // Helper function to validate message object
-  const isValidMessage = (msg) => {
-    return msg && 
-           typeof msg === 'object' && 
-           msg.id && 
-           msg.role && 
-           typeof msg.content === 'string';
-  };
-
-  // Helper function to filter and validate messages
-  const filterValidMessages = (messageArray) => {
-    if (!Array.isArray(messageArray)) {
-      console.warn('ChatInterface: messages is not an array', messageArray);
-      return [];
-    }
-    
-    return messageArray.filter((msg, index) => {
-      const valid = isValidMessage(msg);
-      if (!valid) {
-        console.warn(`ChatInterface: Invalid message at index ${index}:`, msg);
-      }
-      return valid;
-    });
-  };
-
   const loadSession = async (id) => {
     try {
       setIsLoading(true);
       const response = await sessionAPI.getSession(id);
-      const sessionData = response.data;
-      
-      setSession(sessionData);
-      
-      // Filter and validate messages
-      const validMessages = filterValidMessages(sessionData.recent_messages || []);
+      setSession(response.data);
+      const validMessages = (response.data.recent_messages || []).filter(msg => msg && msg.id);
       setMessages(validMessages);
       setShowTypeSelector(false);
       
@@ -90,14 +61,12 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
       setIsLoading(true);
       const response = await sessionAPI.createSession({
         session_type: sessionType,
-        metadata: context
+        context
       });
       
       const newSession = response.data;
       setSession(newSession);
-      
-      // Filter and validate messages
-      const validMessages = filterValidMessages(newSession.recent_messages || []);
+      const validMessages = (newSession.recent_messages || []).filter(msg => msg && msg.id);
       setMessages(validMessages);
       setShowTypeSelector(false);
       
@@ -118,13 +87,10 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
   };
 
   const sendMessage = async (content) => {
-    if (!session || !content.trim()) {
-      console.warn('ChatInterface: Cannot send message - no session or empty content');
-      return;
-    }
+    if (!session || !content.trim()) return;
 
     const userMessage = {
-      id: `temp-${Date.now()}`,
+      id: Date.now().toString(),
       role: 'user',
       content: content.trim(),
       timestamp: new Date().toISOString()
@@ -139,12 +105,9 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
         content: content.trim()
       });
 
-      // Validate and add AI response
-      if (response.data && isValidMessage(response.data)) {
+      // Add AI response
+      if (response.data && response.data.id) {
         setMessages(prev => [...prev, response.data]);
-      } else {
-        console.error('ChatInterface: Invalid AI response:', response.data);
-        toast.error('Received invalid response from AI');
       }
       
       // Refresh suggestions
@@ -164,17 +127,10 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
   const loadSuggestions = async (sessionId) => {
     try {
       const response = await sessionAPI.getSuggestions(sessionId);
-      const suggestionData = response.data;
-      
-      if (suggestionData && Array.isArray(suggestionData.suggestions)) {
-        setSuggestions(suggestionData.suggestions);
-      } else {
-        setSuggestions([]);
-      }
+      setSuggestions(response.data.suggestions || []);
     } catch (error) {
       console.error('Error loading suggestions:', error);
       // Don't show error for suggestions, just fail silently
-      setSuggestions([]);
     }
   };
 
@@ -198,8 +154,8 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
       const response = await sessionAPI.resumeSession(session.id);
       setSession(prev => ({ ...prev, status: 'active' }));
       
-      // Add resume message if provided and valid
-      if (response.data && response.data.resume_message && isValidMessage(response.data.resume_message)) {
+      // Add resume message if provided
+      if (response.data.resume_message && response.data.resume_message.id) {
         setMessages(prev => [...prev, response.data.resume_message]);
       }
       
@@ -273,14 +229,14 @@ const ChatInterface = ({ sessionId = null, onSessionChange }) => {
         className="flex-1 overflow-y-auto p-4 space-y-4"
         style={{ minHeight: '400px', maxHeight: '600px' }}
       >
-        {messages.map((message) => (
+        {messages.filter(message => message && message.id).map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}
         
         {/* Typing Indicator */}
         {isTyping && (
           <ChatMessage 
-            message={null} 
+            message={{ role: 'assistant', content: '' }} 
             isTyping={true} 
           />
         )}
