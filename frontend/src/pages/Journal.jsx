@@ -116,11 +116,14 @@ const Journal = ({ searchQuery = null }) => {
   };
 
   const handleSelectTemplate = (templateData) => {
+    // Don't set editingEntry for template-based new entries
+    // Just pass the template data directly to the editor
     setEditingEntry({
       title: templateData.title,
       content: templateData.content,
       tags: templateData.tags,
-      template_id: templateData.template_id
+      template_id: templateData.template_id,
+      isTemplate: true // Add flag to indicate this is template-based
     });
     setShowEditor(true);
   };
@@ -150,15 +153,15 @@ const Journal = ({ searchQuery = null }) => {
     try {
       setSavingEntry(true);
       
-      if (editingEntry) {
-        // Update existing entry
+      if (editingEntry && editingEntry.id && !editingEntry.isTemplate) {
+        // Update existing entry (has valid ID and not template-based)
         const response = await entryAPI.update(editingEntry.id, entryData);
         setEntries(prev => prev.map(entry => 
           entry.id === editingEntry.id ? response.data : entry
         ));
         toast.success('Entry updated successfully!');
       } else {
-        // Create new entry
+        // Create new entry (no ID or template-based)
         const response = await entryAPI.create(entryData);
         setEntries(prev => [response.data, ...prev]);
         toast.success('Entry created successfully!');

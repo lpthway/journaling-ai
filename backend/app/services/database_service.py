@@ -374,7 +374,7 @@ class DatabaseService:
                 
                 entry = Entry(**entry_data_copy)
                 
-                # Apply filters
+                # Apply filters using correct attribute names
                 if search_filter.query and search_filter.query.lower() not in (entry.title.lower() + " " + entry.content.lower()):
                     continue
                 
@@ -384,7 +384,8 @@ class DatabaseService:
                 if search_filter.topic_id and entry.topic_id != search_filter.topic_id:
                     continue
                 
-                if search_filter.favorites_only and not entry.is_favorite:
+                # Fixed: use is_favorite instead of favorites_only
+                if search_filter.is_favorite is not None and entry.is_favorite != search_filter.is_favorite:
                     continue
                 
                 if search_filter.date_from and entry.created_at.date() < search_filter.date_from:
@@ -393,10 +394,12 @@ class DatabaseService:
                 if search_filter.date_to and entry.created_at.date() > search_filter.date_to:
                     continue
                 
-                if search_filter.min_word_count and (entry.word_count or 0) < search_filter.min_word_count:
+                # Fixed: use word_count_min instead of min_word_count
+                if search_filter.word_count_min and (entry.word_count or 0) < search_filter.word_count_min:
                     continue
                 
-                if search_filter.max_word_count and (entry.word_count or 0) > search_filter.max_word_count:
+                # Fixed: use word_count_max instead of max_word_count
+                if search_filter.word_count_max and (entry.word_count or 0) > search_filter.word_count_max:
                     continue
                 
                 if search_filter.tags:

@@ -7,6 +7,14 @@ const EntryTemplates = ({ onSelectTemplate, onClose, isVisible }) => {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [customTemplate, setCustomTemplate] = useState({
+    name: '',
+    description: '',
+    category: 'Custom',
+    content_template: '',
+    tags: []
+  });
+  const [newTag, setNewTag] = useState('');
 
   // Pre-defined templates
   const defaultTemplates = [
@@ -286,6 +294,47 @@ Cons:
     return colors[category] || colors['Custom'];
   };
 
+  const handleCreateTemplate = () => {
+    if (!customTemplate.name.trim() || !customTemplate.content_template.trim()) {
+      toast.error('Please provide a name and content for the template');
+      return;
+    }
+
+    const newTemplate = {
+      ...customTemplate,
+      id: `custom-${Date.now()}`,
+      category: customTemplate.category || 'Custom'
+    };
+
+    setTemplates(prev => [...prev, newTemplate]);
+    setShowCreateForm(false);
+    setCustomTemplate({
+      name: '',
+      description: '',
+      category: 'Custom',
+      content_template: '',
+      tags: []
+    });
+    toast.success('Custom template created successfully!');
+  };
+
+  const handleAddTag = () => {
+    if (newTag.trim() && !customTemplate.tags.includes(newTag.trim())) {
+      setCustomTemplate(prev => ({
+        ...prev,
+        tags: [...prev.tags, newTag.trim()]
+      }));
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove) => {
+    setCustomTemplate(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }));
+  };
+
   if (!isVisible) return null;
 
   if (loading) {
@@ -294,6 +343,166 @@ Cons:
         <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full p-8">
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Custom template creation form
+  if (showCreateForm) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+              <PlusIcon className="w-5 h-5 mr-2" />
+              Create Custom Template
+            </h2>
+            <button
+              onClick={() => setShowCreateForm(false)}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Form */}
+          <div className="p-6 space-y-6">
+            {/* Template Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Template Name *
+              </label>
+              <input
+                type="text"
+                value={customTemplate.name}
+                onChange={(e) => setCustomTemplate(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Weekly Review"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description
+              </label>
+              <input
+                type="text"
+                value={customTemplate.description}
+                onChange={(e) => setCustomTemplate(prev => ({ ...prev, description: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Brief description of what this template is for"
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Category
+              </label>
+              <select
+                value={customTemplate.category}
+                onChange={(e) => setCustomTemplate(prev => ({ ...prev, category: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="Custom">Custom</option>
+                <option value="Reflection">Reflection</option>
+                <option value="Gratitude">Gratitude</option>
+                <option value="Planning">Planning</option>
+                <option value="Analysis">Analysis</option>
+                <option value="Wellness">Wellness</option>
+                <option value="Creativity">Creativity</option>
+              </select>
+            </div>
+
+            {/* Template Content */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Template Content *
+              </label>
+              <div className="text-sm text-gray-600 mb-2">
+                Use {'{date}'} to insert the current date automatically.
+              </div>
+              <textarea
+                value={customTemplate.content_template}
+                onChange={(e) => setCustomTemplate(prev => ({ ...prev, content_template: e.target.value }))}
+                rows={10}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                placeholder={`# My Custom Template - {date}
+
+## Section 1:
+
+
+## Section 2:
+
+
+## Reflection:
+
+`}
+              />
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tags
+              </label>
+              <div className="flex space-x-2 mb-2">
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Add a tag"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddTag}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {customTemplate.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {customTemplate.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        className="ml-1 text-blue-600 hover:text-blue-800"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
+            <button
+              onClick={() => setShowCreateForm(false)}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateTemplate}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Create Template
+            </button>
           </div>
         </div>
       </div>
