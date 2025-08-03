@@ -36,6 +36,7 @@ export const entryAPI = {
   create: (entryData) => api.post('/entries/', entryData),
   getAll: (params = {}) => api.get('/entries/', { params }),
   getById: (id) => api.get(`/entries/${id}`),
+  getByTopic: (topicId, params = {}) => api.get(`/topics/${topicId}/entries`, { params }),
   update: (id, entryData) => api.put(`/entries/${id}`, entryData),
   delete: (id) => api.delete(`/entries/${id}`),
   search: (query, limit = 10, topicId = null) => 

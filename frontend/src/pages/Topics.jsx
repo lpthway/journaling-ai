@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PlusIcon, TagIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TagIcon, PencilIcon, TrashIcon, ArrowLeftIcon, DocumentTextIcon, CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { topicAPI, entryAPI } from '../services/api';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
@@ -8,7 +8,10 @@ import { formatDate, getTopicColor } from '../utils/helpers';
 
 const Topics = () => {
   const [topics, setTopics] = useState([]);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [topicEntries, setTopicEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [entriesLoading, setEntriesLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTopic, setEditingTopic] = useState(null);
   const [savingTopic, setSavingTopic] = useState(false);
@@ -25,13 +28,45 @@ const Topics = () => {
   const loadTopics = async () => {
     try {
       const response = await topicAPI.getAll();
-      setTopics(response.data);
+      // Remove duplicates by grouping by name and language, keeping the one with most entries
+      const uniqueTopics = response.data.reduce((acc, topic) => {
+        const key = `${topic.name}-${topic.language || 'en'}`;
+        if (!acc[key] || topic.entry_count > acc[key].entry_count) {
+          acc[key] = topic;
+        }
+        return acc;
+      }, {});
+      
+      setTopics(Object.values(uniqueTopics).sort((a, b) => b.entry_count - a.entry_count));
     } catch (error) {
       console.error('Error loading topics:', error);
       toast.error('Failed to load topics');
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadTopicEntries = async (topicId) => {
+    setEntriesLoading(true);
+    try {
+      const response = await entryAPI.getByTopic(topicId);
+      setTopicEntries(response.data.entries || []);
+    } catch (error) {
+      console.error('Error loading topic entries:', error);
+      toast.error('Failed to load entries for this topic');
+    } finally {
+      setEntriesLoading(false);
+    }
+  };
+
+  const handleTopicClick = async (topic) => {
+    setSelectedTopic(topic);
+    await loadTopicEntries(topic.id);
+  };
+
+  const handleBackToTopics = () => {
+    setSelectedTopic(null);
+    setTopicEntries([]);
   };
 
   const handleCreateTopic = () => {
@@ -53,6 +88,11 @@ const Topics = () => {
       await topicAPI.delete(topicId);
       setTopics(prev => prev.filter(topic => topic.id !== topicId));
       toast.success('Topic deleted successfully');
+      
+      // If we're viewing this topic, go back to topics list
+      if (selectedTopic && selectedTopic.id === topicId) {
+        handleBackToTopics();
+      }
     } catch (error) {
       console.error('Error deleting topic:', error);
       toast.error('Failed to delete topic');
@@ -64,6 +104,20 @@ const Topics = () => {
       <div className="flex justify-center items-center h-64">
         <LoadingSpinner size="lg" />
       </div>
+    );
+  }
+
+  // Show topic detail view if a topic is selected
+  if (selectedTopic) {
+    return (
+      <TopicDetailView
+        topic={selectedTopic}
+        entries={topicEntries}
+        loading={entriesLoading}
+        onBack={handleBackToTopics}
+        onEdit={handleEditTopic}
+        onDelete={handleDeleteTopic}
+      />
     );
   }
 
@@ -96,6 +150,7 @@ const Topics = () => {
               topic={topic}
               onEdit={handleEditTopic}
               onDelete={handleDeleteTopic}
+              onClick={handleTopicClick}
             />
           ))}
         </div>
@@ -157,30 +212,225 @@ const Topics = () => {
   );
 };
 
-// Topic Card Component
-const TopicCard = ({ topic, onEdit, onDelete }) => {
+// Topic Detail View Component
+const TopicDetailView = ({ topic, entries, loading, onBack, onEdit, onDelete }) => {
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={onBack}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+          >
+            <ArrowLeftIcon className="w-5 h-5" />
+          </button>
+          <div className="flex items-center space-x-3">
+            <div className={`w-6 h-6 rounded-full ${getTopicColor(topic.color)}`} />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{topic.name}</h1>
+              {topic.description && (
+                <p className="text-sm text-gray-500 mt-1">{topic.description}</p>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex space-x-2">
+          <button
+            onClick={() => onEdit(topic)}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            <PencilIcon className="w-4 h-4 mr-2" />
+            Edit
+          </button>
+          <button
+            onClick={() => onDelete(topic.id)}
+            className="inline-flex items-center px-3 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+          >
+            <TrashIcon className="w-4 h-4 mr-2" />
+            Delete
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center space-x-2">
+            <DocumentTextIcon className="w-5 h-5 text-gray-400" />
+            <span className="text-sm text-gray-500">Total Entries</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{topic.entry_count}</p>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center space-x-2">
+            <CalendarIcon className="w-5 h-5 text-gray-400" />
+            <span className="text-sm text-gray-500">Last Entry</span>
+          </div>
+          <p className="text-lg font-semibold text-gray-900 mt-1">
+            {topic.last_entry_date ? formatDate(topic.last_entry_date) : 'Never'}
+          </p>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center space-x-2">
+            <TagIcon className="w-5 h-5 text-gray-400" />
+            <span className="text-sm text-gray-500">Related Tags</span>
+          </div>
+          <p className="text-lg font-semibold text-gray-900 mt-1">
+            {topic.tags ? topic.tags.length : 0}
+          </p>
+        </div>
+      </div>
+
+      {/* Entries */}
+      <div className="bg-white rounded-lg border border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Entries</h2>
+        </div>
+        
+        <div className="p-6">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : entries.length > 0 ? (
+            <div className="space-y-4">
+              {entries.map(entry => (
+                <EntryCard key={entry.id} entry={entry} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={DocumentTextIcon}
+              title="No entries yet"
+              description="This topic doesn't have any entries yet. Create a new journal entry and assign it to this topic."
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Entry Card Component for Topic Detail View
+const EntryCard = ({ entry }) => {
+  const getMoodColor = (mood) => {
+    const colors = {
+      very_positive: 'bg-green-100 text-green-800',
+      positive: 'bg-green-50 text-green-700',
+      neutral: 'bg-gray-100 text-gray-700',
+      negative: 'bg-orange-100 text-orange-800',
+      very_negative: 'bg-red-100 text-red-800'
+    };
+    return colors[mood] || 'bg-gray-100 text-gray-700';
+  };
+
+  const getMoodLabel = (mood) => {
+    const labels = {
+      very_positive: 'Very Positive',
+      positive: 'Positive',
+      neutral: 'Neutral',
+      negative: 'Negative',
+      very_negative: 'Very Negative'
+    };
+    return labels[mood] || 'Unknown';
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <h3 className="text-lg font-medium text-gray-900 mb-1">{entry.title}</h3>
+          <div className="flex items-center space-x-4 text-sm text-gray-500">
+            <div className="flex items-center space-x-1">
+              <ClockIcon className="w-4 h-4" />
+              <span>{formatDate(entry.created_at)}</span>
+            </div>
+            <span>{entry.word_count} words</span>
+          </div>
+        </div>
+        
+        {entry.mood && (
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getMoodColor(entry.mood)}`}>
+            {getMoodLabel(entry.mood)}
+          </span>
+        )}
+      </div>
+      
+      <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+        {entry.content}
+      </p>
+      
+      {entry.tags && entry.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {entry.tags.slice(0, 5).map((tag, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+            >
+              {tag}
+            </span>
+          ))}
+          {entry.tags.length > 5 && (
+            <span className="text-xs text-gray-500">
+              +{entry.tags.length - 5} more
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Topic Card Component
+const TopicCard = ({ topic, onEdit, onDelete, onClick }) => {
+  const handleCardClick = (e) => {
+    // Don't trigger card click if clicking on edit/delete buttons
+    if (e.target.closest('button')) {
+      return;
+    }
+    onClick(topic);
+  };
+
+  return (
+    <div 
+      className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer group"
+      onClick={handleCardClick}
+    >
       <div className="p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 flex-1">
             <div className={`w-4 h-4 rounded-full ${getTopicColor(topic.color)}`} />
-            <h3 className="text-lg font-semibold text-gray-900 truncate">
+            <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
               {topic.name}
             </h3>
+            {topic.entry_count > 0 && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {topic.entry_count} entries
+              </span>
+            )}
           </div>
           
           <div className="flex space-x-1">
             <button
-              onClick={() => onEdit(topic)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(topic);
+              }}
               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
               title="Edit topic"
             >
               <PencilIcon className="w-4 h-4" />
             </button>
             <button
-              onClick={() => onDelete(topic.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(topic.id);
+              }}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
               title="Delete topic"
             >
@@ -196,13 +446,21 @@ const TopicCard = ({ topic, onEdit, onDelete }) => {
           </p>
         )}
 
-        {/* Stats */}
-        <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>{topic.entry_count} entries</span>
+        {/* Stats and Click hint */}
+        <div className="flex items-center justify-between text-sm mb-2">
+          <span className="text-gray-500">
+            {topic.entry_count === 0 ? 'No entries yet' : `${topic.entry_count} entries`}
+          </span>
           {topic.last_entry_date && (
-            <span>Last: {formatDate(topic.last_entry_date)}</span>
+            <span className="text-gray-500">Last: {formatDate(topic.last_entry_date)}</span>
           )}
         </div>
+        
+        {topic.entry_count > 0 && (
+          <div className="text-xs text-blue-600 group-hover:text-blue-700 font-medium">
+            Click to view entries →
+          </div>
+        )}
 
         {/* Tags */}
         {topic.tags && topic.tags.length > 0 && (
