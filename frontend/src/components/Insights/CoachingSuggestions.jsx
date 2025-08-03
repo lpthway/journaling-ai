@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { LightBulbIcon, ArrowPathIcon, HeartIcon, ArrowTrendingUpIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { insightsAPI } from '../../services/api';
 import LoadingSpinner from '../Common/LoadingSpinner';
 
@@ -196,9 +198,9 @@ const SuggestionCard = ({ suggestion, index }) => {
 
         {/* Content */}
         <div className="prose prose-sm max-w-none">
-          <p className="text-gray-700 leading-relaxed">
-            {suggestion}
-          </p>
+          <div className="text-gray-700 leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{suggestion}</ReactMarkdown>
+          </div>
         </div>
 
         {/* Actions */}

@@ -37,6 +37,7 @@ const Insights = () => {
     { id: 'coaching', name: 'Coaching', icon: LightBulbIcon },
     { id: 'ask', name: 'Ask AI', icon: QuestionMarkCircleIcon },
     { id: 'trends', name: 'Trends', icon: ArrowTrendingUpIcon },
+    { id: 'patterns', name: 'Patterns', icon: HeartIcon },
   ];
 
   useEffect(() => {
@@ -118,18 +119,30 @@ const Insights = () => {
       {/* Tab Content */}
       <div className="min-h-96">
         {activeTab === 'overview' && (
-          <EnhancedOverviewTab data={overviewData} />
+          <EnhancedOverviewTab data={overviewData} setActiveTab={setActiveTab} />
         )}
         {activeTab === 'coaching' && <CoachingSuggestions />}
         {activeTab === 'ask' && <EnhancedAskQuestion />}
         {activeTab === 'trends' && <TrendsTab />}
+        {activeTab === 'patterns' && (
+          loading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-sm text-gray-500">Loading pattern analysis...</p>
+              </div>
+            </div>
+          ) : (
+            <PatternAnalysis data={overviewData.patterns} />
+          )
+        )}
       </div>
     </div>
   );
 };
 
 // Enhanced Overview Tab Component
-const EnhancedOverviewTab = ({ data }) => {
+const EnhancedOverviewTab = ({ data, setActiveTab }) => {
   const { moodStats, patterns, chatInsights, comprehensiveMood } = data;
 
   if (!moodStats && !chatInsights) {
@@ -314,7 +327,10 @@ const EnhancedOverviewTab = ({ data }) => {
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Pattern Analysis Preview</h3>
-          <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+          <button 
+            onClick={() => setActiveTab('patterns')}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          >
             View Full Analysis
           </button>
         </div>
