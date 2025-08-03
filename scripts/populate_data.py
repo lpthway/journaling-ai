@@ -139,6 +139,16 @@ class DataPopulator:
         
         # Store created topic IDs for reuse
         self.created_topic_ids = {}
+        
+        # Track creation statistics
+        self.stats = {
+            'topics_created': 0,
+            'topics_failed': 0,
+            'journal_entries_created': 0,
+            'journal_entries_failed': 0,
+            'chat_sessions_created': 0,
+            'chat_sessions_failed': 0
+        }
     
     def get_season(self, date: datetime) -> str:
         """Get season based on date"""
@@ -432,13 +442,16 @@ Schreibe nur die Nachricht, nichts anderes:"""
                         result = await response.json()
                         lang_flag = "🇺🇸" if topic_data['language'] == 'en' else "🇩🇪"
                         print(f"✅ Created topic: '{topic_data['name']}' {lang_flag}")
+                        self.stats['topics_created'] += 1
                         return result['id']
                     else:
                         error_text = await response.text()
                         print(f"❌ Failed to create topic: {response.status} - {error_text}")
+                        self.stats['topics_failed'] += 1
                         return None
         except Exception as e:
             print(f"❌ Error creating topic: {e}")
+            self.stats['topics_failed'] += 1
             return None
 
     async def create_journal_entry(self, entry_data: Dict[str, Any], topic_id: str = None) -> bool:
@@ -460,13 +473,16 @@ Schreibe nur die Nachricht, nichts anderes:"""
                         print(f"✅ Created journal entry: '{entry_data['title']}' {lang_flag}")
                         if result.get('tags'):
                             print(f"   Auto-generated tags: {result['tags']}")
+                        self.stats['journal_entries_created'] += 1
                         return True
                     else:
                         error_text = await response.text()
                         print(f"❌ Failed to create journal entry: {response.status} - {error_text}")
+                        self.stats['journal_entries_failed'] += 1
                         return False
         except Exception as e:
             print(f"❌ Error creating journal entry: {e}")
+            self.stats['journal_entries_failed'] += 1
             return False
 
     async def create_chat_session(self, session_type: SessionType, theme_data: Dict[str, str], messages: List[Dict]) -> bool:
@@ -491,11 +507,13 @@ Schreibe nur die Nachricht, nichts anderes:"""
                     if response.status != 200:
                         error_text = await response.text()
                         print(f"❌ Failed to create session: {response.status} - {error_text}")
+                        self.stats['chat_sessions_failed'] += 1
                         return False
                     
                     session_result = await response.json()
                     session_id = session_result['id']
                     print(f"✅ Created chat session: '{session_data['title']}' {lang_flag}")
+                    self.stats['chat_sessions_created'] += 1
                 
                 # Add messages (skip first user message as it will be sent via the message endpoint)
                 user_messages = [msg for msg in messages if msg['role'] == 'user']
@@ -526,6 +544,7 @@ Schreibe nur die Nachricht, nichts anderes:"""
                 
         except Exception as e:
             print(f"❌ Error creating chat session: {e}")
+            self.stats['chat_sessions_failed'] += 1
             return False
 
     async def populate_year_data(self, language_preference: str = None):
@@ -558,12 +577,15 @@ Schreibe nur die Nachricht, nichts anderes:"""
         total_entries = 0
         total_chats = 0
         seasonal_topics_created = set()
+        days_processed = 0
         
         print("📝 Generating year-long daily entries...")
         print(f"📅 From {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         print()
         
         while current_date <= end_date:
+            days_processed += 1
+            
             # Determine number of entries for this day (1-3, weighted toward 1-2)
             num_entries = random.choices([1, 2, 3], weights=[50, 35, 15])[0]
             
@@ -574,6 +596,13 @@ Schreibe nur die Nachricht, nichts anderes:"""
                 num_entries = random.choices([1, 2, 3], weights=[40, 40, 20])[0]
             
             days_ago = (end_date - current_date).days
+            day_name = current_date.strftime('%A')
+            
+            # Show daily progress
+            if num_entries == 0:
+                print(f"📅 Day {days_processed}/365: {current_date.strftime('%Y-%m-%d')} ({day_name}) - No entries (busy day)")
+            else:
+                print(f"📅 Day {days_processed}/365: {current_date.strftime('%Y-%m-%d')} ({day_name}) - Creating {num_entries} {'entry' if num_entries == 1 else 'entries'}")
             
             # Create seasonal topic if appropriate
             seasonal_topic = self.should_create_seasonal_topic(current_date)
@@ -591,9 +620,8 @@ Schreibe nur die Nachricht, nichts anderes:"""
                     # Generate journal entry
                     theme_data = self.select_theme_for_date(current_date, language_preference)
                     
-                    if total_entries % 50 == 0:
-                        lang_flag = "🇺🇸" if theme_data['language'] == 'en' else "🇩🇪"
-                        print(f"   📝 Day {365 - days_ago}/365: {current_date.strftime('%Y-%m-%d')} - Entry {total_entries + 1} {lang_flag}")
+                    lang_flag = "🇺🇸" if theme_data['language'] == 'en' else "🇩🇪"
+                    print(f"   📝 Creating journal entry: '{theme_data['theme'][:50]}...' {lang_flag}")
                     
                     entry_data = await self.generate_journal_entry(theme_data, days_ago)
                     topic_id = self.get_topic_for_theme(theme_data)
@@ -606,9 +634,8 @@ Schreibe nur die Nachricht, nichts anderes:"""
                     theme_data = random.choice([t for t in self.chat_themes if t['language'] == (language_preference or random.choice(['en', 'de']))])
                     session_type = random.choice(list(SessionType))
                     
-                    if total_chats % 20 == 0:
-                        lang_flag = "🇺🇸" if theme_data['language'] == 'en' else "🇩🇪"
-                        print(f"   💬 Day {365 - days_ago}/365: {current_date.strftime('%Y-%m-%d')} - Chat {total_chats + 1} {lang_flag}")
+                    lang_flag = "🇺🇸" if theme_data['language'] == 'en' else "🇩🇪"
+                    print(f"   💬 Creating chat session: '{theme_data['theme'][:50]}...' {lang_flag}")
                     
                     messages = await self.generate_chat_conversation(theme_data, session_type)
                     await self.create_chat_session(session_type, theme_data, messages)
@@ -625,28 +652,78 @@ Schreibe nur die Nachricht, nichts anderes:"""
                 await asyncio.sleep(2)
         
         print()
-        print("✨ FULL YEAR data population complete!")
+        print("=" * 80)
+        print("✨ FULL YEAR DATA POPULATION COMPLETE!")
+        print("=" * 80)
         print()
-        print("🎯 What was created:")
-        print(f"   • {len(self.created_topic_ids)} topics (core + seasonal)")
-        print(f"   • {total_entries} journal entries across 365 days")
-        print(f"   • {total_chats} chat sessions with conversations")
-        print(f"   • Realistic daily patterns (1-3 entries per day)")
-        print(f"   • Seasonal content variation")
-        print(f"   • Multilingual content (English 🇺🇸 and German 🇩🇪)")
-        print(f"   • Automatic sentiment analysis and AI-generated tags")
+        
+        # Summary statistics
+        total_created = (self.stats['topics_created'] + self.stats['journal_entries_created'] + 
+                        self.stats['chat_sessions_created'])
+        total_failed = (self.stats['topics_failed'] + self.stats['journal_entries_failed'] + 
+                       self.stats['chat_sessions_failed'])
+        success_rate = (total_created / (total_created + total_failed) * 100) if (total_created + total_failed) > 0 else 0
+        
+        print("📊 CREATION SUMMARY:")
         print()
-        print("📊 Data distribution:")
-        print(f"   • Average {total_entries/365:.1f} journal entries per day")
-        print(f"   • Average {total_chats/365:.1f} chat sessions per day")
-        print(f"   • Total: {total_entries + total_chats} content pieces")
+        print("🎯 Successfully Created:")
+        print(f"   ✅ Topics: {self.stats['topics_created']}")
+        print(f"   ✅ Journal Entries: {self.stats['journal_entries_created']}")
+        print(f"   ✅ Chat Sessions: {self.stats['chat_sessions_created']}")
+        print(f"   📈 Total Success: {total_created} items")
+        
+        if total_failed > 0:
+            print()
+            print("❌ Failed to Create:")
+            if self.stats['topics_failed'] > 0:
+                print(f"   ❌ Topics: {self.stats['topics_failed']}")
+            if self.stats['journal_entries_failed'] > 0:
+                print(f"   ❌ Journal Entries: {self.stats['journal_entries_failed']}")
+            if self.stats['chat_sessions_failed'] > 0:
+                print(f"   ❌ Chat Sessions: {self.stats['chat_sessions_failed']}")
+            print(f"   📉 Total Failed: {total_failed} items")
+        
         print()
-        print("🔍 Perfect for testing:")
-        print("   • Mood prediction patterns over time")
+        print(f"📈 Overall Success Rate: {success_rate:.1f}%")
+        print()
+        
+        print("📅 Time Period Coverage:")
+        print(f"   • Start Date: {start_date.strftime('%Y-%m-%d (%A)')}")
+        print(f"   • End Date: {end_date.strftime('%Y-%m-%d (%A)')}")
+        print(f"   • Total Days: {days_processed}")
+        print(f"   • Days with Content: {days_processed - (days_processed - total_entries - total_chats)}")
+        
+        print()
+        print("📊 Content Distribution:")
+        print(f"   • Average entries per day: {(self.stats['journal_entries_created'] + self.stats['chat_sessions_created'])/365:.1f}")
+        print(f"   • Journal entries: {self.stats['journal_entries_created']} ({self.stats['journal_entries_created']/(self.stats['journal_entries_created'] + self.stats['chat_sessions_created'])*100:.1f}%)")
+        print(f"   • Chat sessions: {self.stats['chat_sessions_created']} ({self.stats['chat_sessions_created']/(self.stats['journal_entries_created'] + self.stats['chat_sessions_created'])*100:.1f}%)")
+        print(f"   • Seasonal topics: {len(seasonal_topics_created)}")
+        
+        print()
+        print("🔍 Perfect for Testing:")
+        print("   • Mood prediction patterns over full year")
         print("   • Long-term emotional trends and insights")
         print("   • Seasonal variation in content and mood")
         print("   • Hardware-adaptive AI performance with large datasets")
         print("   • Auto-tagging accuracy across diverse content")
+        print("   • Rate limiting prevention with offline AI models")
+        
+        if language_preference:
+            lang_name = "English" if language_preference == 'en' else "German"
+            lang_flag = "🇺🇸" if language_preference == 'en' else "🇩🇪"
+            print(f"   • Multilingual content with {lang_name} preference {lang_flag}")
+        else:
+            print("   • Balanced multilingual content (English 🇺🇸 and German 🇩🇪)")
+        
+        print()
+        print("🚀 Next Steps:")
+        print("   • Start the backend to see your data")
+        print("   • Visit 'Insights & Analytics' to see mood trends")
+        print("   • Test the hardware-adaptive AI features")
+        print("   • Explore the offline model performance")
+        print()
+        print("=" * 80)
 
     async def populate_data(self, num_journal_entries: int = 15, num_chat_sessions: int = 8):
         """Populate the application with sample data (original method for smaller datasets)"""
@@ -699,15 +776,50 @@ Schreibe nur die Nachricht, nichts anderes:"""
             await asyncio.sleep(2)
         
         print()
-        print("✨ Data population complete!")
+        print("=" * 60)
+        print("✨ DATA POPULATION COMPLETE!")
+        print("=" * 60)
         print()
-        print("🎯 What was created:")
-        print(f"   • {len(self.created_topic_ids)} topics in English and German")
-        print(f"   • {num_journal_entries} journal entries with automatic tags")
-        print(f"   • {num_chat_sessions} chat sessions with conversations")
-        print(f"   • Automatic sentiment analysis for all content")
-        print(f"   • AI-generated tags for better organization")
-        print(f"   • Multilingual content testing (English 🇺🇸 and German 🇩🇪)")
+        
+        # Summary statistics
+        total_created = (self.stats['topics_created'] + self.stats['journal_entries_created'] + 
+                        self.stats['chat_sessions_created'])
+        total_failed = (self.stats['topics_failed'] + self.stats['journal_entries_failed'] + 
+                       self.stats['chat_sessions_failed'])
+        success_rate = (total_created / (total_created + total_failed) * 100) if (total_created + total_failed) > 0 else 0
+        
+        print("📊 CREATION SUMMARY:")
+        print()
+        print("🎯 Successfully Created:")
+        print(f"   ✅ Topics: {self.stats['topics_created']}")
+        print(f"   ✅ Journal Entries: {self.stats['journal_entries_created']}")
+        print(f"   ✅ Chat Sessions: {self.stats['chat_sessions_created']}")
+        print(f"   📈 Total Success: {total_created} items")
+        
+        if total_failed > 0:
+            print()
+            print("❌ Failed to Create:")
+            if self.stats['topics_failed'] > 0:
+                print(f"   ❌ Topics: {self.stats['topics_failed']}")
+            if self.stats['journal_entries_failed'] > 0:
+                print(f"   ❌ Journal Entries: {self.stats['journal_entries_failed']}")
+            if self.stats['chat_sessions_failed'] > 0:
+                print(f"   ❌ Chat Sessions: {self.stats['chat_sessions_failed']}")
+            print(f"   📉 Total Failed: {total_failed} items")
+        
+        print()
+        print(f"📈 Overall Success Rate: {success_rate:.1f}%")
+        print()
+        
+        print("🔍 Perfect for Testing:")
+        print("   • Auto-tagging accuracy across diverse content")
+        print("   • Sentiment analysis on multilingual content")
+        print("   • Chat conversation flow and responses")
+        print("   • Hardware-adaptive AI performance")
+        print("   • Offline model functionality")
+        print("   • Multilingual content handling (English 🇺🇸 and German 🇩🇪)")
+        print()
+        print("=" * 60)
 
 async def main():
     """Main function to run the data population"""

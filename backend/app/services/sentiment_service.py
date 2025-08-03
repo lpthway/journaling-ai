@@ -19,41 +19,127 @@ class MultilingualSentimentService:
         self.primary_pipeline = None
         self.models_loaded = False
         
-        logger.info("🔧 Sentiment service initialized (models will load on demand)")
+        # Local model cache directory
+        from pathlib import Path
+        self._cache_dir = Path(__file__).parent.parent.parent / "models"
+        self._cache_dir.mkdir(exist_ok=True)
+        
+        logger.info("🔧 Sentiment service initialized (models will load on demand with local caching)")
+        
+    def _ensure_model_cached(self, model_name: str) -> str:
+        """Ensure model is downloaded and cached locally"""
+        from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
+        
+        # Create model-specific cache directory
+        model_cache_dir = self._cache_dir / model_name.replace("/", "--")
+        
+        if model_cache_dir.exists() and any(model_cache_dir.iterdir()):
+            logger.info(f"📦 Using cached model: {model_name}")
+            return str(model_cache_dir)
+        
+        logger.info(f"⬇️ Downloading and caching model: {model_name}")
+        
+        try:
+            # Download tokenizer and model to cache
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_name,
+                cache_dir=str(model_cache_dir)
+            )
+            
+            # Try sequence classification model first, then fall back to base model
+            try:
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    model_name,
+                    cache_dir=str(model_cache_dir)
+                )
+            except:
+                model = AutoModel.from_pretrained(
+                    model_name,
+                    cache_dir=str(model_cache_dir)
+                )
+            
+            logger.info(f"✅ Model cached successfully: {model_name}")
+            return str(model_cache_dir)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to cache model {model_name}: {e}")
+            # If caching fails, return original model name for online loading
+            return model_name
         
     def _load_single_model(self, model_type: str):
         """Load only one model at a time to conserve VRAM"""
         # Clear any existing models first
         self._clear_models()
         
-        try:
-            if model_type == "emotion" and not self.emotion_pipeline:
-                # Primary: Enhanced emotion detection (English)
-                self.emotion_pipeline = pipeline(
-                    "text-classification",
-                    model="j-hartmann/emotion-english-distilroberta-base",
-                    return_all_scores=True
-                )
-                logger.info("✅ Loaded emotion detection model")
+        import time
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    # Add exponential backoff for rate limiting
+                    delay = min(5 * (2 ** attempt), 30)
+                    logger.info(f"⏳ Rate limiting: waiting {delay}s before retry {attempt}")
+                    time.sleep(delay)
                 
-            elif model_type == "multilingual" and not self.multilingual_pipeline:
-                # Fallback: Multilingual sentiment (German/English)
-                self.multilingual_pipeline = pipeline(
-                    "sentiment-analysis",
-                    model="nlptown/bert-base-multilingual-uncased-sentiment"
-                )
-                logger.info("✅ Loaded multilingual sentiment model")
-                
-            elif model_type == "backup" and not self.primary_pipeline:
-                # Backup: Original RoBERTa (English only)
-                self.primary_pipeline = pipeline(
-                    "sentiment-analysis",
-                    model="cardiffnlp/twitter-roberta-base-sentiment-latest"
-                )
-                logger.info("✅ Loaded backup sentiment model")
-                
-        except Exception as e:
-            logger.warning(f"Could not load {model_type} model: {e}")
+                if model_type == "emotion" and not self.emotion_pipeline:
+                    # Primary: Enhanced emotion detection (English)
+                    model_name = "j-hartmann/emotion-english-distilroberta-base"
+                    cached_path = self._ensure_model_cached(model_name)
+                    
+                    self.emotion_pipeline = pipeline(
+                        "text-classification",
+                        model=cached_path,
+                        return_all_scores=True
+                    )
+                    logger.info("✅ Loaded emotion detection model")
+                    return
+                    
+                elif model_type == "multilingual" and not self.multilingual_pipeline:
+                    # Fallback: Multilingual sentiment (German/English)
+                    model_name = "nlptown/bert-base-multilingual-uncased-sentiment"
+                    logger.info("🌐 Loading multilingual sentiment model...")
+                    cached_path = self._ensure_model_cached(model_name)
+                    
+                    self.multilingual_pipeline = pipeline(
+                        "sentiment-analysis",
+                        model=cached_path
+                    )
+                    logger.info("✅ Loaded multilingual sentiment model")
+                    return
+                    
+                elif model_type == "backup" and not self.primary_pipeline:
+                    # Backup: Original RoBERTa (English only)
+                    model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+                    cached_path = self._ensure_model_cached(model_name)
+                    
+                    self.primary_pipeline = pipeline(
+                        "sentiment-analysis",
+                        model=cached_path
+                    )
+                    logger.info("✅ Loaded backup sentiment model")
+                    return
+                    
+            except Exception as e:
+                error_msg = str(e)
+                # Handle Hugging Face rate limiting
+                if "429" in error_msg or "rate limit" in error_msg.lower() or "too many requests" in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        logger.warning(f"🚫 Rate limited by Hugging Face, retrying in next attempt...")
+                        continue
+                    else:
+                        logger.error(f"❌ Rate limited by Hugging Face, max retries exceeded for {model_type}")
+                        return
+                elif "connection" in error_msg.lower() or "timeout" in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        logger.warning(f"🌐 Network error loading {model_type}, retrying...")
+                        continue
+                    else:
+                        logger.error(f"❌ Network error loading {model_type}: {e}")
+                        return
+                else:
+                    logger.warning(f"Could not load {model_type} model: {e}")
+                    return
             
     def _clear_models(self):
         """Clear all models to free VRAM"""
@@ -84,24 +170,34 @@ class MultilingualSentimentService:
         try:
             language = self.detect_language(text)
             
-            # For English: Use advanced emotion detection
+            # For English: Try advanced emotion detection
             if language == "en":
-                self._load_single_model("emotion")
-                if self.emotion_pipeline:
-                    return self._analyze_with_emotions(text)
+                try:
+                    self._load_single_model("emotion")
+                    if self.emotion_pipeline:
+                        return self._analyze_with_emotions(text)
+                except Exception as e:
+                    logger.warning(f"Emotion model failed, falling back: {e}")
             
-            # For German or if emotion detection fails: Use multilingual
-            if language == "de" or not self.emotion_pipeline:
-                self._load_single_model("multilingual")
-                if self.multilingual_pipeline:
-                    return self._analyze_multilingual(text)
+            # For German or if emotion detection fails: Try multilingual (often rate limited)
+            if language == "de":
+                try:
+                    self._load_single_model("multilingual")
+                    if self.multilingual_pipeline:
+                        return self._analyze_multilingual(text)
+                except Exception as e:
+                    logger.warning(f"Multilingual model failed (likely rate limited), falling back: {e}")
             
-            # Final fallback to backup model
-            self._load_single_model("backup")
-            if self.primary_pipeline:
-                return self._analyze_with_roberta(text)
+            # Try backup model
+            try:
+                self._load_single_model("backup")
+                if self.primary_pipeline:
+                    return self._analyze_with_roberta(text)
+            except Exception as e:
+                logger.warning(f"Backup model failed, using TextBlob fallback: {e}")
             
-            # Ultimate fallback (no GPU required)
+            # Ultimate fallback (no GPU required, no external API calls)
+            logger.info("🔄 Using TextBlob fallback (no external dependencies)")
             return self._analyze_with_textblob(text)
                 
         except Exception as e:

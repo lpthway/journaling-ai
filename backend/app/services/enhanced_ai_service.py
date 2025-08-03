@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 import statistics
 import asyncio
+from pathlib import Path
 
 # NLP and ML libraries
 import spacy
@@ -74,6 +75,55 @@ class EnhancedAIService:
         # Cached data for performance
         self._user_patterns_cache = {}
         self._cache_timestamp = None
+        
+        # Model loading throttle to prevent Hugging Face rate limiting
+        self._last_model_load_time = 0
+        self._model_load_delay = 2.0  # Minimum seconds between model loads
+        
+        # Local model cache directory
+        self._cache_dir = Path(__file__).parent.parent.parent / "models"
+        self._cache_dir.mkdir(exist_ok=True)
+        
+    def _ensure_model_cached(self, model_name: str) -> str:
+        """Ensure model is downloaded and cached locally"""
+        import os
+        from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
+        
+        # Create model-specific cache directory
+        model_cache_dir = self._cache_dir / model_name.replace("/", "--")
+        
+        if model_cache_dir.exists() and any(model_cache_dir.iterdir()):
+            logger.info(f"📦 Using cached model: {model_name}")
+            return str(model_cache_dir)
+        
+        logger.info(f"⬇️ Downloading and caching model: {model_name}")
+        
+        try:
+            # Download tokenizer and model to cache
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_name,
+                cache_dir=str(model_cache_dir)
+            )
+            
+            # Try sequence classification model first, then fall back to base model
+            try:
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    model_name,
+                    cache_dir=str(model_cache_dir)
+                )
+            except:
+                model = AutoModel.from_pretrained(
+                    model_name,
+                    cache_dir=str(model_cache_dir)
+                )
+            
+            logger.info(f"✅ Model cached successfully: {model_name}")
+            return str(model_cache_dir)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to cache model {model_name}: {e}")
+            # If caching fails, return original model name for online loading
+            return model_name
         
     async def initialize(self):
         """Initialize the AI service and load models with hardware-adaptive AI"""
@@ -149,6 +199,13 @@ class EnhancedAIService:
                     torch.cuda.empty_cache()
                     torch.cuda.synchronize()
                 
+                # Add delay for rate limiting (especially on retries)
+                if attempt > 0:
+                    import time
+                    delay = min(2 ** attempt, 30)  # Exponential backoff, max 30s
+                    logger.info(f"⏳ Rate limiting: waiting {delay}s before retry {attempt}")
+                    time.sleep(delay)
+                
                 # Determine device based on hardware tier and memory pressure
                 if cpu_optimized or not self._use_gpu:
                     device = -1  # CPU
@@ -172,10 +229,14 @@ class EnhancedAIService:
                 
                 logger.info(f"Device set to use {device_name}")
                 
+                # Ensure model is cached locally to avoid rate limiting
+                cached_model_path = self._ensure_model_cached(model_name)
+                
                 # Configure model loading parameters to avoid conflicts
                 model_kwargs = {
-                    'model': model_name,
+                    'model': cached_model_path,
                     'device': device,
+                    'local_files_only': cached_model_path != model_name,  # Use local files if cached
                 }
                 
                 # Add appropriate dtype based on device
@@ -203,8 +264,28 @@ class EnhancedAIService:
                     return None
                     
             except Exception as e:
-                logger.error(f"Unexpected error loading {model_name}: {e}")
-                return None
+                error_msg = str(e)
+                # Handle Hugging Face rate limiting
+                if "429" in error_msg or "rate limit" in error_msg.lower() or "too many requests" in error_msg.lower():
+                    if attempt < max_retries:
+                        delay = min(10 * (2 ** attempt), 60)  # Longer delays for rate limits
+                        logger.warning(f"🚫 Rate limited by Hugging Face, waiting {delay}s before retry {attempt + 1}")
+                        import time
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.error(f"❌ Rate limited by Hugging Face, max retries exceeded for {model_name}")
+                        return None
+                elif "connection" in error_msg.lower() or "timeout" in error_msg.lower():
+                    if attempt < max_retries:
+                        logger.warning(f"🌐 Network error loading {model_name}, retrying...")
+                        continue
+                    else:
+                        logger.error(f"❌ Network error loading {model_name}: {e}")
+                        return None
+                else:
+                    logger.error(f"❌ Unexpected error loading {model_name}: {e}")
+                    return None
                 
         return None
 
@@ -212,6 +293,14 @@ class EnhancedAIService:
         """Initialize lightweight components only - models loaded on demand"""
         try:
             logger.info("🔧 Initializing Enhanced AI Service...")
+            
+            # Check if models are cached locally
+            cached_models = list(self._cache_dir.glob("*"))
+            if cached_models:
+                logger.info(f"📦 Found {len(cached_models)} cached models, will use offline mode")
+            else:
+                logger.info("⚠️ No cached models found, will download on first use")
+                logger.info("💡 Run 'python download_models.py' to pre-download all models")
             
             # Load spaCy model for advanced NLP (CPU only, lightweight)
             try:
@@ -257,6 +346,18 @@ class EnhancedAIService:
     def _load_model_on_demand(self, model_key: str, max_retries: int = 2) -> Optional[Any]:
         """Load a specific model on demand with hardware-adaptive selection"""
         
+        # Throttle model loading to prevent Hugging Face rate limiting
+        import time
+        current_time = time.time()
+        time_since_last_load = current_time - self._last_model_load_time
+        
+        if time_since_last_load < self._model_load_delay:
+            wait_time = self._model_load_delay - time_since_last_load
+            logger.info(f"⏳ Throttling model load: waiting {wait_time:.1f}s to prevent rate limiting")
+            time.sleep(wait_time)
+        
+        self._last_model_load_time = time.time()
+        
         # Ensure service is initialized
         if not hasattr(self, 'model_configs') or not self.model_configs:
             logger.warning("Model configs not initialized, refreshing hardware-adaptive configs")
@@ -269,6 +370,7 @@ class EnhancedAIService:
         # Check if model is already loaded
         current_model = getattr(self, model_key, None)
         if current_model is not None:
+            logger.info(f"♻️ Reusing already loaded model: {model_key}")
             return current_model
             
         config = self.model_configs[model_key]
