@@ -43,7 +43,21 @@ export const entryAPI = {
     api.get('/entries/search/semantic', { 
       params: { query, limit, topic_id: topicId } 
     }),
+  advancedSearch: (filters) => api.post('/entries/search/advanced', filters),
   getMoodStats: (days = 30) => api.get('/entries/stats/mood', { params: { days } }),
+  
+  // Favorites
+  toggleFavorite: (id) => api.patch(`/entries/${id}/favorite`),
+  getFavorites: (limit = 50) => api.get('/entries/favorites', { params: { limit } }),
+  
+  // Versioning
+  getVersions: (id) => api.get(`/entries/${id}/versions`),
+  revertToVersion: (id, version) => api.post(`/entries/${id}/revert/${version}`),
+  
+  // Templates
+  getTemplates: () => api.get('/entries/templates'),
+  getTemplate: (id) => api.get(`/entries/templates/${id}`),
+  createTemplate: (templateData) => api.post('/entries/templates', templateData),
 };
 
 // Topic API
