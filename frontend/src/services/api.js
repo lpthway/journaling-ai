@@ -105,6 +105,7 @@ export const enhancedInsightsAPI = {
   getEnhancedPatterns: () => api.get('/insights/patterns-enhanced'),
   getChatInsights: (days = 30) => api.get('/insights/chat-insights', { params: { days } }),
   getComprehensiveMoodAnalysis: (days = 30) => api.get('/insights/mood-analysis-comprehensive', { params: { days } }),
+  getComprehensiveTrends: (days = 30) => api.get('/insights/trends/comprehensive', { params: { days } }),
 };
 
 // Update existing insightsAPI to include new methods
@@ -114,3 +115,4 @@ insightsAPI.getEnhancedCoaching = enhancedInsightsAPI.getEnhancedCoaching;
 insightsAPI.getEnhancedPatterns = enhancedInsightsAPI.getEnhancedPatterns;
 insightsAPI.getChatInsights = enhancedInsightsAPI.getChatInsights;
 insightsAPI.getComprehensiveMoodAnalysis = enhancedInsightsAPI.getComprehensiveMoodAnalysis;
+insightsAPI.getComprehensiveTrends = enhancedInsightsAPI.getComprehensiveTrends;

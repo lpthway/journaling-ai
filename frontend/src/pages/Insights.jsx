@@ -521,15 +521,18 @@ const TrendsTab = () => {
   const [timeRange, setTimeRange] = useState(30);
   const [trendsData, setTrendsData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [useComprehensive, setUseComprehensive] = useState(true);
 
   useEffect(() => {
     loadTrendsData();
-  }, [timeRange]);
+  }, [timeRange, useComprehensive]);
 
   const loadTrendsData = async () => {
     try {
       setLoading(true);
-      const response = await insightsAPI.getMoodTrends(timeRange);
+      const response = useComprehensive 
+        ? await insightsAPI.getComprehensiveTrends(timeRange)
+        : await insightsAPI.getMoodTrends(timeRange);
       setTrendsData(response.data);
     } catch (error) {
       console.error('Error loading trends:', error);
@@ -541,9 +544,33 @@ const TrendsTab = () => {
 
   return (
     <div className="space-y-6">
-      {/* Time Range Selector */}
+      {/* Controls */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Mood Trends</h2>
+        <div className="flex items-center space-x-4">
+          <h2 className="text-lg font-semibold text-gray-900">Mood Trends</h2>
+          
+          {/* Data Source Toggle */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-600">Data source:</span>
+            <button
+              onClick={() => setUseComprehensive(!useComprehensive)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                useComprehensive ? 'bg-blue-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  useComprehensive ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className="text-sm font-medium text-gray-900">
+              {useComprehensive ? 'Journal + Chat' : 'Journal Only'}
+            </span>
+          </div>
+        </div>
+
+        {/* Time Range Selector */}
         <select
           value={timeRange}
           onChange={(e) => setTimeRange(parseInt(e.target.value))}
@@ -561,7 +588,11 @@ const TrendsTab = () => {
           <LoadingSpinner size="lg" />
         </div>
       ) : (
-        <MoodTrends data={trendsData} timeRange={timeRange} />
+        <MoodTrends 
+          data={trendsData} 
+          timeRange={timeRange} 
+          isComprehensive={useComprehensive}
+        />
       )}
     </div>
   );

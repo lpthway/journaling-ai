@@ -389,6 +389,161 @@ async def analyze_patterns():
         logger.error(f"Error analyzing patterns: {e}")
         raise HTTPException(status_code=500, detail="Failed to analyze patterns")
 
+@router.get("/trends/comprehensive")
+async def get_comprehensive_trends(days: int = Query(30, ge=7, le=365)):
+    """Get comprehensive mood trends including journal entries AND chat conversations with all days filled"""
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Get journal entries
+        journal_entries = await db_service.get_entries(
+            limit=1000,
+            date_from=start_date,
+            date_to=end_date
+        )
+        
+        # Get chat conversations
+        chat_conversations = await get_chat_conversations(days)
+        
+        # Create a complete date range
+        all_dates = []
+        current_date = start_date
+        while current_date <= end_date:
+            all_dates.append(current_date.strftime('%Y-%m-%d'))
+            current_date += timedelta(days=1)
+        
+        # Initialize daily data structure
+        daily_data = {}
+        for date_str in all_dates:
+            daily_data[date_str] = {
+                'date': date_str,
+                'journal_entries': [],
+                'chat_conversations': [],
+                'journal_mood_scores': [],
+                'chat_mood_scores': [],
+                'combined_mood_scores': []
+            }
+        
+        # Process journal entries
+        mood_values = {
+            'very_negative': -2,
+            'negative': -1,
+            'neutral': 0,
+            'positive': 1,
+            'very_positive': 2
+        }
+        
+        total_journal_entries = 0
+        for entry in journal_entries:
+            date_str = entry.created_at.strftime('%Y-%m-%d')
+            if date_str in daily_data and entry.mood:
+                mood_score = mood_values[entry.mood.value]
+                daily_data[date_str]['journal_entries'].append({
+                    'id': entry.id,
+                    'title': entry.title,
+                    'mood': entry.mood.value,
+                    'mood_score': mood_score
+                })
+                daily_data[date_str]['journal_mood_scores'].append(mood_score)
+                daily_data[date_str]['combined_mood_scores'].append(mood_score)
+                total_journal_entries += 1
+        
+        # Process chat conversations
+        total_chat_conversations = 0
+        for conv in chat_conversations:
+            try:
+                conv_date = datetime.fromisoformat(conv['created_at'].replace('Z', '+00:00'))
+                date_str = conv_date.strftime('%Y-%m-%d')
+                
+                if date_str in daily_data:
+                    # Get user messages for sentiment analysis
+                    user_messages = [msg for msg in conv['messages'] if msg['role'] == 'user']
+                    if user_messages:
+                        combined_text = ' '.join([msg['content'] for msg in user_messages])
+                        mood, sentiment_score = sentiment_service.analyze_sentiment(combined_text)
+                        mood_score = mood_values.get(mood.value, 0)
+                        
+                        daily_data[date_str]['chat_conversations'].append({
+                            'id': conv['session_id'],
+                            'session_type': conv['session_type'],
+                            'message_count': len(user_messages),
+                            'mood': mood.value,
+                            'mood_score': mood_score
+                        })
+                        daily_data[date_str]['chat_mood_scores'].append(mood_score)
+                        daily_data[date_str]['combined_mood_scores'].append(mood_score)
+                        total_chat_conversations += 1
+            except Exception as e:
+                logger.warning(f"Error processing conversation date: {e}")
+                continue
+        
+        # Calculate daily averages and create trend data
+        trend_data = []
+        for date_str in sorted(all_dates):
+            day_data = daily_data[date_str]
+            
+            # Calculate averages
+            journal_avg = sum(day_data['journal_mood_scores']) / len(day_data['journal_mood_scores']) if day_data['journal_mood_scores'] else None
+            chat_avg = sum(day_data['chat_mood_scores']) / len(day_data['chat_mood_scores']) if day_data['chat_mood_scores'] else None
+            combined_avg = sum(day_data['combined_mood_scores']) / len(day_data['combined_mood_scores']) if day_data['combined_mood_scores'] else None
+            
+            trend_data.append({
+                'date': date_str,
+                'journal_mood_score': round(journal_avg, 2) if journal_avg is not None else None,
+                'chat_mood_score': round(chat_avg, 2) if chat_avg is not None else None,
+                'combined_mood_score': round(combined_avg, 2) if combined_avg is not None else None,
+                'journal_entry_count': len(day_data['journal_entries']),
+                'chat_conversation_count': len(day_data['chat_conversations']),
+                'total_activity_count': len(day_data['journal_entries']) + len(day_data['chat_conversations']),
+                'has_data': len(day_data['combined_mood_scores']) > 0
+            })
+        
+        # Calculate overall trends
+        def calculate_trend(scores):
+            valid_scores = [s for s in scores if s is not None]
+            if len(valid_scores) >= 2:
+                recent_scores = valid_scores[-7:] if len(valid_scores) >= 7 else valid_scores[len(valid_scores)//2:]
+                earlier_scores = valid_scores[:7] if len(valid_scores) >= 7 else valid_scores[:len(valid_scores)//2]
+                
+                if recent_scores and earlier_scores:
+                    recent_avg = sum(recent_scores) / len(recent_scores)
+                    earlier_avg = sum(earlier_scores) / len(earlier_scores)
+                    
+                    if recent_avg > earlier_avg + 0.1:
+                        return 'improving'
+                    elif recent_avg < earlier_avg - 0.1:
+                        return 'declining'
+                    else:
+                        return 'stable'
+            return 'insufficient_data'
+        
+        journal_scores = [d['journal_mood_score'] for d in trend_data if d['journal_mood_score'] is not None]
+        chat_scores = [d['chat_mood_score'] for d in trend_data if d['chat_mood_score'] is not None]
+        combined_scores = [d['combined_mood_score'] for d in trend_data if d['combined_mood_score'] is not None]
+        
+        return {
+            'period_days': days,
+            'total_journal_entries': total_journal_entries,
+            'total_chat_conversations': total_chat_conversations,
+            'total_activities': total_journal_entries + total_chat_conversations,
+            'journal_trend_direction': calculate_trend(journal_scores),
+            'chat_trend_direction': calculate_trend(chat_scores),
+            'combined_trend_direction': calculate_trend(combined_scores),
+            'daily_data': trend_data,
+            'source': 'comprehensive',
+            'data_summary': {
+                'days_with_journal_entries': len([d for d in trend_data if d['journal_entry_count'] > 0]),
+                'days_with_chat_conversations': len([d for d in trend_data if d['chat_conversation_count'] > 0]),
+                'days_with_any_activity': len([d for d in trend_data if d['has_data']]),
+                'total_days_in_period': len(trend_data)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting comprehensive trends: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze comprehensive trends")
+
 @router.get("/trends/mood")
 async def get_mood_trends(days: int = Query(30, ge=7, le=365)):
     """Get detailed mood trends over time from journal entries only"""
