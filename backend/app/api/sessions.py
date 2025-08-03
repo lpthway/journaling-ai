@@ -8,11 +8,57 @@ from app.models.session import (
 )
 from app.services.session_service import session_service
 from app.services.conversation_service import conversation_service
+from app.services.llm_service import llm_service
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+async def auto_tag_conversation(session_id: str):
+    """Automatically generate tags for a conversation based on its content"""
+    try:
+        # Get session and messages
+        session = await session_service.get_session(session_id)
+        if not session:
+            return
+        
+        messages = await session_service.get_session_messages(session_id)
+        if not messages:
+            return
+        
+        # Extract user messages for tagging
+        user_messages = [msg for msg in messages if msg.role == MessageRole.USER]
+        if len(user_messages) < 2:  # Need at least 2 user messages
+            return
+        
+        # Combine user messages for analysis
+        conversation_text = " ".join([msg.content for msg in user_messages])
+        
+        # Generate tags if we have enough content
+        if len(conversation_text.strip()) > 20:
+            auto_tags = await llm_service.generate_automatic_tags(conversation_text, "conversation")
+            
+            if auto_tags:
+                # Get existing session tags
+                existing_tags = session.tags if hasattr(session, 'tags') and session.tags else []
+                existing_tags_lower = [tag.lower() for tag in existing_tags]
+                
+                # Add new tags that don't already exist
+                new_tags = []
+                for tag in auto_tags:
+                    if tag.lower() not in existing_tags_lower:
+                        new_tags.append(tag)
+                
+                if new_tags:
+                    # Update session with new tags
+                    all_tags = existing_tags + new_tags
+                    update_data = SessionUpdate(tags=all_tags[:8])  # Limit to 8 tags
+                    await session_service.update_session(session_id, update_data)
+                    logger.info(f"Auto-tagged session {session_id} with tags: {new_tags}")
+    
+    except Exception as e:
+        logger.error(f"Error auto-tagging conversation {session_id}: {e}")
 
 @router.post("/", response_model=SessionResponse)
 async def create_session(session_data: SessionCreate):
@@ -159,6 +205,16 @@ async def send_message(session_id: str, message_data: MessageCreate):
             session_id,
             MessageCreate(content=ai_response, role=MessageRole.ASSISTANT)
         )
+        
+        # Auto-tag conversation every 6 messages (3 exchanges)
+        try:
+            all_messages = await session_service.get_session_messages(session_id)
+            message_count = len(all_messages)
+            
+            if message_count >= 6 and message_count % 6 == 0:
+                await auto_tag_conversation(session_id)
+        except Exception as e:
+            logger.warning(f"Failed to auto-tag conversation {session_id}: {e}")
         
         return MessageResponse(**ai_message.model_dump())
         
@@ -315,3 +371,25 @@ async def get_available_session_types():
             }
         ]
     }
+
+@router.post("/{session_id}/auto-tag")
+async def trigger_auto_tag(session_id: str):
+    """Manually trigger automatic tagging for a conversation session"""
+    try:
+        # Check if session exists
+        session = await session_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Trigger auto-tagging
+        await auto_tag_conversation(session_id)
+        
+        # Return updated session
+        updated_session = await session_service.get_session(session_id)
+        return SessionResponse(**updated_session.model_dump())
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error triggering auto-tag for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to auto-tag session")

@@ -71,6 +71,7 @@ class SessionUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[SessionStatus] = None
+    tags: Optional[List[str]] = None
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -84,6 +85,7 @@ class Session(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_activity: Optional[datetime] = None
     message_count: int = 0
+    tags: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
     class Config:
@@ -102,6 +104,7 @@ class SessionResponse(BaseModel):
     updated_at: datetime
     last_activity: Optional[datetime] = None
     message_count: int = 0
+    tags: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     recent_messages: Optional[List[MessageResponse]] = None
 

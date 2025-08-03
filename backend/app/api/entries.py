@@ -7,6 +7,7 @@ from app.models.entry import Entry, EntryCreate, EntryUpdate, EntryResponse
 from app.services.database_service import db_service
 from app.services.vector_service import vector_service
 from app.services.sentiment_service import sentiment_service
+from app.services.llm_service import llm_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,13 +16,33 @@ router = APIRouter()
 
 @router.post("/", response_model=EntryResponse)
 async def create_entry(entry: EntryCreate):
-    """Create a new journal entry"""
+    """Create a new journal entry with automatic tagging"""
     try:
         # Analyze sentiment
         mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
         
+        # Generate automatic tags if not provided
+        auto_tags = []
+        if len(entry.content.strip()) > 10:  # Only tag substantial content
+            auto_tags = await llm_service.generate_automatic_tags(entry.content, "journal")
+        
+        # Combine manual tags with automatic tags, avoiding duplicates
+        manual_tags = [tag.lower().strip() for tag in entry.tags] if entry.tags else []
+        all_tags = manual_tags.copy()
+        
+        for auto_tag in auto_tags:
+            if auto_tag not in all_tags:
+                all_tags.append(auto_tag)
+        
+        # Limit to 8 tags total
+        final_tags = all_tags[:8]
+        
+        # Update entry with final tags
+        entry_with_tags = entry.model_copy()
+        entry_with_tags.tags = final_tags
+        
         # Create entry in database
-        db_entry = await db_service.create_entry(entry, mood, sentiment_score)
+        db_entry = await db_service.create_entry(entry_with_tags, mood, sentiment_score)
         
         # Prepare metadata for vector database
         metadata = {
@@ -32,8 +53,9 @@ async def create_entry(entry: EntryCreate):
             'mood': db_entry.mood.value if db_entry.mood else 'neutral',
             'sentiment_score': db_entry.sentiment_score or 0.0,
             'created_at': db_entry.created_at.isoformat(),
-            'tags': db_entry.tags or [],  # This will be handled by vector service
-            'word_count': db_entry.word_count or 0
+            'tags': db_entry.tags or [],
+            'word_count': db_entry.word_count or 0,
+            'auto_tagged': len(auto_tags) > 0  # Track if entry was auto-tagged
         }
         
         await vector_service.add_entry(db_entry.id, db_entry.content, metadata)

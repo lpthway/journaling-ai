@@ -237,6 +237,58 @@ Format as a simple list of suggestions, each on a new line starting with a dash 
         except Exception as e:
             logger.error(f"Error generating coaching suggestions: {e}")
             return ["Keep reflecting on your experiences and emotions through journaling."]
+    
+    async def generate_automatic_tags(self, content: str, content_type: str = "journal") -> List[str]:
+        """Generate automatic tags for journal entries or chat conversations"""
+        try:
+            if not content or len(content.strip()) < 10:
+                return []
+            
+            # Prepare the prompt based on content type
+            content_description = "journal entry" if content_type == "journal" else "conversation"
+            
+            prompt = f"""Analyze this {content_description} and generate 3-5 relevant tags that capture the main themes, emotions, topics, or categories.
+
+Rules for tags:
+- Use single words or short phrases (1-3 words max)
+- Focus on themes, emotions, activities, relationships, goals, challenges
+- Be specific but not too niche
+- Use lowercase
+- Separate tags with commas
+- Examples: work, relationships, anxiety, gratitude, travel, health, goals, family, stress, creativity, learning
+
+{content_description.title()}:
+{content[:500]}...
+
+Generate only the tags as a comma-separated list, nothing else:"""
+            
+            response = await self.generate_response(prompt)
+            
+            # Parse the response to extract tags
+            tags = []
+            for line in response.split('\n'):
+                line = line.strip()
+                if line and not line.startswith('Tags:') and not line.startswith('Here are'):
+                    # Split by comma and clean up
+                    potential_tags = [tag.strip().lower() for tag in line.split(',')]
+                    for tag in potential_tags:
+                        # Clean tag: remove special characters, limit length
+                        clean_tag = ''.join(c for c in tag if c.isalnum() or c in [' ', '-', '_']).strip()
+                        if clean_tag and len(clean_tag) <= 20 and clean_tag not in tags:
+                            tags.append(clean_tag)
+                    break  # Only process the first valid line
+            
+            # Limit to 5 tags and ensure they're reasonable
+            final_tags = []
+            for tag in tags[:5]:
+                if len(tag) >= 2 and len(tag.split()) <= 3:  # 2+ chars, max 3 words
+                    final_tags.append(tag)
+            
+            return final_tags[:5] if final_tags else []
+        
+        except Exception as e:
+            logger.error(f"Error generating automatic tags: {e}")
+            return []
 
 # Global instance
 llm_service = LLMService()
