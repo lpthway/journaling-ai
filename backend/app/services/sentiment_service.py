@@ -13,40 +13,62 @@ logger = logging.getLogger(__name__)
 
 class MultilingualSentimentService:
     def __init__(self):
+        # TEMPORARILY DISABLED: Load models on-demand to prevent VRAM usage at startup
+        self.emotion_pipeline = None
+        self.multilingual_pipeline = None
+        self.primary_pipeline = None
+        self.models_loaded = False
+        
+        logger.info("🔧 Sentiment service initialized (models will load on demand)")
+        
+    def _load_single_model(self, model_type: str):
+        """Load only one model at a time to conserve VRAM"""
+        # Clear any existing models first
+        self._clear_models()
+        
+        try:
+            if model_type == "emotion" and not self.emotion_pipeline:
+                # Primary: Enhanced emotion detection (English)
+                self.emotion_pipeline = pipeline(
+                    "text-classification",
+                    model="j-hartmann/emotion-english-distilroberta-base",
+                    return_all_scores=True
+                )
+                logger.info("✅ Loaded emotion detection model")
+                
+            elif model_type == "multilingual" and not self.multilingual_pipeline:
+                # Fallback: Multilingual sentiment (German/English)
+                self.multilingual_pipeline = pipeline(
+                    "sentiment-analysis",
+                    model="nlptown/bert-base-multilingual-uncased-sentiment"
+                )
+                logger.info("✅ Loaded multilingual sentiment model")
+                
+            elif model_type == "backup" and not self.primary_pipeline:
+                # Backup: Original RoBERTa (English only)
+                self.primary_pipeline = pipeline(
+                    "sentiment-analysis",
+                    model="cardiffnlp/twitter-roberta-base-sentiment-latest"
+                )
+                logger.info("✅ Loaded backup sentiment model")
+                
+        except Exception as e:
+            logger.warning(f"Could not load {model_type} model: {e}")
+            
+    def _clear_models(self):
+        """Clear all models to free VRAM"""
+        import gc
+        import torch
+        
         self.emotion_pipeline = None
         self.multilingual_pipeline = None
         self.primary_pipeline = None
         
-        try:
-            # Primary: Enhanced emotion detection (English)
-            self.emotion_pipeline = pipeline(
-                "text-classification",
-                model="j-hartmann/emotion-english-distilroberta-base",
-                return_all_scores=True
-            )
-            logger.info("✅ Loaded enhanced emotion detection model (6 emotions)")
-        except Exception as e:
-            logger.warning(f"Could not load emotion model: {e}")
-        
-        try:
-            # Fallback: Multilingual sentiment (German/English)
-            self.multilingual_pipeline = pipeline(
-                "sentiment-analysis",
-                model="nlptown/bert-base-multilingual-uncased-sentiment"
-            )
-            logger.info("✅ Loaded multilingual sentiment model (German/English)")
-        except Exception as e:
-            logger.warning(f"Could not load multilingual model: {e}")
-            
-        try:
-            # Backup: Original RoBERTa (English only)
-            self.primary_pipeline = pipeline(
-                "sentiment-analysis",
-                model="cardiffnlp/twitter-roberta-base-sentiment-latest"
-            )
-            logger.info("✅ Loaded backup sentiment model")
-        except Exception as e:
-            logger.warning(f"Could not load backup model: {e}")
+        # Force garbage collection and clear GPU cache
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
     
     def detect_language(self, text: str) -> str:
         """Detect if text is German or English"""
@@ -58,24 +80,29 @@ class MultilingualSentimentService:
             return "en"  # Default fallback
     
     def analyze_sentiment(self, text: str) -> Tuple[MoodType, float]:
-        """Analyze sentiment with language detection"""
+        """Analyze sentiment with language detection and sequential model loading"""
         try:
             language = self.detect_language(text)
             
             # For English: Use advanced emotion detection
-            if language == "en" and self.emotion_pipeline:
-                return self._analyze_with_emotions(text)
+            if language == "en":
+                self._load_single_model("emotion")
+                if self.emotion_pipeline:
+                    return self._analyze_with_emotions(text)
             
             # For German or if emotion detection fails: Use multilingual
-            elif self.multilingual_pipeline:
-                return self._analyze_multilingual(text)
+            if language == "de" or not self.emotion_pipeline:
+                self._load_single_model("multilingual")
+                if self.multilingual_pipeline:
+                    return self._analyze_multilingual(text)
             
-            # Final fallback
-            elif self.primary_pipeline:
+            # Final fallback to backup model
+            self._load_single_model("backup")
+            if self.primary_pipeline:
                 return self._analyze_with_roberta(text)
             
-            else:
-                return self._analyze_with_textblob(text)
+            # Ultimate fallback (no GPU required)
+            return self._analyze_with_textblob(text)
                 
         except Exception as e:
             logger.error(f"Error in sentiment analysis: {e}")

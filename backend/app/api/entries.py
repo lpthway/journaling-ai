@@ -5,11 +5,11 @@ from typing import List, Optional
 from datetime import datetime, date
 from app.models.entry import (
     Entry, EntryCreate, EntryUpdate, EntryResponse, EntryVersion, 
-    EntryTemplate, EntryTemplateCreate, AdvancedSearchFilter
+    EntryTemplate, EntryTemplateCreate, AdvancedSearchFilter, MoodType
 )
 from app.services.database_service import db_service
 from app.services.vector_service import vector_service
-from app.services.sentiment_service import sentiment_service
+from app.services.sentiment_service import sentiment_service  
 from app.services.llm_service import llm_service
 import logging
 
@@ -21,7 +21,7 @@ router = APIRouter()
 async def create_entry(entry: EntryCreate):
     """Create a new journal entry with automatic tagging"""
     try:
-        # Analyze sentiment
+        # Analyze sentiment  
         mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
         
         # Generate automatic tags if not provided
@@ -44,7 +44,7 @@ async def create_entry(entry: EntryCreate):
         entry_with_tags = entry.model_copy()
         entry_with_tags.tags = final_tags
         
-        # Create entry in database
+        # Create entry in database (mood already analyzed above)
         db_entry = await db_service.create_entry(entry_with_tags, mood, sentiment_score)
         
         # Prepare metadata for vector database

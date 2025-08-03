@@ -9,6 +9,7 @@ to populate the application with test data for development and testing purposes.
 import asyncio
 import json
 import random
+import argparse
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import aiohttp
@@ -30,33 +31,87 @@ class DataPopulator:
         self.ollama_client = ollama.Client(host="http://localhost:11434")
         self.api_base = "http://localhost:8000/api/v1"
         
-        # Journal entry themes for variety - English and German
-        self.journal_themes = [
-            # English themes
-            {"theme": "work stress and productivity", "language": "en"},
-            {"theme": "personal relationships and family", "language": "en"},
-            {"theme": "health and wellness journey", "language": "en"}, 
-            {"theme": "creative projects and hobbies", "language": "en"},
-            {"theme": "travel experiences and adventures", "language": "en"},
-            {"theme": "learning and personal growth", "language": "en"},
-            {"theme": "financial planning and goals", "language": "en"},
-            {"theme": "daily routines and habits", "language": "en"},
-            {"theme": "emotional challenges and breakthroughs", "language": "en"},
-            {"theme": "career development and aspirations", "language": "en"},
-            # German themes
-            {"theme": "Arbeitsstress und Produktivität", "language": "de"},
-            {"theme": "persönliche Beziehungen und Familie", "language": "de"},
-            {"theme": "Gesundheit und Wohlbefinden", "language": "de"},
-            {"theme": "kreative Projekte und Hobbys", "language": "de"},
-            {"theme": "Reiseerfahrungen und Abenteuer", "language": "de"},
-            {"theme": "Lernen und persönliche Entwicklung", "language": "de"},
-            {"theme": "finanzielle Planung und Ziele", "language": "de"},
-            {"theme": "tägliche Routinen und Gewohnheiten", "language": "de"},
-            {"theme": "emotionale Herausforderungen und Durchbrüche", "language": "de"},
-            {"theme": "Karriereentwicklung und Bestrebungen", "language": "de"}
+        # Core topics for better organization (limited set to encourage reuse)
+        self.core_topics = [
+            {"name": "Work & Career", "description": "Professional life, career development, and workplace experiences", "language": "en"},
+            {"name": "Arbeit & Karriere", "description": "Berufsleben, Karriereentwicklung und Erfahrungen am Arbeitsplatz", "language": "de"},
+            {"name": "Personal Growth", "description": "Self-reflection, learning experiences, and personal development", "language": "en"},
+            {"name": "Persönliche Entwicklung", "description": "Selbstreflexion, Lernerfahrungen und persönliche Weiterentwicklung", "language": "de"},
+            {"name": "Family & Relationships", "description": "Connections with family, friends, and significant others", "language": "en"},
+            {"name": "Familie & Beziehungen", "description": "Verbindungen zu Familie, Freunden und wichtigen Menschen", "language": "de"},
+            {"name": "Health & Wellness", "description": "Physical and mental health, fitness, nutrition, and wellbeing", "language": "en"},
+            {"name": "Gesundheit & Wohlbefinden", "description": "Körperliche und geistige Gesundheit, Fitness, Ernährung", "language": "de"},
+            {"name": "Daily Life", "description": "Everyday experiences, routines, and observations", "language": "en"},
+            {"name": "Alltag", "description": "Alltägliche Erfahrungen, Routinen und Beobachtungen", "language": "de"}
         ]
         
-        # Chat session themes - English and German
+        # Seasonal topics (created occasionally based on time of year)
+        self.seasonal_topics = [
+            {"name": "Travel & Adventures", "description": "Travel experiences and explorations", "language": "en", "seasons": ["spring", "summer"]},
+            {"name": "Reisen & Abenteuer", "description": "Reiseerfahrungen und Entdeckungen", "language": "de", "seasons": ["spring", "summer"]},
+            {"name": "Holiday Reflections", "description": "Holiday experiences and family gatherings", "language": "en", "seasons": ["winter"]},
+            {"name": "Feiertagsreflexionen", "description": "Feiertags-Erfahrungen und Familientreffen", "language": "de", "seasons": ["winter"]},
+            {"name": "New Year Goals", "description": "Resolutions, planning, and fresh starts", "language": "en", "seasons": ["winter"]},
+            {"name": "Neujahrsziele", "description": "Vorsätze, Planung und Neuanfänge", "language": "de", "seasons": ["winter"]}
+        ]
+        
+        # Diverse journal themes for realistic variety
+        self.journal_themes = [
+            # Work & Career themes
+            {"theme": "work stress and productivity challenges", "language": "en", "topic_category": "work"},
+            {"theme": "team collaboration and workplace dynamics", "language": "en", "topic_category": "work"},
+            {"theme": "career goals and professional development", "language": "en", "topic_category": "work"},
+            {"theme": "work-life balance struggles", "language": "en", "topic_category": "work"},
+            {"theme": "Arbeitsstress und Produktivitätsherausforderungen", "language": "de", "topic_category": "work"},
+            {"theme": "Teamarbeit und Arbeitsplatz-Dynamik", "language": "de", "topic_category": "work"},
+            {"theme": "Karriereziele und berufliche Entwicklung", "language": "de", "topic_category": "work"},
+            
+            # Personal Growth themes
+            {"theme": "self-reflection and personal insights", "language": "en", "topic_category": "growth"},
+            {"theme": "learning new skills and knowledge", "language": "en", "topic_category": "growth"},
+            {"theme": "overcoming personal challenges", "language": "en", "topic_category": "growth"},
+            {"theme": "meditation and mindfulness practice", "language": "en", "topic_category": "growth"},
+            {"theme": "Selbstreflexion und persönliche Einsichten", "language": "de", "topic_category": "growth"},
+            {"theme": "neue Fähigkeiten und Wissen erlernen", "language": "de", "topic_category": "growth"},
+            {"theme": "persönliche Herausforderungen überwinden", "language": "de", "topic_category": "growth"},
+            
+            # Family & Relationships themes
+            {"theme": "family time and bonding experiences", "language": "en", "topic_category": "relationships"},
+            {"theme": "friendship dynamics and social connections", "language": "en", "topic_category": "relationships"},
+            {"theme": "romantic relationship reflections", "language": "en", "topic_category": "relationships"},
+            {"theme": "communication challenges with loved ones", "language": "en", "topic_category": "relationships"},
+            {"theme": "Familienzeit und verbindende Erfahrungen", "language": "de", "topic_category": "relationships"},
+            {"theme": "Freundschaftsdynamik und soziale Verbindungen", "language": "de", "topic_category": "relationships"},
+            {"theme": "romantische Beziehungsreflexionen", "language": "de", "topic_category": "relationships"},
+            
+            # Health & Wellness themes
+            {"theme": "fitness journey and exercise routines", "language": "en", "topic_category": "health"},
+            {"theme": "mental health and emotional wellbeing", "language": "en", "topic_category": "health"},
+            {"theme": "nutrition and healthy eating habits", "language": "en", "topic_category": "health"},
+            {"theme": "sleep patterns and rest quality", "language": "en", "topic_category": "health"},
+            {"theme": "Fitness-Reise und Trainingsroutinen", "language": "de", "topic_category": "health"},
+            {"theme": "mentale Gesundheit und emotionales Wohlbefinden", "language": "de", "topic_category": "health"},
+            {"theme": "Ernährung und gesunde Essgewohnheiten", "language": "de", "topic_category": "health"},
+            
+            # Daily Life themes
+            {"theme": "morning routines and daily habits", "language": "en", "topic_category": "daily"},
+            {"theme": "evening reflections and gratitude", "language": "en", "topic_category": "daily"},
+            {"theme": "weekend activities and leisure time", "language": "en", "topic_category": "daily"},
+            {"theme": "weather and seasonal observations", "language": "en", "topic_category": "daily"},
+            {"theme": "cooking and meal experiences", "language": "en", "topic_category": "daily"},
+            {"theme": "Morgenroutinen und tägliche Gewohnheiten", "language": "de", "topic_category": "daily"},
+            {"theme": "Abendreflexionen und Dankbarkeit", "language": "de", "topic_category": "daily"},
+            {"theme": "Wochenendaktivitäten und Freizeit", "language": "de", "topic_category": "daily"},
+            
+            # Seasonal themes
+            {"theme": "travel planning and adventure dreams", "language": "en", "topic_category": "seasonal", "seasons": ["spring", "summer"]},
+            {"theme": "holiday preparations and celebrations", "language": "en", "topic_category": "seasonal", "seasons": ["winter"]},
+            {"theme": "new year resolutions and goal setting", "language": "en", "topic_category": "seasonal", "seasons": ["winter"]},
+            {"theme": "Reiseplanung und Abenteuerträume", "language": "de", "topic_category": "seasonal", "seasons": ["spring", "summer"]},
+            {"theme": "Feiertagsvorbereitungen und Feiern", "language": "de", "topic_category": "seasonal", "seasons": ["winter"]}
+        ]
+        
+        # Chat session themes for variety
         self.chat_themes = [
             # English themes
             {"theme": "exploring feelings about work-life balance", "language": "en"},
@@ -82,19 +137,74 @@ class DataPopulator:
             {"theme": "tägliche Emotionen und Gedanken verarbeiten", "language": "de"}
         ]
         
-        # Topics to create
-        self.topics = [
-            {"name": "Work & Career", "description": "Everything related to professional life, career development, and workplace experiences", "language": "en"},
-            {"name": "Arbeit & Karriere", "description": "Alles rund um das Berufsleben, Karriereentwicklung und Erfahrungen am Arbeitsplatz", "language": "de"},
-            {"name": "Personal Growth", "description": "Self-reflection, learning experiences, and personal development journey", "language": "en"},
-            {"name": "Persönliche Entwicklung", "description": "Selbstreflexion, Lernerfahrungen und persönliche Weiterentwicklung", "language": "de"},
-            {"name": "Family & Relationships", "description": "Connections with family, friends, and significant others", "language": "en"},
-            {"name": "Familie & Beziehungen", "description": "Verbindungen zu Familie, Freunden und wichtigen Menschen", "language": "de"},
-            {"name": "Health & Wellness", "description": "Physical and mental health, fitness, nutrition, and overall wellbeing", "language": "en"},
-            {"name": "Gesundheit & Wohlbefinden", "description": "Körperliche und geistige Gesundheit, Fitness, Ernährung und allgemeines Wohlbefinden", "language": "de"},
-            {"name": "Travel & Adventure", "description": "Travel experiences, adventures, and exploration", "language": "en"},
-            {"name": "Reisen & Abenteuer", "description": "Reiseerfahrungen, Abenteuer und Entdeckungen", "language": "de"}
+        # Store created topic IDs for reuse
+        self.created_topic_ids = {}
+    
+    def get_season(self, date: datetime) -> str:
+        """Get season based on date"""
+        month = date.month
+        if month in [12, 1, 2]:
+            return "winter"
+        elif month in [3, 4, 5]:
+            return "spring"
+        elif month in [6, 7, 8]:
+            return "summer"
+        else:
+            return "autumn"
+    
+    def select_theme_for_date(self, date: datetime, language_preference: str = None) -> Dict[str, str]:
+        """Select appropriate theme based on date and season"""
+        season = self.get_season(date)
+        
+        # 70% chance for language preference if specified, 30% chance for other language
+        if language_preference and random.random() < 0.7:
+            language = language_preference
+        else:
+            language = random.choice(['en', 'de'])
+        
+        # Filter themes by language and appropriate season
+        available_themes = [
+            theme for theme in self.journal_themes 
+            if theme['language'] == language and (
+                'seasons' not in theme or season in theme.get('seasons', [])
+            )
         ]
+        
+        return random.choice(available_themes)
+    
+    def should_create_seasonal_topic(self, date: datetime) -> Dict[str, str]:
+        """Determine if a seasonal topic should be created"""
+        season = self.get_season(date)
+        
+        # Only create seasonal topics during relevant seasons
+        relevant_topics = [
+            topic for topic in self.seasonal_topics 
+            if season in topic.get('seasons', [])
+        ]
+        
+        # 20% chance to create a seasonal topic during relevant season
+        if relevant_topics and random.random() < 0.2:
+            return random.choice(relevant_topics)
+        
+        return None
+    
+    def get_topic_for_theme(self, theme_data: Dict[str, str]) -> str:
+        """Get appropriate topic ID for a theme"""
+        category = theme_data.get('topic_category', 'daily')
+        language = theme_data['language']
+        
+        # Map categories to topic names
+        topic_mapping = {
+            'work': 'Work & Career' if language == 'en' else 'Arbeit & Karriere',
+            'growth': 'Personal Growth' if language == 'en' else 'Persönliche Entwicklung',
+            'relationships': 'Family & Relationships' if language == 'en' else 'Familie & Beziehungen',
+            'health': 'Health & Wellness' if language == 'en' else 'Gesundheit & Wohlbefinden',
+            'daily': 'Daily Life' if language == 'en' else 'Alltag',
+            'seasonal': None  # Will be handled separately
+        }
+        
+        topic_name = topic_mapping.get(category)
+        return self.created_topic_ids.get(topic_name)
 
     async def generate_journal_entry(self, theme_data: Dict[str, str], days_ago: int) -> Dict[str, Any]:
         """Generate a realistic journal entry using Ollama"""
@@ -418,23 +528,142 @@ Schreibe nur die Nachricht, nichts anderes:"""
             print(f"❌ Error creating chat session: {e}")
             return False
 
-    async def populate_data(self, num_journal_entries: int = 10, num_chat_sessions: int = 5):
-        """Populate the application with sample data"""
+    async def populate_year_data(self, language_preference: str = None):
+        """Populate the application with a full year of realistic data (1-3 entries per day)"""
+        
+        print("🚀 Starting FULL YEAR data population...")
+        print("📅 Generating entries from one year ago to today")
+        print("� 1-3 entries per day (journal entries + chat sessions)")
+        print("🌍 Languages: English 🇺🇸 and German 🇩🇪")
+        if language_preference:
+            lang_flag = "🇺🇸" if language_preference == 'en' else "🇩🇪"
+            print(f"🎯 Preference: {language_preference} {lang_flag} (70% of content)")
+        print()
+        
+        # Create core topics first
+        print("📚 Creating core topics...")
+        for topic in self.core_topics:
+            topic_id = await self.create_topic(topic)
+            if topic_id:
+                self.created_topic_ids[topic['name']] = topic_id
+            await asyncio.sleep(0.3)
+        
+        print()
+        
+        # Generate daily entries for the past year
+        start_date = datetime.now() - timedelta(days=365)
+        end_date = datetime.now()
+        current_date = start_date
+        
+        total_entries = 0
+        total_chats = 0
+        seasonal_topics_created = set()
+        
+        print("📝 Generating year-long daily entries...")
+        print(f"📅 From {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        print()
+        
+        while current_date <= end_date:
+            # Determine number of entries for this day (1-3, weighted toward 1-2)
+            num_entries = random.choices([1, 2, 3], weights=[50, 35, 15])[0]
+            
+            # Reduce entries on some days to simulate realistic patterns
+            if random.random() < 0.15:  # 15% chance of no entries (busy days)
+                num_entries = 0
+            elif current_date.weekday() in [5, 6]:  # Weekends - slightly different pattern
+                num_entries = random.choices([1, 2, 3], weights=[40, 40, 20])[0]
+            
+            days_ago = (end_date - current_date).days
+            
+            # Create seasonal topic if appropriate
+            seasonal_topic = self.should_create_seasonal_topic(current_date)
+            if seasonal_topic and seasonal_topic['name'] not in seasonal_topics_created:
+                topic_id = await self.create_topic(seasonal_topic)
+                if topic_id:
+                    self.created_topic_ids[seasonal_topic['name']] = topic_id
+                    seasonal_topics_created.add(seasonal_topic['name'])
+                await asyncio.sleep(0.3)
+            
+            for entry_num in range(num_entries):
+                entry_type = random.choices(['journal', 'chat'], weights=[70, 30])[0]
+                
+                if entry_type == 'journal':
+                    # Generate journal entry
+                    theme_data = self.select_theme_for_date(current_date, language_preference)
+                    
+                    if total_entries % 50 == 0:
+                        lang_flag = "🇺🇸" if theme_data['language'] == 'en' else "🇩🇪"
+                        print(f"   📝 Day {365 - days_ago}/365: {current_date.strftime('%Y-%m-%d')} - Entry {total_entries + 1} {lang_flag}")
+                    
+                    entry_data = await self.generate_journal_entry(theme_data, days_ago)
+                    topic_id = self.get_topic_for_theme(theme_data)
+                    
+                    await self.create_journal_entry(entry_data, topic_id)
+                    total_entries += 1
+                    
+                else:
+                    # Generate chat session
+                    theme_data = random.choice([t for t in self.chat_themes if t['language'] == (language_preference or random.choice(['en', 'de']))])
+                    session_type = random.choice(list(SessionType))
+                    
+                    if total_chats % 20 == 0:
+                        lang_flag = "🇺🇸" if theme_data['language'] == 'en' else "🇩🇪"
+                        print(f"   💬 Day {365 - days_ago}/365: {current_date.strftime('%Y-%m-%d')} - Chat {total_chats + 1} {lang_flag}")
+                    
+                    messages = await self.generate_chat_conversation(theme_data, session_type)
+                    await self.create_chat_session(session_type, theme_data, messages)
+                    total_chats += 1
+                
+                # Small delay between entries
+                await asyncio.sleep(0.5)
+            
+            # Move to next day
+            current_date += timedelta(days=1)
+            
+            # Longer delay every 10 days to avoid overwhelming the API
+            if (end_date - current_date).days % 10 == 0:
+                await asyncio.sleep(2)
+        
+        print()
+        print("✨ FULL YEAR data population complete!")
+        print()
+        print("🎯 What was created:")
+        print(f"   • {len(self.created_topic_ids)} topics (core + seasonal)")
+        print(f"   • {total_entries} journal entries across 365 days")
+        print(f"   • {total_chats} chat sessions with conversations")
+        print(f"   • Realistic daily patterns (1-3 entries per day)")
+        print(f"   • Seasonal content variation")
+        print(f"   • Multilingual content (English 🇺🇸 and German 🇩🇪)")
+        print(f"   • Automatic sentiment analysis and AI-generated tags")
+        print()
+        print("📊 Data distribution:")
+        print(f"   • Average {total_entries/365:.1f} journal entries per day")
+        print(f"   • Average {total_chats/365:.1f} chat sessions per day")
+        print(f"   • Total: {total_entries + total_chats} content pieces")
+        print()
+        print("🔍 Perfect for testing:")
+        print("   • Mood prediction patterns over time")
+        print("   • Long-term emotional trends and insights")
+        print("   • Seasonal variation in content and mood")
+        print("   • Hardware-adaptive AI performance with large datasets")
+        print("   • Auto-tagging accuracy across diverse content")
+
+    async def populate_data(self, num_journal_entries: int = 15, num_chat_sessions: int = 8):
+        """Populate the application with sample data (original method for smaller datasets)"""
         
         print("🚀 Starting data population...")
-        print(f"� Creating {len(self.topics)} topics")
-        print(f"�📝 Generating {num_journal_entries} journal entries")
+        print(f"📚 Creating {len(self.core_topics)} core topics")
+        print(f"📝 Generating {num_journal_entries} journal entries")
         print(f"💬 Generating {num_chat_sessions} chat sessions")
         print("🌍 Languages: English 🇺🇸 and German 🇩🇪")
         print()
         
-        # Create topics first
-        print("📚 Creating topics...")
-        topic_ids = {}
-        for topic in self.topics:
+        # Create core topics first
+        print("📚 Creating core topics...")
+        for topic in self.core_topics:
             topic_id = await self.create_topic(topic)
             if topic_id:
-                topic_ids[topic['name']] = topic_id
+                self.created_topic_ids[topic['name']] = topic_id
             await asyncio.sleep(0.5)
         
         print()
@@ -447,24 +676,9 @@ Schreibe nur die Nachricht, nichts anderes:"""
             
             print(f"   Generating entry {i+1}/{num_journal_entries}: {theme_data['theme']} ({theme_data['language']})")
             entry_data = await self.generate_journal_entry(theme_data, days_ago)
-            
-            # Assign appropriate topic based on content and language
-            topic_id = None
-            theme_lower = theme_data['theme'].lower()
-            if 'work' in theme_lower or 'arbeit' in theme_lower or 'career' in theme_lower or 'karriere' in theme_lower:
-                topic_id = topic_ids.get('Work & Career' if theme_data['language'] == 'en' else 'Arbeit & Karriere')
-            elif 'family' in theme_lower or 'familie' in theme_lower or 'relationship' in theme_lower or 'beziehung' in theme_lower:
-                topic_id = topic_ids.get('Family & Relationships' if theme_data['language'] == 'en' else 'Familie & Beziehungen')
-            elif 'health' in theme_lower or 'gesundheit' in theme_lower or 'wellness' in theme_lower or 'wohlbefinden' in theme_lower:
-                topic_id = topic_ids.get('Health & Wellness' if theme_data['language'] == 'en' else 'Gesundheit & Wohlbefinden')
-            elif 'travel' in theme_lower or 'reise' in theme_lower or 'adventure' in theme_lower or 'abenteuer' in theme_lower:
-                topic_id = topic_ids.get('Travel & Adventure' if theme_data['language'] == 'en' else 'Reisen & Abenteuer')
-            else:
-                topic_id = topic_ids.get('Personal Growth' if theme_data['language'] == 'en' else 'Persönliche Entwicklung')
+            topic_id = self.get_topic_for_theme(theme_data)
             
             await self.create_journal_entry(entry_data, topic_id)
-            
-            # Small delay to avoid overwhelming the API
             await asyncio.sleep(1)
         
         print()
@@ -488,33 +702,30 @@ Schreibe nur die Nachricht, nichts anderes:"""
         print("✨ Data population complete!")
         print()
         print("🎯 What was created:")
-        print(f"   • {len(self.topics)} topics in English and German")
-        print(f"   • {num_journal_entries} journal entries with automatic tags and topic categorization")
+        print(f"   • {len(self.created_topic_ids)} topics in English and German")
+        print(f"   • {num_journal_entries} journal entries with automatic tags")
         print(f"   • {num_chat_sessions} chat sessions with conversations")
         print(f"   • Automatic sentiment analysis for all content")
         print(f"   • AI-generated tags for better organization")
         print(f"   • Multilingual content testing (English 🇺🇸 and German 🇩🇪)")
-        print()
-        print("🔍 You can now explore:")
-        print("   • Topics tab to see categorized entries")
-        print("   • Insights & Analytics tab for patterns and trends")
-        print("   • Coaching suggestions based on your 'content'")
-        print("   • Ask AI questions about your 'experiences'")
-        print("   • View comprehensive mood trends")
-        print("   • Test multilingual auto-tagging and sentiment analysis")
 
 async def main():
     """Main function to run the data population"""
-    import argparse
     
     parser = argparse.ArgumentParser(description="Populate journaling AI with sample data")
-    parser.add_argument("--journal-entries", type=int, default=15, help="Number of journal entries to create")
-    parser.add_argument("--chat-sessions", type=int, default=8, help="Number of chat sessions to create")
+    parser.add_argument("--year", action="store_true", help="Generate a full year of data (365 days)")
+    parser.add_argument("--language", choices=['en', 'de'], help="Language preference (en/de, 70 percent of content)")
+    parser.add_argument("--journal-entries", type=int, default=15, help="Number of journal entries for regular mode")
+    parser.add_argument("--chat-sessions", type=int, default=8, help="Number of chat sessions for regular mode")
     
     args = parser.parse_args()
     
     populator = DataPopulator()
-    await populator.populate_data(args.journal_entries, args.chat_sessions)
+    
+    if args.year:
+        await populator.populate_year_data(args.language)
+    else:
+        await populator.populate_data(args.journal_entries, args.chat_sessions)
 
 if __name__ == "__main__":
     asyncio.run(main())

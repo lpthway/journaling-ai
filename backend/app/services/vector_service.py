@@ -12,15 +12,31 @@ logger = logging.getLogger(__name__)
 
 class VectorService:
     def __init__(self):
+        # Initialize ChromaDB but delay model loading
         self.client = chromadb.PersistentClient(
             path=settings.CHROMA_PERSIST_DIRECTORY,
             settings=ChromaSettings(anonymized_telemetry=False)
         )
-        self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        self.embedding_model = None  # Load on demand
+        self.model_loaded = False
         self.collection = self.client.get_or_create_collection(
             name="journal_entries",
             metadata={"hnsw:space": "cosine"}
         )
+        logger.info("🔧 Vector service initialized (embedding model will load on demand)")
+        
+    def _ensure_model_loaded(self):
+        """Load embedding model on first use"""
+        if self.model_loaded:
+            return
+        
+        try:
+            self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+            self.model_loaded = True
+            logger.info("✅ Loaded embedding model on demand")
+        except Exception as e:
+            logger.error(f"Failed to load embedding model: {e}")
+            raise
     
     def _prepare_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare metadata for ChromaDB by converting unsupported types"""
@@ -45,6 +61,9 @@ class VectorService:
     async def add_entry(self, entry_id: str, content: str, metadata: Dict[str, Any]):
         """Add an entry to the vector database"""
         try:
+            # Ensure embedding model is loaded
+            self._ensure_model_loaded()
+            
             # Generate embedding
             embedding = self.embedding_model.encode(content).tolist()
             
@@ -66,6 +85,9 @@ class VectorService:
     async def update_entry(self, entry_id: str, content: str, metadata: Dict[str, Any]):
         """Update an entry in the vector database"""
         try:
+            # Ensure embedding model is loaded
+            self._ensure_model_loaded()
+            
             embedding = self.embedding_model.encode(content).tolist()
             
             # Prepare metadata for ChromaDB
@@ -95,6 +117,9 @@ class VectorService:
                            filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Search for similar entries"""
         try:
+            # Ensure embedding model is loaded
+            self._ensure_model_loaded()
+            
             query_embedding = self.embedding_model.encode(query).tolist()
             
             # Prepare filters for ChromaDB
