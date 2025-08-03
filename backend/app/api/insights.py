@@ -19,11 +19,46 @@ async def ask_question(question: str):
         if not question.strip():
             raise HTTPException(status_code=400, detail="Question cannot be empty")
         
+        logger.info(f"Enhanced insights request: {question}")
+        
         # Use enhanced insights service that includes both journals and chats
         result = await enhanced_insights_service.analyze_all_content(question, days=30)
         
-        # Get detailed source information
-        sources_detail = await enhanced_insights_service.get_detailed_sources(question, days=30)
+        # Get detailed source information directly here
+        relevant_journal = await vector_service.search_entries(question, limit=10)
+        relevant_chat = await enhanced_insights_service.search_chat_content(question, limit=10)
+        
+        # Process sources for display
+        detailed_sources = {
+            'journal_entries': [],
+            'conversations': []
+        }
+        
+        # Process journal entries
+        for entry in relevant_journal:
+            metadata = entry.get('metadata', {})
+            detailed_sources['journal_entries'].append({
+                'id': entry['id'],
+                'date': metadata.get('created_at', 'Unknown'),
+                'title': metadata.get('title', 'Untitled'),
+                'snippet': entry['content'][:150] + '...' if len(entry['content']) > 150 else entry['content'],
+                'similarity': round((1 - entry.get('distance', 0)) * 100),
+                'type': 'journal'
+            })
+        
+        # Process chat conversations
+        for chat in relevant_chat:
+            detailed_sources['conversations'].append({
+                'id': chat['session_id'],
+                'date': chat['created_at'],
+                'session_type': chat['session_type'].replace('_', ' ').title(),
+                'snippet': chat['content'],
+                'similarity': round(chat['relevance_score'] * 100),
+                'message_count': chat['message_count'],
+                'type': 'conversation'
+            })
+        
+        total_sources = len(detailed_sources['journal_entries']) + len(detailed_sources['conversations'])
         
         return {
             'question': question,
@@ -31,8 +66,8 @@ async def ask_question(question: str):
             'sources': result['sources'],
             'content_breakdown': result['content_breakdown'],
             'time_period': result['time_period'],
-            'sources_used': sources_detail['total_sources'],
-            'detailed_sources': sources_detail['detailed_sources']
+            'sources_used': total_sources,
+            'detailed_sources': detailed_sources
         }
         
     except HTTPException:
