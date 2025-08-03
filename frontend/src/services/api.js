@@ -96,3 +96,21 @@ export const sessionAPI = {
 export const healthCheck = () => api.get('/health');
 
 export default api;
+// Enhanced Insights API - includes chat conversations
+export const enhancedInsightsAPI = {
+  askQuestion: (question) => api.post('/insights/ask', null, { params: { question } }),
+  askJournalOnly: (question) => api.post('/insights/ask-journal-only', null, { params: { question } }),
+  getEnhancedCoaching: () => api.get('/insights/coaching'),
+  getJournalOnlyCoaching: () => api.get('/insights/coaching-journal-only'),
+  getEnhancedPatterns: () => api.get('/insights/patterns-enhanced'),
+  getChatInsights: (days = 30) => api.get('/insights/chat-insights', { params: { days } }),
+  getComprehensiveMoodAnalysis: (days = 30) => api.get('/insights/mood-analysis-comprehensive', { params: { days } }),
+};
+
+// Update existing insightsAPI to include new methods
+insightsAPI.ask = enhancedInsightsAPI.askQuestion;
+insightsAPI.askJournalOnly = enhancedInsightsAPI.askJournalOnly;
+insightsAPI.getEnhancedCoaching = enhancedInsightsAPI.getEnhancedCoaching;
+insightsAPI.getEnhancedPatterns = enhancedInsightsAPI.getEnhancedPatterns;
+insightsAPI.getChatInsights = enhancedInsightsAPI.getChatInsights;
+insightsAPI.getComprehensiveMoodAnalysis = enhancedInsightsAPI.getComprehensiveMoodAnalysis;

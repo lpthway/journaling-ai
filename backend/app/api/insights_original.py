@@ -1,4 +1,4 @@
-### app/api/insights.py - Enhanced version
+# backend/app/api/insights.py - Enhanced version
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any
@@ -22,17 +22,12 @@ async def ask_question(question: str):
         # Use enhanced insights service that includes both journals and chats
         result = await enhanced_insights_service.analyze_all_content(question, days=30)
         
-        # Get detailed source information
-        sources_detail = await enhanced_insights_service.get_detailed_sources(question, days=30)
-        
         return {
             'question': question,
             'answer': result['answer'],
             'sources': result['sources'],
             'content_breakdown': result['content_breakdown'],
-            'time_period': result['time_period'],
-            'sources_used': sources_detail['total_sources'],
-            'detailed_sources': sources_detail['detailed_sources']
+            'time_period': result['time_period']
         }
         
     except HTTPException:
@@ -234,29 +229,6 @@ async def analyze_enhanced_patterns():
         logger.error(f"Error analyzing enhanced patterns: {e}")
         raise HTTPException(status_code=500, detail="Failed to analyze enhanced patterns")
 
-@router.get("/chat-insights")
-async def get_chat_insights(days: int = Query(30, ge=7, le=365)):
-    """Get insights specifically from chat conversations"""
-    try:
-        conversation_patterns = await enhanced_insights_service.analyze_conversation_patterns(days)
-        return conversation_patterns
-        
-    except Exception as e:
-        logger.error(f"Error getting chat insights: {e}")
-        raise HTTPException(status_code=500, detail="Failed to analyze chat insights")
-
-@router.get("/mood-analysis-comprehensive")
-async def get_comprehensive_mood_analysis(days: int = Query(30, ge=7, le=365)):
-    """Get comprehensive mood analysis from all sources"""
-    try:
-        analysis = await enhanced_insights_service.get_comprehensive_mood_analysis(days)
-        return analysis
-        
-    except Exception as e:
-        logger.error(f"Error getting comprehensive mood analysis: {e}")
-        raise HTTPException(status_code=500, detail="Failed to perform comprehensive mood analysis")
-
-# Keep original endpoints for backward compatibility
 @router.get("/trends/mood")
 async def get_mood_trends(days: int = Query(30, ge=7, le=365)):
     """Get detailed mood trends over time from journal entries only"""
@@ -329,3 +301,47 @@ async def get_mood_trends(days: int = Query(30, ge=7, le=365)):
     except Exception as e:
         logger.error(f"Error getting mood trends: {e}")
         raise HTTPException(status_code=500, detail="Failed to analyze mood trends")
+
+@router.get("/trends/mood-enhanced")
+async def get_enhanced_mood_trends(days: int = Query(30, ge=7, le=365)):
+    """Get mood trends from both journal entries and chat conversations"""
+    try:
+        # Get journal mood trends
+        journal_trends = await get_mood_trends(days)
+        
+        # Get comprehensive mood analysis that includes chat
+        comprehensive_mood = await enhanced_insights_service.get_comprehensive_mood_analysis(days)
+        
+        return {
+            'period_days': days,
+            'journal_trends': journal_trends,
+            'comprehensive_analysis': comprehensive_mood,
+            'source': 'journal_and_chat',
+            'note': 'Includes sentiment analysis from both journal entries and chat conversations'
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting enhanced mood trends: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze enhanced mood trends")
+
+@router.get("/chat-insights")
+async def get_chat_insights(days: int = Query(30, ge=7, le=365)):
+    """Get insights specifically from chat conversations"""
+    try:
+        conversation_patterns = await enhanced_insights_service.analyze_conversation_patterns(days)
+        return conversation_patterns
+        
+    except Exception as e:
+        logger.error(f"Error getting chat insights: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze chat insights")
+
+@router.get("/mood-analysis-comprehensive")
+async def get_comprehensive_mood_analysis(days: int = Query(30, ge=7, le=365)):
+    """Get comprehensive mood analysis from all sources"""
+    try:
+        analysis = await enhanced_insights_service.get_comprehensive_mood_analysis(days)
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Error getting comprehensive mood analysis: {e}")
+        raise HTTPException(status_code=500, detail="Failed to perform comprehensive mood analysis")

@@ -19,17 +19,17 @@ class EnhancedInsightsService:
         """Analyze both journal entries and chat conversations to answer a question"""
         try:
             # Get journal entries
-            journal_entries = await self.get_journal_entries(days)
+            journal_entries = await self._get_journal_entries(days)
             
             # Get chat conversations
-            chat_conversations = await self.get_chat_conversations(days)
+            chat_conversations = await self._get_chat_conversations(days)
             
             # Search for relevant content using vector search
             relevant_journal = await vector_service.search_entries(question, limit=10)
-            relevant_chat = await self.search_chat_content(question, limit=10)
+            relevant_chat = await self._search_chat_content(question, limit=10)
             
             # Combine and analyze all content
-            all_content = self.combine_content(
+            all_content = self._combine_content(
                 journal_entries, 
                 chat_conversations, 
                 relevant_journal, 
@@ -66,10 +66,10 @@ class EnhancedInsightsService:
             journal_mood_stats = await db_service.get_mood_statistics(days)
             
             # Analyze chat conversation sentiments
-            chat_sentiments = await self.analyze_chat_sentiments(days)
+            chat_sentiments = await self._analyze_chat_sentiments(days)
             
             # Combine both analyses
-            combined_analysis = await self.combine_mood_analyses(
+            combined_analysis = await self._combine_mood_analyses(
                 journal_mood_stats, 
                 chat_sentiments
             )
@@ -84,10 +84,10 @@ class EnhancedInsightsService:
         """Generate coaching suggestions based on both journal entries and chat conversations"""
         try:
             # Get recent journal entries
-            journal_entries = await self.get_journal_entries(days)
+            journal_entries = await self._get_journal_entries(days)
             
             # Get recent chat conversations
-            chat_conversations = await self.get_chat_conversations(days)
+            chat_conversations = await self._get_chat_conversations(days)
             
             # Convert to analysis format
             combined_content = []
@@ -139,7 +139,7 @@ class EnhancedInsightsService:
     async def analyze_conversation_patterns(self, days: int = 30) -> Dict[str, Any]:
         """Analyze patterns in chat conversations"""
         try:
-            conversations = await self.get_chat_conversations(days)
+            conversations = await self._get_chat_conversations(days)
             
             if not conversations:
                 return {
@@ -194,13 +194,13 @@ class EnhancedInsightsService:
     
     # Helper methods
     
-    async def get_journal_entries(self, days: int) -> List:
+    async def _get_journal_entries(self, days: int) -> List:
         """Get journal entries from the last N days"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         return await db_service.get_entries(date_from=start_date, date_to=end_date, limit=100)
     
-    async def get_chat_conversations(self, days: int) -> List[Dict]:
+    async def _get_chat_conversations(self, days: int) -> List[Dict]:
         """Get chat conversations from the last N days"""
         try:
             # Get sessions from the last N days
@@ -239,10 +239,10 @@ class EnhancedInsightsService:
             logger.error(f"Error getting chat conversations: {e}")
             return []
     
-    async def search_chat_content(self, query: str, limit: int = 10) -> List[Dict]:
+    async def _search_chat_content(self, query: str, limit: int = 10) -> List[Dict]:
         """Search through chat conversations for relevant content"""
         try:
-            conversations = await self.get_chat_conversations(30)  # Last 30 days
+            conversations = await self._get_chat_conversations(30)  # Last 30 days
             relevant_chats = []
             
             for conv in conversations:
@@ -277,10 +277,10 @@ class EnhancedInsightsService:
             logger.error(f"Error searching chat content: {e}")
             return []
     
-    async def analyze_chat_sentiments(self, days: int) -> Dict[str, Any]:
+    async def _analyze_chat_sentiments(self, days: int) -> Dict[str, Any]:
         """Analyze sentiments from chat conversations"""
         try:
-            conversations = await self.get_chat_conversations(days)
+            conversations = await self._get_chat_conversations(days)
             
             sentiment_data = {
                 'mood_distribution': {},
@@ -322,7 +322,7 @@ class EnhancedInsightsService:
             logger.error(f"Error analyzing chat sentiments: {e}")
             return {'error': 'Failed to analyze chat sentiments'}
     
-    async def combine_mood_analyses(self, journal_moods: Dict, chat_sentiments: Dict) -> Dict[str, Any]:
+    async def _combine_mood_analyses(self, journal_moods: Dict, chat_sentiments: Dict) -> Dict[str, Any]:
         """Combine mood analysis from journal entries and chat conversations"""
         try:
             combined = {
@@ -368,7 +368,7 @@ class EnhancedInsightsService:
             logger.error(f"Error combining mood analyses: {e}")
             return {'error': 'Failed to combine mood analyses'}
     
-    def combine_content(self, journal_entries, chat_conversations, relevant_journal, relevant_chat) -> List[Dict]:
+    def _combine_content(self, journal_entries, chat_conversations, relevant_journal, relevant_chat) -> List[Dict]:
         """Combine all content sources for analysis"""
         combined = []
         
@@ -398,55 +398,6 @@ class EnhancedInsightsService:
         combined.sort(key=lambda x: x['relevance'], reverse=True)
         
         return combined
-
-# Global instance
-async def get_detailed_sources(self, question: str, days: int = 30) -> Dict[str, Any]:
-        """Get detailed source information for the insights response"""
-        try:
-            # Get relevant content
-            relevant_journal = await vector_service.search_entries(question, limit=10)
-            relevant_chat = await self.search_chat_content(question, limit=10)
-            
-            detailed_sources = {
-                'journal_entries': [],
-                'conversations': []
-            }
-            
-            # Process journal entries
-            for entry in relevant_journal:
-                metadata = entry.get('metadata', {})
-                detailed_sources['journal_entries'].append({
-                    'id': entry['id'],
-                    'date': metadata.get('created_at', 'Unknown'),
-                    'title': metadata.get('title', 'Untitled'),
-                    'snippet': entry['content'][:150] + '...' if len(entry['content']) > 150 else entry['content'],
-                    'similarity': round((1 - entry.get('distance', 0)) * 100),
-                    'type': 'journal'
-                })
-            
-            # Process chat conversations
-            for chat in relevant_chat:
-                detailed_sources['conversations'].append({
-                    'id': chat['session_id'],
-                    'date': chat['created_at'],
-                    'session_type': chat['session_type'].replace('_', ' ').title(),
-                    'snippet': chat['content'],
-                    'similarity': round(chat['relevance_score'] * 100),
-                    'message_count': chat['message_count'],
-                    'type': 'conversation'
-                })
-            
-            return {
-                'total_sources': len(detailed_sources['journal_entries']) + len(detailed_sources['conversations']),
-                'detailed_sources': detailed_sources
-            }
-            
-        except Exception as e:
-            logger.error(f"Error getting detailed sources: {e}")
-            return {
-                'total_sources': 0,
-                'detailed_sources': {'journal_entries': [], 'conversations': []}
-            }
 
 # Global instance
 enhanced_insights_service = EnhancedInsightsService()
