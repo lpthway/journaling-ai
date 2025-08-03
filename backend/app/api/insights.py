@@ -1,10 +1,11 @@
-### app/api/insights.py
+# backend/app/api/insights.py - Enhanced version
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any
 from app.services.vector_service import vector_service
 from app.services.llm_service import llm_service
 from app.services.database_service import db_service
+from app.services.enhanced_insights_service import enhanced_insights_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,31 @@ router = APIRouter()
 
 @router.post("/ask")
 async def ask_question(question: str):
-    """Ask a question about your journal entries"""
+    """Ask a question about your journal entries AND chat conversations"""
+    try:
+        if not question.strip():
+            raise HTTPException(status_code=400, detail="Question cannot be empty")
+        
+        # Use enhanced insights service that includes both journals and chats
+        result = await enhanced_insights_service.analyze_all_content(question, days=30)
+        
+        return {
+            'question': question,
+            'answer': result['answer'],
+            'sources': result['sources'],
+            'content_breakdown': result['content_breakdown'],
+            'time_period': result['time_period']
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing question: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process your question")
+
+@router.post("/ask-journal-only")
+async def ask_question_journal_only(question: str):
+    """Ask a question about your journal entries only (original functionality)"""
     try:
         if not question.strip():
             raise HTTPException(status_code=400, detail="Question cannot be empty")
@@ -24,7 +49,7 @@ async def ask_question(question: str):
         if not relevant_entries:
             return {
                 'question': question,
-                'answer': "I couldn't find any relevant entries to answer your question. Try writing more journal entries first!",
+                'answer': "I couldn't find any relevant journal entries to answer your question. Try writing more journal entries first!",
                 'sources_used': 0
             }
         
@@ -49,12 +74,29 @@ async def ask_question(question: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing question: {e}")
+        logger.error(f"Error processing journal question: {e}")
         raise HTTPException(status_code=500, detail="Failed to process your question")
 
 @router.get("/coaching")
 async def get_coaching_suggestions():
-    """Get personalized coaching suggestions based on recent entries"""
+    """Get personalized coaching suggestions based on recent entries AND conversations"""
+    try:
+        suggestions = await enhanced_insights_service.generate_enhanced_coaching_suggestions(days=7)
+        
+        return {
+            'suggestions': suggestions,
+            'source': 'journal_and_chat',
+            'period': 'Last 7 days',
+            'note': 'Based on both your journal entries and chat conversations'
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating coaching suggestions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate coaching suggestions")
+
+@router.get("/coaching-journal-only")
+async def get_coaching_suggestions_journal_only():
+    """Get coaching suggestions based on journal entries only (original functionality)"""
     try:
         # Get recent entries (last 7 days)
         from datetime import datetime, timedelta
@@ -67,7 +109,8 @@ async def get_coaching_suggestions():
         if not recent_entries_db:
             return {
                 'suggestions': ["Start by writing your first journal entry to get personalized coaching suggestions!"],
-                'based_on_entries': 0
+                'based_on_entries': 0,
+                'source': 'journal_only'
             }
         
         # Convert to vector format for LLM service
@@ -87,16 +130,17 @@ async def get_coaching_suggestions():
         return {
             'suggestions': suggestions,
             'based_on_entries': len(recent_entries_db),
-            'period': 'Last 7 days'
+            'period': 'Last 7 days',
+            'source': 'journal_only'
         }
         
     except Exception as e:
-        logger.error(f"Error generating coaching suggestions: {e}")
+        logger.error(f"Error generating journal-only coaching suggestions: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate coaching suggestions")
 
 @router.get("/patterns")
 async def analyze_patterns():
-    """Analyze patterns in journal entries"""
+    """Analyze patterns in journal entries (original functionality)"""
     try:
         # Get mood statistics
         mood_stats = await db_service.get_mood_statistics(30)
@@ -144,16 +188,50 @@ async def analyze_patterns():
         return {
             'analysis_period': '30 days',
             'total_entries_analyzed': len(recent_entries),
-            'patterns': patterns
+            'patterns': patterns,
+            'source': 'journal_only'
         }
         
     except Exception as e:
         logger.error(f"Error analyzing patterns: {e}")
         raise HTTPException(status_code=500, detail="Failed to analyze patterns")
 
+@router.get("/patterns-enhanced")
+async def analyze_enhanced_patterns():
+    """Analyze patterns across both journal entries and chat conversations"""
+    try:
+        # Get comprehensive mood analysis
+        mood_analysis = await enhanced_insights_service.get_comprehensive_mood_analysis(days=30)
+        
+        # Get conversation patterns
+        conversation_patterns = await enhanced_insights_service.analyze_conversation_patterns(days=30)
+        
+        # Get journal patterns (existing functionality)
+        journal_patterns_response = await analyze_patterns()
+        journal_patterns = journal_patterns_response.get('patterns', {})
+        
+        # Combine all patterns
+        enhanced_patterns = {
+            'mood_analysis': mood_analysis,
+            'conversation_patterns': conversation_patterns,
+            'journal_patterns': journal_patterns,
+            'summary': {
+                'total_journal_entries': journal_patterns.get('writing_frequency', {}).get('total_entries', 0),
+                'total_conversations': conversation_patterns.get('total_conversations', 0),
+                'analysis_period': '30 days',
+                'sources': ['journal_entries', 'chat_conversations']
+            }
+        }
+        
+        return enhanced_patterns
+        
+    except Exception as e:
+        logger.error(f"Error analyzing enhanced patterns: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze enhanced patterns")
+
 @router.get("/trends/mood")
 async def get_mood_trends(days: int = Query(30, ge=7, le=365)):
-    """Get detailed mood trends over time"""
+    """Get detailed mood trends over time from journal entries only"""
     try:
         from datetime import datetime, timedelta
         
@@ -216,9 +294,54 @@ async def get_mood_trends(days: int = Query(30, ge=7, le=365)):
             'period_days': days,
             'total_entries': len(entries),
             'trend_direction': trend_direction,
-            'daily_data': trend_data
+            'daily_data': trend_data,
+            'source': 'journal_only'
         }
         
     except Exception as e:
         logger.error(f"Error getting mood trends: {e}")
         raise HTTPException(status_code=500, detail="Failed to analyze mood trends")
+
+@router.get("/trends/mood-enhanced")
+async def get_enhanced_mood_trends(days: int = Query(30, ge=7, le=365)):
+    """Get mood trends from both journal entries and chat conversations"""
+    try:
+        # Get journal mood trends
+        journal_trends = await get_mood_trends(days)
+        
+        # Get comprehensive mood analysis that includes chat
+        comprehensive_mood = await enhanced_insights_service.get_comprehensive_mood_analysis(days)
+        
+        return {
+            'period_days': days,
+            'journal_trends': journal_trends,
+            'comprehensive_analysis': comprehensive_mood,
+            'source': 'journal_and_chat',
+            'note': 'Includes sentiment analysis from both journal entries and chat conversations'
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting enhanced mood trends: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze enhanced mood trends")
+
+@router.get("/chat-insights")
+async def get_chat_insights(days: int = Query(30, ge=7, le=365)):
+    """Get insights specifically from chat conversations"""
+    try:
+        conversation_patterns = await enhanced_insights_service.analyze_conversation_patterns(days)
+        return conversation_patterns
+        
+    except Exception as e:
+        logger.error(f"Error getting chat insights: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze chat insights")
+
+@router.get("/mood-analysis-comprehensive")
+async def get_comprehensive_mood_analysis(days: int = Query(30, ge=7, le=365)):
+    """Get comprehensive mood analysis from all sources"""
+    try:
+        analysis = await enhanced_insights_service.get_comprehensive_mood_analysis(days)
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Error getting comprehensive mood analysis: {e}")
+        raise HTTPException(status_code=500, detail="Failed to perform comprehensive mood analysis")
