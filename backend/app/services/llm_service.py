@@ -71,12 +71,29 @@ class LLMService:
             
             prompt = f"""Based on the personal content above (including {journal_count} journal entries and {chat_count} conversations), please answer this question: {question}
 
-Please provide a thoughtful, personalized response that:
+Please provide a thoughtful, personalized response using proper markdown formatting that:
 1. References specific patterns or themes from BOTH journal entries and conversations
 2. Offers insights about growth, changes, or trends across all your reflections
 3. Is supportive and constructive
 4. Acknowledges the different types of content (written journal vs. conversational)
 5. Maintains privacy and confidentiality
+
+FORMAT YOUR RESPONSE IN MARKDOWN:
+- Use **bold** for emphasis on key insights
+- Use ## headings for major sections (like "Key Patterns", "Growth Insights", "Recommendations")
+- Use bullet points with - for lists
+- Use numbered lists 1. 2. 3. for sequential points
+- Use > blockquotes for important reflections
+- Use *italics* for subtle emphasis
+
+IMPORTANT - INLINE CITATIONS:
+When referencing specific content, include inline citations like this:
+- For journal entries: "In your journal entry about testing [📔1]..."
+- For conversations: "During your conversation about work issues [💬2]..."
+- Use [📔X] for journal entry citations (where X is the entry number)
+- Use [💬X] for conversation citations (where X is the conversation number)
+
+This helps readers jump directly to the source material you're referencing.
 
 Your response should help with self-reflection and personal growth by drawing connections between your written thoughts and conversational insights."""
             
@@ -161,6 +178,19 @@ Focus on practical, specific recommendations that acknowledge both the reflectiv
                 context += f"{entry['content']}\n\n"
             
             prompt = f"""Based on the journal entries provided, please answer this question: {question}
+
+FORMAT YOUR RESPONSE IN MARKDOWN:
+- Use **bold** for emphasis on key insights
+- Use ## headings for major sections (like "Key Patterns", "Growth Insights", "Recommendations")
+- Use bullet points with - for lists
+- Use numbered lists 1. 2. 3. for sequential points
+- Use > blockquotes for important reflections
+- Use *italics* for subtle emphasis
+
+IMPORTANT - INLINE CITATIONS:
+When referencing specific entries, include inline citations like this:
+- "In your entry about testing [📔1]..." or "Your reflection on growth [📔2]..."
+- Use [📔X] for journal entry citations (where X is the entry number from 1-{len(context_entries)})
 
 Please provide a thoughtful, personalized response that:
 1. References specific patterns or themes from the entries

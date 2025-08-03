@@ -1,7 +1,9 @@
 // frontend/src/components/Insights/EnhancedAskQuestion.jsx
-// Enhanced version with clickable citation links - FIXED
+// Enhanced version with clickable citation links and markdown support
 
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { PaperAirplaneIcon, SparklesIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { insightsAPI } from '../../services/api';
@@ -180,46 +182,132 @@ const EnhancedAskQuestion = () => {
 const ConversationEntryWithCitations = ({ entry }) => {
   const [showCitations, setShowCitations] = useState(false);
 
-  // Function to add citation links to the answer text
+  // Function to render markdown with inline citation links
   const formatAnswerWithCitations = (text, sources) => {
-    if (!sources || (!sources.journal_entries?.length && !sources.conversations?.length)) {
-      return text;
+    // Create citation mapping
+    const citationMap = {};
+    let citationCounter = 1;
+    
+    // Map journal entries
+    if (sources?.journal_entries) {
+      sources.journal_entries.forEach((source, index) => {
+        const journalKey = `📔${index + 1}`;
+        citationMap[journalKey] = {
+          ...source,
+          sourceType: 'journal',
+          citationNumber: citationCounter++
+        };
+      });
+    }
+    
+    // Map conversations
+    if (sources?.conversations) {
+      sources.conversations.forEach((source, index) => {
+        const chatKey = `💬${index + 1}`;
+        citationMap[chatKey] = {
+          ...source,
+          sourceType: 'conversation',
+          citationNumber: citationCounter++
+        };
+      });
     }
 
-    // Create a map of all sources with citation numbers
-    const allSources = [];
-    
-    // Add journal entries
-    sources.journal_entries?.forEach((source, index) => {
-      allSources.push({
-        ...source,
-        citationNumber: allSources.length + 1,
-        sourceType: 'journal'
-      });
-    });
+    // Custom component to render markdown with inline citations
+    const MarkdownWithCitations = ({ children }) => {
+      // Replace inline citations with clickable links
+      const processText = (text) => {
+        if (typeof text !== 'string') return text;
+        
+        // Find citation patterns like [📔1] or [💬2]
+        const citationRegex = /\[(📔|💬)(\d+)\]/g;
+        const parts = [];
+        let lastIndex = 0;
+        let match;
 
-    // Add conversations
-    sources.conversations?.forEach((source, index) => {
-      allSources.push({
-        ...source,
-        citationNumber: allSources.length + 1,
-        sourceType: 'conversation'
-      });
-    });
+        while ((match = citationRegex.exec(text)) !== null) {
+          // Add text before citation
+          if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+          }
+          
+          // Add citation link
+          const citationKey = `${match[1]}${match[2]}`;
+          const citation = citationMap[citationKey];
+          
+          if (citation) {
+            parts.push(
+              <InlineCitationLink 
+                key={match.index} 
+                citation={citation} 
+                symbol={match[1]}
+                number={match[2]}
+              />
+            );
+          } else {
+            parts.push(match[0]); // fallback to original text
+          }
+          
+          lastIndex = citationRegex.lastIndex;
+        }
+        
+        // Add remaining text
+        if (lastIndex < text.length) {
+          parts.push(text.slice(lastIndex));
+        }
+        
+        return parts.length > 1 ? parts : text;
+      };
 
-    // For now, return the text with citation indicators
-    // In a real implementation, you'd want to parse the text and add citations where appropriate
+      // Custom renderers for ReactMarkdown
+      const components = {
+        p: ({ children }) => (
+          <p>{React.Children.map(children, child => 
+            typeof child === 'string' ? processText(child) : child
+          )}</p>
+        ),
+        li: ({ children }) => (
+          <li>{React.Children.map(children, child => 
+            typeof child === 'string' ? processText(child) : child
+          )}</li>
+        ),
+        // Add other text-containing elements as needed
+        strong: ({ children }) => (
+          <strong>{React.Children.map(children, child => 
+            typeof child === 'string' ? processText(child) : child
+          )}</strong>
+        ),
+        em: ({ children }) => (
+          <em>{React.Children.map(children, child => 
+            typeof child === 'string' ? processText(child) : child
+          )}</em>
+        ),
+      };
+
+      return (
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]}
+          components={components}
+        >
+          {children}
+        </ReactMarkdown>
+      );
+    };
+
     return (
       <div>
-        <p className="text-gray-900 whitespace-pre-wrap">{text}</p>
+        <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-strong:text-gray-900 prose-ul:text-gray-700 prose-ol:text-gray-700 prose-blockquote:border-l-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:py-2 prose-blockquote:px-4">
+          <MarkdownWithCitations>{text}</MarkdownWithCitations>
+        </div>
         
-        {/* Citation Numbers */}
-        {allSources.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1">
-            <span className="text-xs text-gray-500 mr-2">Sources:</span>
-            {allSources.map((source) => (
-              <CitationLink key={source.citationNumber} source={source} />
-            ))}
+        {/* Traditional citation list at the bottom */}
+        {Object.keys(citationMap).length > 0 && (
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <span className="text-xs text-gray-500 mb-2 block">Referenced sources:</span>
+            <div className="flex flex-wrap gap-1">
+              {Object.values(citationMap).map((source) => (
+                <CitationLink key={source.citationNumber} source={source} />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -313,6 +401,30 @@ const ConversationEntryWithCitations = ({ entry }) => {
         </div>
       </div>
     </div>
+  );
+};
+
+// Inline Citation Link Component
+const InlineCitationLink = ({ citation, symbol, number }) => {
+  const handleCitationClick = () => {
+    if (citation.sourceType === 'journal') {
+      // Navigate to journal entry
+      window.location.href = `/journal#entry-${citation.id}`;
+    } else if (citation.sourceType === 'conversation') {
+      // Navigate to chat conversation
+      window.location.href = `/chat/${citation.id}`;
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCitationClick}
+      className="inline-flex items-center px-1 py-0.5 mx-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors border border-blue-200"
+      title={`${citation.sourceType === 'journal' ? 'Journal' : 'Chat'}: ${citation.snippet?.substring(0, 50)}...`}
+    >
+      {symbol}{number}
+      <ArrowTopRightOnSquareIcon className="w-3 h-3 ml-0.5" />
+    </button>
   );
 };
 
