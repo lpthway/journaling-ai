@@ -34,6 +34,9 @@ async def ask_question(question: str):
             'conversations': []
         }
         
+        # Add citation counter
+        citation_counter = 1
+
         # Process journal entries
         for entry in relevant_journal:
             metadata = entry.get('metadata', {})
@@ -43,8 +46,11 @@ async def ask_question(question: str):
                 'title': metadata.get('title', 'Untitled'),
                 'snippet': entry['content'][:150] + '...' if len(entry['content']) > 150 else entry['content'],
                 'similarity': round((1 - entry.get('distance', 0)) * 100),
-                'type': 'journal'
+                'type': 'journal',
+                'citation_number': citation_counter,  # NEW
+                'link': f"/journal#entry-{entry['id']}"  # NEW
             })
+            citation_counter += 1
         
         # Process chat conversations
         for chat in relevant_chat:
@@ -55,8 +61,11 @@ async def ask_question(question: str):
                 'snippet': chat['content'],
                 'similarity': round(chat['relevance_score'] * 100),
                 'message_count': chat['message_count'],
-                'type': 'conversation'
+                'type': 'conversation',
+                'citation_number': citation_counter,  # NEW
+                'link': f"/chat/{chat['session_id']}"  # NEW
             })
+            citation_counter += 1
         
         total_sources = len(detailed_sources['journal_entries']) + len(detailed_sources['conversations'])
         
@@ -67,7 +76,12 @@ async def ask_question(question: str):
             'content_breakdown': result['content_breakdown'],
             'time_period': result['time_period'],
             'sources_used': total_sources,
-            'detailed_sources': detailed_sources
+            'detailed_sources': detailed_sources,
+            'citations': {  # NEW
+                'total_citations': citation_counter - 1,
+                'journal_citations': len(detailed_sources['journal_entries']),
+                'conversation_citations': len(detailed_sources['conversations'])
+            }
         }
         
     except HTTPException:

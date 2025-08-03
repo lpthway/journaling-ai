@@ -12,9 +12,10 @@ import { insightsAPI, entryAPI } from '../services/api';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import MoodChart from '../components/Analytics/MoodChart';
 import MoodTrends from '../components/Analytics/MoodTrends';
-import AskQuestion from '../components/Insights/AskQuestion';
+import EnhancedAskQuestion from '../components/Insights/EnhancedAskQuestion';
 import CoachingSuggestions from '../components/Insights/CoachingSuggestions';
 import PatternAnalysis from '../components/Insights/PatternAnalysis';
+import { ArrowTopRightOnSquareIcon as ExternalLinkIcon } from '@heroicons/react/24/outline';
 
 const Insights = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -98,7 +99,7 @@ const Insights = () => {
           <OverviewTab moodStats={moodStats} patterns={patterns} />
         )}
         {activeTab === 'coaching' && <CoachingSuggestions />}
-        {activeTab === 'ask' && <AskQuestion />}
+        {activeTab === 'ask' && <EnhancedAskQuestion />}
         {activeTab === 'trends' && <TrendsTab />}
       </div>
     </div>

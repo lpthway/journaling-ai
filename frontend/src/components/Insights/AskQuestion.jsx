@@ -11,14 +11,14 @@ const AskQuestion = () => {
   const [conversationHistory, setConversationHistory] = useState([]);
 
   const suggestedQuestions = [
-    "Have I improved over time?",
     "What do I write about most?",
     "How has my mood changed recently?",
     "What patterns do you notice in my entries?",
     "What am I most grateful for?",
     "What challenges do I face most often?",
     "How do I handle stress?",
-    "What makes me happiest?"
+    "What makes me happiest?",
+    "How do my conversations differ from my writing?"
   ];
 
   const handleSubmit = async (e) => {
@@ -32,12 +32,17 @@ const AskQuestion = () => {
     try {
       const response = await insightsAPI.askQuestion(currentQuestion);
       
+      console.log('API Response:', response.data); // Debug log
+      
       const newEntry = {
         id: Date.now(),
         question: currentQuestion,
         answer: response.data.answer,
-        sourcesUsed: response.data.sources_used,
+        sources: response.data.sources || {},
+        detailedSources: response.data.detailed_sources || null,
+        sourcesUsed: response.data.sources_used || 0,
         relevantEntries: response.data.relevant_entries || [],
+        contentBreakdown: response.data.content_breakdown || {},
         timestamp: new Date()
       };
 
@@ -61,7 +66,7 @@ const AskQuestion = () => {
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <div className="flex items-center space-x-2 mb-4">
           <SparklesIcon className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Ask AI About Your Journal</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Ask AI About Your Journal & Conversations</h2>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -126,8 +131,24 @@ const AskQuestion = () => {
   );
 };
 
-// Conversation Entry Component
+// Updated Conversation Entry Component
 const ConversationEntry = ({ entry }) => {
+  const [showSources, setShowSources] = useState(false);
+
+  const getTotalSources = () => {
+    if (entry.detailedSources) {
+      return (entry.detailedSources.journal_entries?.length || 0) + 
+             (entry.detailedSources.conversations?.length || 0);
+    }
+    return entry.sourcesUsed || entry.relevantEntries?.length || 0;
+  };
+
+  const hasSources = () => {
+    return entry.detailedSources?.journal_entries?.length > 0 || 
+           entry.detailedSources?.conversations?.length > 0 ||
+           entry.relevantEntries?.length > 0;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       {/* Question */}
@@ -162,29 +183,96 @@ const ConversationEntry = ({ entry }) => {
             
             {/* Sources Info */}
             <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-xs text-gray-500 mb-2">
-                Based on {entry.sourcesUsed} journal entries
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-gray-500">
+                  {entry.detailedSources ? (
+                    <>Based on {entry.detailedSources.journal_entries?.length || 0} journal entries, {entry.detailedSources.conversations?.length || 0} conversations</>
+                  ) : (
+                    <>Based on {getTotalSources()} sources</>
+                  )}
+                </p>
+                {hasSources() && (
+                  <button
+                    onClick={() => setShowSources(!showSources)}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    {showSources ? 'Hide sources' : 'Show sources'}
+                  </button>
+                )}
+              </div>
               
-              {/* Relevant Entries Preview */}
-              {entry.relevantEntries && entry.relevantEntries.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-gray-600">Most relevant entries:</p>
-                  <div className="space-y-1">
-                    {entry.relevantEntries.slice(0, 3).map((relevantEntry, index) => (
-                      <div key={index} className="text-xs bg-gray-50 p-2 rounded">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="font-medium text-gray-700">
-                            {relevantEntry.date}
-                          </span>
-                          <span className="text-gray-500">
-                            {Math.round(relevantEntry.similarity * 100)}% match
-                          </span>
-                        </div>
-                        <p className="text-gray-600">{relevantEntry.snippet}</p>
+              {/* Detailed Sources */}
+              {showSources && (
+                <div className="space-y-3">
+                  {/* Enhanced Sources (Journal Entries) */}
+                  {entry.detailedSources?.journal_entries?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-medium text-gray-700 mb-2">Most relevant journal entries:</h4>
+                      <div className="space-y-2">
+                        {entry.detailedSources.journal_entries.slice(0, 5).map((source, index) => (
+                          <div key={index} className="text-xs bg-blue-50 p-3 rounded border-l-4 border-blue-200">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-medium text-blue-700">
+                                {source.date}
+                              </span>
+                              <span className="text-blue-600 font-medium">
+                                {source.similarity}% match
+                              </span>
+                            </div>
+                            {source.title && source.title !== 'Untitled' && (
+                              <p className="font-medium text-gray-700 mb-1">{source.title}</p>
+                            )}
+                            <p className="text-gray-600">{source.snippet}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+                  
+                  {/* Enhanced Sources (Conversations) */}
+                  {entry.detailedSources?.conversations?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-medium text-gray-700 mb-2">Most relevant conversations:</h4>
+                      <div className="space-y-2">
+                        {entry.detailedSources.conversations.slice(0, 5).map((source, index) => (
+                          <div key={index} className="text-xs bg-green-50 p-3 rounded border-l-4 border-green-200">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-medium text-green-700">
+                                {source.session_type} - {source.date}
+                              </span>
+                              <span className="text-green-600 font-medium">
+                                {source.similarity}% match
+                              </span>
+                            </div>
+                            <p className="text-gray-500 mb-1">{source.message_count} messages</p>
+                            <p className="text-gray-600">{source.snippet}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Legacy Sources Format (Fallback) */}
+                  {!entry.detailedSources && entry.relevantEntries?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-medium text-gray-700 mb-2">Most relevant entries:</h4>
+                      <div className="space-y-2">
+                        {entry.relevantEntries.slice(0, 5).map((relevantEntry, index) => (
+                          <div key={index} className="text-xs bg-gray-50 p-3 rounded border-l-4 border-gray-200">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-medium text-gray-700">
+                                {relevantEntry.date}
+                              </span>
+                              <span className="text-gray-500">
+                                {Math.round(relevantEntry.similarity * 100)}% match
+                              </span>
+                            </div>
+                            <p className="text-gray-600">{relevantEntry.snippet}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

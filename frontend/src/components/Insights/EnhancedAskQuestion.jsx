@@ -1,5 +1,8 @@
+// frontend/src/components/Insights/EnhancedAskQuestion.jsx
+// Enhanced version with clickable citation links - FIXED
+
 import React, { useState } from 'react';
-import { PaperAirplaneIcon, SparklesIcon, SwitchHorizontalIcon } from '@heroicons/react/24/outline';
+import { PaperAirplaneIcon, SparklesIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { insightsAPI } from '../../services/api';
 import LoadingSpinner from '../Common/LoadingSpinner';
@@ -9,7 +12,7 @@ const EnhancedAskQuestion = () => {
   const [answer, setAnswer] = useState(null);
   const [loading, setLoading] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [useEnhanced, setUseEnhanced] = useState(true); // Default to enhanced
+  const [useEnhanced, setUseEnhanced] = useState(true);
 
   const suggestedQuestions = [
     "How have my thoughts evolved in both my writing and conversations?",
@@ -31,8 +34,7 @@ const EnhancedAskQuestion = () => {
     setLoading(true);
 
     try {
-      // Use enhanced or journal-only endpoint based on toggle
-      const endpoint = useEnhanced ? 'ask' : 'ask-journal-only';
+      const endpoint = useEnhanced ? 'ask' : 'askJournalOnly';
       const response = await insightsAPI[endpoint](currentQuestion);
       
       const newEntry = {
@@ -43,6 +45,7 @@ const EnhancedAskQuestion = () => {
         contentBreakdown: response.data.content_breakdown,
         timePeriod: response.data.time_period,
         relevantEntries: response.data.relevant_entries || [],
+        detailedSources: response.data.detailed_sources || { journal_entries: [], conversations: [] },
         timestamp: new Date(),
         enhanced: useEnhanced
       };
@@ -94,8 +97,8 @@ const EnhancedAskQuestion = () => {
         <div className="mb-4 p-3 bg-blue-50 rounded-md">
           <p className="text-sm text-blue-800">
             {useEnhanced 
-              ? '🌟 Enhanced mode analyzes both your journal entries AND chat conversations for deeper insights'
-              : '📔 Journal-only mode analyzes just your written journal entries (original functionality)'
+              ? '🌟 Enhanced mode analyzes both your journal entries AND chat conversations with clickable citations'
+              : '📔 Journal-only mode analyzes just your written journal entries with source links'
             }
           </p>
         </div>
@@ -165,7 +168,7 @@ const EnhancedAskQuestion = () => {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-900">Conversation History</h3>
           {conversationHistory.map((entry) => (
-            <ConversationEntry key={entry.id} entry={entry} />
+            <ConversationEntryWithCitations key={entry.id} entry={entry} />
           ))}
         </div>
       )}
@@ -173,8 +176,56 @@ const EnhancedAskQuestion = () => {
   );
 };
 
-// Enhanced Conversation Entry Component
-const ConversationEntry = ({ entry }) => {
+// Enhanced Conversation Entry with Citation Links
+const ConversationEntryWithCitations = ({ entry }) => {
+  const [showCitations, setShowCitations] = useState(false);
+
+  // Function to add citation links to the answer text
+  const formatAnswerWithCitations = (text, sources) => {
+    if (!sources || (!sources.journal_entries?.length && !sources.conversations?.length)) {
+      return text;
+    }
+
+    // Create a map of all sources with citation numbers
+    const allSources = [];
+    
+    // Add journal entries
+    sources.journal_entries?.forEach((source, index) => {
+      allSources.push({
+        ...source,
+        citationNumber: allSources.length + 1,
+        sourceType: 'journal'
+      });
+    });
+
+    // Add conversations
+    sources.conversations?.forEach((source, index) => {
+      allSources.push({
+        ...source,
+        citationNumber: allSources.length + 1,
+        sourceType: 'conversation'
+      });
+    });
+
+    // For now, return the text with citation indicators
+    // In a real implementation, you'd want to parse the text and add citations where appropriate
+    return (
+      <div>
+        <p className="text-gray-900 whitespace-pre-wrap">{text}</p>
+        
+        {/* Citation Numbers */}
+        {allSources.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1">
+            <span className="text-xs text-gray-500 mr-2">Sources:</span>
+            {allSources.map((source) => (
+              <CitationLink key={source.citationNumber} source={source} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       {/* Question */}
@@ -207,7 +258,7 @@ const ConversationEntry = ({ entry }) => {
         </div>
       </div>
 
-      {/* Answer */}
+      {/* Answer with Citations */}
       <div className="px-6 py-4">
         <div className="flex items-start space-x-3">
           <div className="flex-shrink-0 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
@@ -215,22 +266,30 @@ const ConversationEntry = ({ entry }) => {
           </div>
           <div className="flex-1">
             <div className="prose prose-sm max-w-none">
-              <p className="text-gray-900 whitespace-pre-wrap">{entry.answer}</p>
+              {formatAnswerWithCitations(entry.answer, entry.detailedSources)}
             </div>
             
-            {/* Enhanced Sources Info */}
+            {/* Sources Summary */}
             <div className="mt-4 pt-4 border-t border-gray-100">
               {entry.enhanced && entry.sources ? (
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-500">
-                    Enhanced analysis based on {entry.sources.total_sources} sources:
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500">
+                      Enhanced analysis based on {entry.sources.total_sources || 0} sources:
+                    </p>
+                    <button
+                      onClick={() => setShowCitations(!showCitations)}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {showCitations ? 'Hide' : 'Show'} detailed sources
+                    </button>
+                  </div>
                   <div className="flex space-x-4 text-xs">
                     <span className="text-blue-600">
-                      📔 {entry.sources.journal_entries} journal entries
+                      📔 {entry.sources.journal_entries || 0} journal entries
                     </span>
                     <span className="text-purple-600">
-                      💬 {entry.sources.chat_messages} conversations
+                      💬 {entry.sources.chat_messages || 0} conversations
                     </span>
                   </div>
                   {entry.timePeriod && (
@@ -245,8 +304,111 @@ const ConversationEntry = ({ entry }) => {
                 </p>
               )}
             </div>
+
+            {/* Detailed Sources (collapsible) */}
+            {showCitations && entry.detailedSources && (
+              <DetailedSourcesList sources={entry.detailedSources} />
+            )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// Citation Link Component
+const CitationLink = ({ source }) => {
+  const handleCitationClick = () => {
+    if (source.sourceType === 'journal') {
+      // Navigate to journal entry
+      window.location.href = `/journal#entry-${source.id}`;
+    } else if (source.sourceType === 'conversation') {
+      // Navigate to chat conversation
+      window.location.href = `/chat/${source.id}`;
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCitationClick}
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+      title={`${source.sourceType === 'journal' ? 'Journal' : 'Chat'}: ${source.snippet?.substring(0, 50)}...`}
+    >
+      [{source.citationNumber}]
+      <ArrowTopRightOnSquareIcon className="w-3 h-3 ml-1" />
+    </button>
+  );
+};
+
+// Detailed Sources List Component
+const DetailedSourcesList = ({ sources }) => {
+  return (
+    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+      <h4 className="text-sm font-medium text-gray-900 mb-3">Detailed Sources</h4>
+      
+      {/* Journal Entries */}
+      {sources.journal_entries?.length > 0 && (
+        <div className="mb-4">
+          <h5 className="text-xs font-medium text-gray-700 mb-2">📔 Journal Entries</h5>
+          <div className="space-y-2">
+            {sources.journal_entries.map((entry, index) => (
+              <SourceItem key={entry.id || index} source={entry} type="journal" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Conversations */}
+      {sources.conversations?.length > 0 && (
+        <div>
+          <h5 className="text-xs font-medium text-gray-700 mb-2">💬 Conversations</h5>
+          <div className="space-y-2">
+            {sources.conversations.map((conversation, index) => (
+              <SourceItem key={conversation.id || index} source={conversation} type="conversation" />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Individual Source Item
+const SourceItem = ({ source, type }) => {
+  const handleSourceClick = () => {
+    if (type === 'journal') {
+      window.location.href = `/journal#entry-${source.id}`;
+    } else {
+      window.location.href = `/chat/${source.id}`;
+    }
+  };
+
+  return (
+    <div className="p-3 bg-white rounded border border-gray-200 hover:border-gray-300 transition-colors">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center space-x-2 mb-1">
+            <span className="text-xs font-medium text-gray-600">
+              {type === 'journal' ? source.title || 'Untitled Entry' : source.session_type}
+            </span>
+            <span className="text-xs text-gray-500">
+              {source.similarity}% match
+            </span>
+          </div>
+          <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+            {source.snippet}
+          </p>
+          <p className="text-xs text-gray-500">
+            {source.date} {type === 'conversation' && `• ${source.message_count} messages`}
+          </p>
+        </div>
+        <button
+          onClick={handleSourceClick}
+          className="ml-3 p-1 text-gray-400 hover:text-blue-600 transition-colors"
+          title={`Go to ${type}`}
+        >
+          <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
