@@ -9,7 +9,7 @@ import {
   UserIcon 
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
-import ChatInterface from '../components/chat/ChatInterface';
+import ChatInterface from './ChatInterface';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
 import { sessionAPI } from '../services/api';
