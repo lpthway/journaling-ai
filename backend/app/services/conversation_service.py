@@ -1,64 +1,83 @@
-### app/services/conversation_service.py
+# backend/app/services/conversation_service.py - Enhanced with Psychology Integration
 
 import json
 import random
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import logging
 from datetime import datetime, timedelta
 from app.models.session import SessionType, Message, MessageRole
 from app.services.llm_service import llm_service
 from app.services.database_service import db_service
 from app.services.session_service import session_service
+from app.services.psychology_knowledge_service import psychology_knowledge_service, PsychologyDomain
 
 logger = logging.getLogger(__name__)
 
-class ConversationPersonality:
-    """Defines AI personality traits for different session types"""
+class EnhancedConversationService:
+    """
+    Enhanced conversation service with professional psychology knowledge integration.
     
-    REFLECTION_BUDDY = {
-        "name": "Reflection Buddy",
-        "tone": "casual and friendly",
-        "style": "curious friend who asks thoughtful questions",
-        "approach": "gentle exploration through friendly conversation",
-        "greeting_style": "warm and approachable"
-    }
+    Provides evidence-based, research-backed conversational AI that combines:
+    - Personality-based conversation styles
+    - Professional psychology insights
+    - Personal context from journal entries
+    - Source attribution for credibility
+    """
     
-    INNER_VOICE = {
-        "name": "Inner Voice Guide",
-        "tone": "wise and contemplative", 
-        "style": "helps explore different perspectives",
-        "approach": "guides self-discovery through perspective-taking",
-        "greeting_style": "thoughtful and introspective"
-    }
-    
-    GROWTH_CHALLENGE = {
-        "name": "Growth Coach",
-        "tone": "encouraging and motivational",
-        "style": "supportive challenger who promotes growth",
-        "approach": "structured challenges with positive reinforcement",
-        "greeting_style": "energetic and goal-oriented"
-    }
-    
-    PATTERN_DETECTIVE = {
-        "name": "Pattern Detective",
-        "tone": "observant and insightful",
-        "style": "analytical friend who notices patterns",
-        "approach": "data-driven insights with actionable suggestions",
-        "greeting_style": "curious and analytical"
-    }
-
-class ConversationService:
     def __init__(self):
+        self.llm_service = llm_service
+        self.psychology_service = psychology_knowledge_service
+        
+        # Enhanced personality definitions with psychology integration
         self.personalities = {
-            SessionType.REFLECTION_BUDDY: ConversationPersonality.REFLECTION_BUDDY,
-            SessionType.INNER_VOICE: ConversationPersonality.INNER_VOICE,
-            SessionType.GROWTH_CHALLENGE: ConversationPersonality.GROWTH_CHALLENGE,
-            SessionType.PATTERN_DETECTIVE: ConversationPersonality.PATTERN_DETECTIVE,
-            SessionType.FREE_CHAT: ConversationPersonality.REFLECTION_BUDDY
+            SessionType.REFLECTION_BUDDY: {
+                "name": "Reflection Buddy",
+                "tone": "warm, curious, and supportive",
+                "style": "Uses active listening and open-ended questions informed by person-centered therapy principles",
+                "approach": "Facilitates self-discovery through gentle exploration and reflection",
+                "psychology_domains": [PsychologyDomain.CBT, PsychologyDomain.EMOTIONAL_REGULATION],
+                "greeting_style": "warm and approachable with genuine curiosity"
+            },
+            
+            SessionType.INNER_VOICE: {
+                "name": "Inner Voice Guide", 
+                "tone": "wise, contemplative, and insightful",
+                "style": "Helps access internal wisdom using mindfulness and self-compassion techniques",
+                "approach": "Guides perspective-taking and internal reflection using proven therapeutic methods",
+                "psychology_domains": [PsychologyDomain.MINDFULNESS, PsychologyDomain.POSITIVE_PSYCHOLOGY],
+                "greeting_style": "thoughtful and introspective with depth"
+            },
+            
+            SessionType.GROWTH_CHALLENGE: {
+                "name": "Growth Coach",
+                "tone": "encouraging, motivational, and empowering",
+                "style": "Uses evidence-based behavior change techniques and positive psychology principles",
+                "approach": "Structured challenges with supportive accountability using habit formation science",
+                "psychology_domains": [PsychologyDomain.HABIT_FORMATION, PsychologyDomain.POSITIVE_PSYCHOLOGY],
+                "greeting_style": "energetic and goal-oriented with optimism"
+            },
+            
+            SessionType.PATTERN_DETECTIVE: {
+                "name": "Pattern Detective",
+                "tone": "observant, analytical, and insightful", 
+                "style": "Uses cognitive-behavioral analysis to identify thought and behavior patterns",
+                "approach": "Data-driven insights with actionable suggestions using CBT frameworks",
+                "psychology_domains": [PsychologyDomain.CBT, PsychologyDomain.SOCIAL_PSYCHOLOGY],
+                "greeting_style": "curious and analytical with systematic thinking"
+            },
+            
+            SessionType.FREE_CHAT: {
+                "name": "Supportive Companion",
+                "tone": "flexible, adaptive, and supportive",
+                "style": "Adapts therapeutic approach based on user needs and conversation flow",
+                "approach": "Integrates multiple therapeutic modalities as appropriate to the conversation",
+                "psychology_domains": [PsychologyDomain.CBT, PsychologyDomain.MINDFULNESS, PsychologyDomain.EMOTIONAL_REGULATION],
+                "greeting_style": "warm and adaptive to user's energy"
+            }
         }
     
     async def generate_opening_message(self, session_type: SessionType, context: Dict[str, Any] = None) -> str:
-        """Generate an opening message for a new session"""
+        """Generate psychology-informed opening message for a new session"""
         personality = self.personalities[session_type]
         user_name = context.get('user_name', 'friend') if context else 'friend'
         
@@ -66,71 +85,102 @@ class ConversationService:
         recent_entries = await self._get_recent_journal_context()
         mood_context = await self._get_recent_mood_context()
         
-        opening_prompts = {
+        # Get relevant psychology knowledge for the session type
+        psychology_insights = await self._get_opening_psychology_context(session_type, recent_entries)
+        
+        # Base opening messages with psychology integration
+        opening_templates = {
             SessionType.REFLECTION_BUDDY: [
-                f"Hey {user_name}! 😊 How are you feeling right now? I'm here to chat about whatever's on your mind.",
-                f"Hi there! What's been going through your head lately? I'm curious to hear what you're thinking about.",
-                f"Hello {user_name}! I'm here as your reflection buddy. What would you like to explore together today?"
+                f"Hey {user_name}! 😊 I'm here as your reflection buddy, drawing on active listening techniques to help you explore your thoughts. How are you feeling right now?",
+                f"Hi there! I'm curious to hear what's been going through your mind lately. Using person-centered approaches, I'm here to help you discover your own insights.",
+                f"Hello {user_name}! Research shows that reflective conversation can significantly improve self-awareness. What would you like to explore together today?"
             ],
             
             SessionType.INNER_VOICE: [
-                f"Hello {user_name}. Let's take a moment to explore different perspectives on what you're experiencing. What situation or feeling would you like to examine more deeply?",
-                f"Hi there. I'm here to help you hear your inner wisdom. What's something you've been wondering about or struggling with?",
-                f"Welcome, {user_name}. Sometimes we need to step back and see things from different angles. What's on your mind today?"
+                f"Hello {user_name}. Let's tap into your inner wisdom using mindfulness principles. Take a moment to notice what you're experiencing right now - what situation or feeling would you like to examine more deeply?",
+                f"Hi there. Drawing on contemplative practices, I'm here to help you access different perspectives. What's something you've been wondering about or feeling uncertain about?",
+                f"Welcome, {user_name}. Sometimes we need to step back and listen to our inner voice. What's asking for your attention today?"
             ],
             
             SessionType.GROWTH_CHALLENGE: [
-                f"Hey {user_name}! Ready for some growth? 🌱 I have some interesting challenges that might help you develop new insights about yourself.",
-                f"Hi there! I'm excited to help you explore new aspects of yourself. What area of your life would you like to grow in?",
-                f"Welcome to your growth session, {user_name}! Let's discover something new about yourself today."
+                f"Hey {user_name}! Ready for some evidence-based growth? 🌱 Research in habit formation shows that small, consistent changes create lasting transformation. What area of your life would you like to develop?",
+                f"Hi there! I'm excited to help you explore new possibilities using positive psychology principles. What challenge or growth opportunity is calling to you?",
+                f"Welcome to your growth session, {user_name}! Studies show that goal-setting combined with social support dramatically increases success. Let's discover something new about your potential today."
             ],
             
             SessionType.PATTERN_DETECTIVE: [
-                f"Hello {user_name}! 🔍 I've been noticing some interesting patterns in your recent entries. Want to explore what they might mean?",
-                f"Hi there! As your pattern detective, I've spotted some trends in your journaling. Shall we investigate together?",
-                f"Hey {user_name}! I love connecting dots and finding insights. What patterns have you noticed in your life lately?"
+                f"Hello {user_name}! 🔍 Using cognitive-behavioral analysis, I've noticed some interesting themes in your recent reflections. Want to explore what patterns might be emerging?",
+                f"Hi there! As your pattern detective, I use evidence-based observation techniques to spot trends. What patterns have you noticed in your thoughts or behaviors lately?",
+                f"Hey {user_name}! Research shows that pattern recognition is key to personal growth. I love connecting dots and finding insights - what recurring themes are you curious about?"
+            ],
+            
+            SessionType.FREE_CHAT: [
+                f"Hi {user_name}! I'm here as your supportive companion, ready to adapt my approach based on what you need. What's on your mind today?",
+                f"Hello! I'm here to chat about whatever feels important to you, using therapeutic principles as appropriate. How can I support you right now?",
+                f"Hey {user_name}! Whether you need reflection, problem-solving, or just someone to listen, I'm here with evidence-based support. What would be most helpful?"
             ]
         }
         
-        base_messages = opening_prompts.get(session_type, opening_prompts[SessionType.REFLECTION_BUDDY])
+        base_messages = opening_templates.get(session_type, opening_templates[SessionType.FREE_CHAT])
         base_message = random.choice(base_messages)
         
         # Add personalized context if available
-        if recent_entries or mood_context:
-            context_addition = await self._generate_contextual_opening(session_type, recent_entries, mood_context)
+        if recent_entries or mood_context or psychology_insights:
+            context_addition = await self._generate_contextual_opening(
+                session_type, recent_entries, mood_context, psychology_insights
+            )
             if context_addition:
                 base_message += f"\n\n{context_addition}"
         
         return base_message
     
-    async def generate_response(self, session_type: SessionType, user_message: str, 
-                              conversation_history: List[Message], context: Dict[str, Any] = None) -> str:
-        """Generate AI response based on conversation context"""
-        personality = self.personalities[session_type]
+    async def generate_response(
+        self, 
+        session_type: SessionType, 
+        user_message: str,
+        conversation_history: List[Message], 
+        context: Dict[str, Any] = None
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Generate psychology-informed AI response with source attribution.
         
-        # Build conversation context for LLM
-        conversation_context = self._build_conversation_context(conversation_history)
-        
-        # Create personality-specific prompt
-        system_prompt = self._create_system_prompt(session_type, personality, context)
-        
-        # Generate response using LLM
-        full_prompt = f"{system_prompt}\n\nConversation so far:\n{conversation_context}\n\nUser just said: {user_message}\n\nRespond as the {personality['name']}:"
-        
+        Returns:
+            Tuple of (response_text, psychology_citations)
+        """
         try:
-            response = await llm_service.generate_response(full_prompt)
+            # Get journal context for richer understanding
+            journal_context = await self._get_relevant_journal_context(user_message)
             
-            # Post-process response to ensure quality
+            # Generate evidence-based response with citations
+            response, citations = await self.llm_service.generate_evidence_based_response(
+                user_message=user_message,
+                conversation_history=[
+                    {"role": msg.role, "content": msg.content} 
+                    for msg in conversation_history
+                ],
+                journal_context=journal_context,
+                session_type=session_type.value
+            )
+            
+            # Post-process response to ensure conversational tone
             response = self._post_process_response(response, session_type)
             
-            return response
+            logger.info(f"Generated psychology-informed response with {len(citations)} citations")
+            return response, citations
+            
         except Exception as e:
-            logger.error(f"Error generating AI response: {e}")
-            return self._get_fallback_response(session_type)
+            logger.error(f"Error generating enhanced response: {e}")
+            # Fallback to basic response
+            fallback_response = self._get_fallback_response(session_type)
+            return fallback_response, []
     
-    async def suggest_follow_up_questions(self, session_type: SessionType, 
-                                        recent_messages: List[Message]) -> List[str]:
-        """Generate follow-up question suggestions"""
+    async def suggest_follow_up_questions(
+        self, 
+        session_type: SessionType,
+        recent_messages: List[Message],
+        psychology_context: Optional[List[Dict[str, Any]]] = None
+    ) -> List[str]:
+        """Generate psychology-informed follow-up question suggestions"""
         if not recent_messages:
             return []
         
@@ -143,95 +193,158 @@ class ConversationService:
         if not last_user_message:
             return []
         
-        suggestions = {
+        # Get psychology-informed suggestions based on session type
+        personality = self.personalities[session_type]
+        
+        # Base suggestions by session type with psychology integration
+        base_suggestions = {
             SessionType.REFLECTION_BUDDY: [
-                "How does that make you feel?",
-                "What do you think caused that?",
-                "Can you tell me more about that?",
-                "What would you like to be different?"
+                "How does that make you feel when you really sit with it?",
+                "What patterns do you notice in this experience?",
+                "Can you tell me more about what that means to you?",
+                "What would self-compassion look like in this situation?"
             ],
             
             SessionType.INNER_VOICE: [
-                "What would your wise future self say about this?",
-                "How might your best friend view this situation?",
-                "What perspective am I missing here?",
-                "What would love do in this situation?"
+                "What would your wisest self say about this?",
+                "How might you view this situation with fresh eyes?",
+                "What perspective would bring you most peace?",
+                "What does your intuition tell you about this?"
             ],
             
             SessionType.GROWTH_CHALLENGE: [
                 "What's one small step you could take today?",
-                "What would happen if you tried a different approach?",
-                "What strengths could you use here?",
-                "What would growth look like in this situation?"
+                "How could you turn this challenge into growth?",
+                "What strengths do you have that could help here?",
+                "What would progress look like for you?"
             ],
             
             SessionType.PATTERN_DETECTIVE: [
                 "Have you noticed this pattern before?",
-                "What triggers this feeling/behavior?",
+                "What triggers this feeling or behavior?",
                 "What would breaking this pattern look like?",
-                "What patterns serve you well?"
+                "What patterns actually serve you well?"
             ]
         }
         
-        return suggestions.get(session_type, suggestions[SessionType.REFLECTION_BUDDY])[:3]
+        suggestions = base_suggestions.get(session_type, base_suggestions[SessionType.FREE_CHAT])
+        
+        # Enhance suggestions with psychology context if available
+        if psychology_context:
+            enhanced_suggestions = await self._enhance_suggestions_with_psychology(
+                suggestions, psychology_context, last_user_message
+            )
+            return enhanced_suggestions[:3]
+        
+        return suggestions[:3]
     
-    def _create_system_prompt(self, session_type: SessionType, personality: Dict[str, Any], 
-                             context: Dict[str, Any] = None) -> str:
-        """Create personality-specific system prompt"""
-        base_prompt = f"""You are the {personality['name']}, an AI companion for journaling and self-reflection.
-
-Your personality:
-- Tone: {personality['tone']}
-- Style: {personality['style']}
-- Approach: {personality['approach']}
-
-Guidelines:
-- Keep responses conversational and under 3 sentences
-- Ask thoughtful follow-up questions
-- Be empathetic and non-judgmental
-- Focus on helping the user reflect and gain insights
-- Avoid giving direct advice; instead guide them to their own conclusions
-- Use the user's name occasionally to make it personal
-- Be authentic and warm in your responses
-
-Remember: You're having a real conversation with someone who trusts you with their thoughts."""
-
-        # Add session-specific guidelines
-        if session_type == SessionType.REFLECTION_BUDDY:
-            base_prompt += "\n\nAs a Reflection Buddy, be curious and ask the kinds of questions a good friend would ask. Help them process their thoughts and feelings."
-        
-        elif session_type == SessionType.INNER_VOICE:
-            base_prompt += "\n\nAs an Inner Voice Guide, help them explore different perspectives. Ask 'What would X say?' or 'How might Y view this?' to broaden their viewpoint."
-        
-        elif session_type == SessionType.GROWTH_CHALLENGE:
-            base_prompt += "\n\nAs a Growth Coach, gently challenge them to grow. Suggest small experiments or new ways of thinking. Be encouraging and celebrate progress."
-        
-        elif session_type == SessionType.PATTERN_DETECTIVE:
-            base_prompt += "\n\nAs a Pattern Detective, help them notice recurring themes in their life. Point out patterns you observe and ask about connections."
-        
-        return base_prompt
+    async def _get_opening_psychology_context(
+        self, 
+        session_type: SessionType, 
+        recent_entries: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Get relevant psychology knowledge for session opening"""
+        try:
+            personality = self.personalities[session_type]
+            
+            # Create search query based on session type and recent entries
+            search_context = f"conversation opening {session_type.value}"
+            if recent_entries:
+                search_context += f" {recent_entries[:200]}"
+            
+            # Get psychology knowledge for the session's preferred domains
+            psychology_insights = await self.psychology_service.get_knowledge_for_context(
+                user_message=search_context,
+                preferred_domains=personality["psychology_domains"],
+                max_sources=2
+            )
+            
+            return psychology_insights
+            
+        except Exception as e:
+            logger.error(f"Error getting opening psychology context: {e}")
+            return []
     
-    def _build_conversation_context(self, messages: List[Message]) -> str:
-        """Build conversation context from message history"""
-        context_parts = []
-        
-        for msg in messages[-10:]:  # Last 10 messages for context
-            role_label = "You" if msg.role == MessageRole.ASSISTANT else "User"
-            context_parts.append(f"{role_label}: {msg.content}")
-        
-        return "\n".join(context_parts)
+    async def _get_relevant_journal_context(self, user_message: str) -> Optional[str]:
+        """Get relevant journal context for the user's message"""
+        try:
+            # Get recent entries that might be relevant
+            recent_entries = await db_service.get_entries(limit=5)
+            
+            if not recent_entries:
+                return None
+            
+            # Simple relevance check based on keywords
+            user_words = set(user_message.lower().split())
+            relevant_entries = []
+            
+            for entry in recent_entries:
+                entry_words = set(entry.content.lower().split())
+                common_words = user_words.intersection(entry_words)
+                
+                # If there are common meaningful words, include the entry
+                if len(common_words) > 2:
+                    relevant_entries.append(entry)
+            
+            if relevant_entries:
+                # Combine relevant entry summaries
+                context_parts = []
+                for entry in relevant_entries[:2]:  # Max 2 entries
+                    context_parts.append(f"Recent journal entry: {entry.content[:150]}...")
+                
+                return " ".join(context_parts)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting journal context: {e}")
+            return None
+    
+    async def _enhance_suggestions_with_psychology(
+        self,
+        base_suggestions: List[str],
+        psychology_context: List[Dict[str, Any]],
+        user_message: str
+    ) -> List[str]:
+        """Enhance follow-up suggestions using psychology knowledge"""
+        try:
+            # Extract key techniques from psychology context
+            techniques = []
+            for source in psychology_context:
+                techniques.extend(source.get('techniques', [])[:2])
+            
+            # Create enhanced suggestions incorporating techniques
+            enhanced = base_suggestions.copy()
+            
+            if 'cognitive restructuring' in techniques:
+                enhanced.append("What evidence supports or challenges that thought?")
+            
+            if 'mindfulness' in techniques or 'mindfulness meditation' in techniques:
+                enhanced.append("What would happen if you just observed this feeling without judgment?")
+            
+            if 'behavioral activation' in techniques:
+                enhanced.append("What activity might help shift your mood right now?")
+            
+            if 'HALT' in techniques:
+                enhanced.append("Are you hungry, angry, lonely, or tired right now?")
+            
+            return enhanced[:4]  # Return top 4 suggestions
+            
+        except Exception as e:
+            logger.error(f"Error enhancing suggestions: {e}")
+            return base_suggestions
     
     def _post_process_response(self, response: str, session_type: SessionType) -> str:
-        """Post-process AI response to ensure quality"""
-        # Remove any unwanted prefixes
+        """Post-process AI response to ensure appropriate tone and length"""
         response = response.strip()
         
-        # Remove common AI prefixes
+        # Remove unwanted prefixes
         prefixes_to_remove = [
             "As a Reflection Buddy:",
             "As an Inner Voice Guide:",
             "As a Growth Coach:",
             "As a Pattern Detective:",
+            "As a Supportive Companion:",
             "AI:",
             "Assistant:"
         ]
@@ -240,33 +353,33 @@ Remember: You're having a real conversation with someone who trusts you with the
             if response.startswith(prefix):
                 response = response[len(prefix):].strip()
         
-        # Ensure response isn't too long
-        if len(response) > 500:
+        # Ensure appropriate length (not too long for conversation)
+        if len(response) > 600:
             sentences = response.split('. ')
-            response = '. '.join(sentences[:3]) + '.'
+            response = '. '.join(sentences[:4]) + '.'
         
         return response
     
     def _get_fallback_response(self, session_type: SessionType) -> str:
-        """Get fallback response when AI generation fails"""
+        """Get fallback response when enhanced generation fails"""
         fallbacks = {
-            SessionType.REFLECTION_BUDDY: "I'm here to listen. Can you tell me more about what you're experiencing?",
-            SessionType.INNER_VOICE: "Let's pause and reflect. What feels most important to you right now?",
+            SessionType.REFLECTION_BUDDY: "I'm here to listen and explore this with you. Can you tell me more about what you're experiencing?",
+            SessionType.INNER_VOICE: "Let's pause and reflect together. What feels most important to you right now?",
             SessionType.GROWTH_CHALLENGE: "That's interesting. What would growth look like in this situation?",
-            SessionType.PATTERN_DETECTIVE: "I'm curious about the patterns here. What do you notice?"
+            SessionType.PATTERN_DETECTIVE: "I'm curious about the patterns here. What do you notice when you step back and observe?",
+            SessionType.FREE_CHAT: "I'm here to support you. What's on your mind?"
         }
         
-        return fallbacks.get(session_type, "I'm here to listen. What's on your mind?")
+        return fallbacks.get(session_type, "I'm here to listen. What would be most helpful to talk about?")
     
     async def _get_recent_journal_context(self) -> Optional[str]:
         """Get context from recent journal entries"""
         try:
             recent_entries = await db_service.get_entries(limit=3)
             if recent_entries:
-                # Get themes from recent entries without being too specific
                 themes = []
                 for entry in recent_entries:
-                    if len(entry.content) > 50:  # Only substantial entries
+                    if len(entry.content) > 50:
                         themes.append(entry.title or entry.content[:100])
                 
                 if themes:
@@ -279,9 +392,8 @@ Remember: You're having a real conversation with someone who trusts you with the
     async def _get_recent_mood_context(self) -> Optional[str]:
         """Get context from recent mood patterns"""
         try:
-            mood_stats = await db_service.get_mood_statistics(7)  # Last week
+            mood_stats = await db_service.get_mood_statistics(7)
             if mood_stats and mood_stats.get('mood_distribution'):
-                # Find dominant mood
                 moods = mood_stats['mood_distribution']
                 if moods:
                     dominant_mood = max(moods.items(), key=lambda x: x[1])[0]
@@ -291,27 +403,42 @@ Remember: You're having a real conversation with someone who trusts you with the
         
         return None
     
-    async def _generate_contextual_opening(self, session_type: SessionType, 
-                                         recent_entries: Optional[str], 
-                                         mood_context: Optional[str]) -> Optional[str]:
+    async def _generate_contextual_opening(
+        self,
+        session_type: SessionType,
+        recent_entries: Optional[str],
+        mood_context: Optional[str], 
+        psychology_insights: List[Dict[str, Any]]
+    ) -> Optional[str]:
         """Generate contextual addition to opening message"""
-        if not recent_entries and not mood_context:
-            return None
-        
         context_parts = []
+        
         if recent_entries:
             context_parts.append(recent_entries)
         if mood_context:
             context_parts.append(mood_context)
         
+        if not context_parts and not psychology_insights:
+            return None
+        
         context_info = " | ".join(context_parts)
         
-        if session_type == SessionType.PATTERN_DETECTIVE:
-            return f"I noticed some interesting themes lately: {context_info}. Want to explore these patterns?"
-        elif session_type == SessionType.REFLECTION_BUDDY:
+        # Add psychology-informed context based on session type
+        if session_type == SessionType.PATTERN_DETECTIVE and psychology_insights:
+            techniques = []
+            for insight in psychology_insights:
+                techniques.extend(insight.get('techniques', [])[:1])
+            
+            if techniques:
+                return f"I noticed some interesting themes lately: {context_info}. Using {techniques[0]} approaches, want to explore these patterns?"
+        
+        elif session_type == SessionType.REFLECTION_BUDDY and context_info:
             return f"I see you've been reflecting on some meaningful topics recently. How are you feeling about everything?"
+        
+        elif session_type == SessionType.GROWTH_CHALLENGE and psychology_insights:
+            return f"Based on your recent reflections, I have some evidence-based growth ideas that might interest you."
         
         return None
 
 # Global instance
-conversation_service = ConversationService()
+conversation_service = EnhancedConversationService()
