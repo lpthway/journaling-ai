@@ -514,6 +514,35 @@ class DatabaseService:
                 "tags": ["creative", "writing"]
             }
         ]
+    
+    async def get_entries_in_range(
+        self, 
+        start_date: datetime, 
+        end_date: datetime,
+        limit: Optional[int] = None
+    ) -> List[Entry]:
+        """Get entries within a date range"""
+        try:
+            entries_data = await self._read_entries()
+            entries = []
+            
+            for entry_data in entries_data.values():
+                created_at = datetime.fromisoformat(entry_data['created_at'])
+                if start_date <= created_at <= end_date:
+                    entries.append(Entry(**entry_data))
+            
+            # Sort by creation date
+            entries.sort(key=lambda x: x.created_at, reverse=True)
+            
+            # Apply limit if specified
+            if limit:
+                entries = entries[:limit]
+                
+            return entries
+            
+        except Exception as e:
+            logger.error(f"Error getting entries in range: {e}")
+            return []
 
 # Global instance
 db_service = DatabaseService()

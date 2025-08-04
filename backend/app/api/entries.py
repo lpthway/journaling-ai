@@ -11,6 +11,7 @@ from app.services.database_service import db_service
 from app.services.vector_service import vector_service
 from app.services.sentiment_service import sentiment_service  
 from app.services.llm_service import llm_service
+from app.services.background_analytics import on_entry_created, on_entry_updated
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,9 @@ async def create_entry(entry: EntryCreate):
         }
         
         await vector_service.add_entry(db_entry.id, db_entry.content, metadata)
+        
+        # Trigger background analytics processing for the new entry
+        await on_entry_created(db_entry.id)
         
         return EntryResponse(**db_entry.model_dump())
         
@@ -130,18 +134,6 @@ async def search_entries(
     except Exception as e:
         logger.error(f"Error searching entries: {e}")
         raise HTTPException(status_code=500, detail="Failed to search entries")
-
-@router.get("/stats/mood")
-async def get_mood_statistics(
-    days: int = Query(30, ge=1, le=365)
-):
-    """Get mood statistics for the last N days"""
-    try:
-        stats = await db_service.get_mood_statistics(days)
-        return stats
-    except Exception as e:
-        logger.error(f"Error getting mood statistics: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve mood statistics")
 
 @router.post("/search/advanced")
 async def advanced_search(search_filter: AdvancedSearchFilter):
@@ -265,6 +257,9 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
         
         await vector_service.update_entry(updated_entry.id, content_to_index, metadata)
         
+        # Trigger background analytics processing for the updated entry
+        await on_entry_updated(updated_entry.id)
+        
         return EntryResponse(**updated_entry.model_dump())
         
     except HTTPException:
@@ -371,17 +366,6 @@ async def search_entries(
     except Exception as e:
         logger.error(f"Error searching entries: {e}")
         raise HTTPException(status_code=500, detail="Failed to search entries")
-
-@router.get("/stats/mood")
-async def get_mood_statistics(days: int = Query(30, ge=1, le=365)):
-    """Get mood statistics for the specified period"""
-    try:
-        stats = await db_service.get_mood_statistics(days)
-        return stats
-        
-    except Exception as e:
-        logger.error(f"Error getting mood statistics: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve mood statistics")
 
 # Enhanced Search Endpoint
 @router.post("/search/advanced")

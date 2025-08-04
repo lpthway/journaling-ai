@@ -6,8 +6,27 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PaperAirplaneIcon, SparklesIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
-import { insightsAPI } from '../../services/api';
 import LoadingSpinner from '../Common/LoadingSpinner';
+
+// Use the legacy API endpoints that have full citation functionality
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
+const callLegacyAPI = async (endpoint, question) => {
+  const url = `${API_BASE_URL}/insights-legacy/${endpoint}?question=${encodeURIComponent(question)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API call failed: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+};
 
 const EnhancedAskQuestion = () => {
   const [question, setQuestion] = useState('');
@@ -36,18 +55,18 @@ const EnhancedAskQuestion = () => {
     setLoading(true);
 
     try {
-      const endpoint = useEnhanced ? 'ask' : 'askJournalOnly';
-      const response = await insightsAPI[endpoint](currentQuestion);
+      const endpoint = useEnhanced ? 'ask' : 'ask-journal-only';
+      const response = await callLegacyAPI(endpoint, currentQuestion);
       
       const newEntry = {
         id: Date.now(),
         question: currentQuestion,
-        answer: response.data.answer,
-        sources: response.data.sources || { sources_used: response.data.sources_used },
-        contentBreakdown: response.data.content_breakdown,
-        timePeriod: response.data.time_period,
-        relevantEntries: response.data.relevant_entries || [],
-        detailedSources: response.data.detailed_sources || { journal_entries: [], conversations: [] },
+        answer: response.answer,
+        sources: response.sources || { sources_used: response.sources_used },
+        contentBreakdown: response.content_breakdown,
+        timePeriod: response.time_period,
+        relevantEntries: response.relevant_entries || [],
+        detailedSources: response.detailed_sources || { journal_entries: [], conversations: [] },
         timestamp: new Date(),
         enhanced: useEnhanced
       };
@@ -191,7 +210,7 @@ const ConversationEntryWithCitations = ({ entry }) => {
     // Map journal entries
     if (sources?.journal_entries) {
       sources.journal_entries.forEach((source, index) => {
-        const journalKey = `📔${index + 1}`;
+        const journalKey = `Journal Entry ${index + 1}`;
         citationMap[journalKey] = {
           ...source,
           sourceType: 'journal',
@@ -203,7 +222,7 @@ const ConversationEntryWithCitations = ({ entry }) => {
     // Map conversations
     if (sources?.conversations) {
       sources.conversations.forEach((source, index) => {
-        const chatKey = `💬${index + 1}`;
+        const chatKey = `Conversation ${index + 1}`;
         citationMap[chatKey] = {
           ...source,
           sourceType: 'conversation',
@@ -218,8 +237,8 @@ const ConversationEntryWithCitations = ({ entry }) => {
       const processText = (text) => {
         if (typeof text !== 'string') return text;
         
-        // Find citation patterns like [📔1] or [💬2]
-        const citationRegex = /\[(📔|💬)(\d+)\]/g;
+        // Find citation patterns like "Journal Entry 1", "Conversation 3", etc.
+        const citationRegex = /(Journal Entry \d+|Conversation \d+)/g;
         const parts = [];
         let lastIndex = 0;
         let match;
@@ -231,7 +250,7 @@ const ConversationEntryWithCitations = ({ entry }) => {
           }
           
           // Add citation link
-          const citationKey = `${match[1]}${match[2]}`;
+          const citationKey = match[1];
           const citation = citationMap[citationKey];
           
           if (citation) {
@@ -239,12 +258,17 @@ const ConversationEntryWithCitations = ({ entry }) => {
               <InlineCitationLink 
                 key={match.index} 
                 citation={citation} 
-                symbol={match[1]}
-                number={match[2]}
+                text={citationKey}
+                number={citation.citationNumber}
               />
             );
           } else {
-            parts.push(match[0]); // fallback to original text
+            // If no citation found, add the text with a number
+            parts.push(
+              <span key={match.index} className="font-medium">
+                {citationKey} <sup className="text-blue-600 font-bold">[{citationCounter++}]</sup>
+              </span>
+            );
           }
           
           lastIndex = citationRegex.lastIndex;
@@ -405,7 +429,7 @@ const ConversationEntryWithCitations = ({ entry }) => {
 };
 
 // Inline Citation Link Component
-const InlineCitationLink = ({ citation, symbol, number }) => {
+const InlineCitationLink = ({ citation, text, number }) => {
   const handleCitationClick = () => {
     if (citation.sourceType === 'journal') {
       // Navigate to journal entry
@@ -417,14 +441,25 @@ const InlineCitationLink = ({ citation, symbol, number }) => {
   };
 
   return (
-    <button
-      onClick={handleCitationClick}
-      className="inline-flex items-center px-1 py-0.5 mx-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors border border-blue-200"
-      title={`${citation.sourceType === 'journal' ? 'Journal' : 'Chat'}: ${citation.snippet?.substring(0, 50)}...`}
-    >
-      {symbol}{number}
-      <ArrowTopRightOnSquareIcon className="w-3 h-3 ml-0.5" />
-    </button>
+    <span className="inline">
+      <button
+        onClick={handleCitationClick}
+        className="font-medium text-gray-900 hover:text-blue-600 transition-colors"
+        title={`${citation.sourceType === 'journal' ? 'Journal' : 'Chat'}: ${citation.snippet?.substring(0, 50)}...`}
+      >
+        {text}
+      </button>
+      <sup>
+        <button
+          onClick={handleCitationClick}
+          className="inline-flex items-center px-1 py-0.5 ml-1 rounded text-xs font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors border border-blue-200"
+          title={`Click to view source: ${citation.snippet?.substring(0, 50)}...`}
+        >
+          [{number}]
+          <ArrowTopRightOnSquareIcon className="w-2 h-2 ml-0.5" />
+        </button>
+      </sup>
+    </span>
   );
 };
 

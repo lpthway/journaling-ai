@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class MultilingualSentimentService:
     def __init__(self):
-        # TEMPORARILY DISABLED: Load models on-demand to prevent VRAM usage at startup
+        # Model pipelines - will be loaded on first use and cached
         self.emotion_pipeline = None
         self.multilingual_pipeline = None
         self.primary_pipeline = None
@@ -24,7 +24,28 @@ class MultilingualSentimentService:
         self._cache_dir = Path(__file__).parent.parent.parent / "models"
         self._cache_dir.mkdir(exist_ok=True)
         
-        logger.info("🔧 Sentiment service initialized (models will load on demand with local caching)")
+        logger.info("🔧 Sentiment service initialized (models will be preloaded for performance)")
+        
+    async def preload_models(self):
+        """Preload all models into memory for instant access"""
+        if self.models_loaded:
+            return
+            
+        try:
+            logger.info("🚀 Preloading AI models for optimal performance...")
+            
+            # Load emotion model
+            await self._ensure_emotion_model()
+            
+            # Load multilingual model  
+            await self._ensure_multilingual_model()
+            
+            self.models_loaded = True
+            logger.info("✅ All AI models preloaded and ready!")
+            
+        except Exception as e:
+            logger.error(f"❌ Error preloading models: {e}")
+            # Continue without preloading - models will load on demand
         
     def _ensure_model_cached(self, model_name: str) -> str:
         """Ensure model is downloaded and cached locally"""
@@ -65,6 +86,41 @@ class MultilingualSentimentService:
             logger.error(f"❌ Failed to cache model {model_name}: {e}")
             # If caching fails, return original model name for online loading
             return model_name
+    
+    async def _ensure_emotion_model(self):
+        """Ensure emotion model is loaded and ready"""
+        if self.emotion_pipeline:
+            return
+            
+        try:
+            model_name = "j-hartmann/emotion-english-distilroberta-base"
+            cached_path = self._ensure_model_cached(model_name)
+            
+            self.emotion_pipeline = pipeline(
+                "text-classification",
+                model=cached_path,
+                return_all_scores=True
+            )
+            logger.info("✅ Emotion model preloaded")
+        except Exception as e:
+            logger.error(f"❌ Error loading emotion model: {e}")
+    
+    async def _ensure_multilingual_model(self):
+        """Ensure multilingual model is loaded and ready"""
+        if self.multilingual_pipeline:
+            return
+            
+        try:
+            model_name = "nlptown/bert-base-multilingual-uncased-sentiment"
+            cached_path = self._ensure_model_cached(model_name)
+            
+            self.multilingual_pipeline = pipeline(
+                "sentiment-analysis",
+                model=cached_path
+            )
+            logger.info("✅ Multilingual model preloaded")
+        except Exception as e:
+            logger.error(f"❌ Error loading multilingual model: {e}")
         
     def _load_single_model(self, model_type: str):
         """Load only one model at a time to conserve VRAM"""

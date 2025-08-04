@@ -8,7 +8,8 @@ import os
 from pathlib import Path
 
 from app.core.config import settings
-from app.api import entries, topics, insights, sessions, psychology
+from app.api import entries, topics, insights, insights_v2, sessions, psychology
+from app.services.background_analytics import analytics_lifespan
 
 # Configure logging
 logging.basicConfig(
@@ -18,12 +19,13 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
+# Create FastAPI app with background analytics lifespan
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     description="A local-first journaling and coaching assistant with AI insights",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=analytics_lifespan  # Enable background analytics processing
 )
 
 # Configure CORS
@@ -35,10 +37,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routers
+# Include API routers - ORDER MATTERS! New optimized endpoints first
+app.include_router(insights_v2.router, prefix=f"{settings.API_V1_STR}/insights", tags=["insights"])
+app.include_router(insights.router, prefix=f"{settings.API_V1_STR}/insights-legacy", tags=["insights-legacy"])
 app.include_router(entries.router, prefix=f"{settings.API_V1_STR}/entries", tags=["entries"])
 app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=["topics"])
-app.include_router(insights.router, prefix=f"{settings.API_V1_STR}/insights", tags=["insights"])
 app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
 app.include_router(psychology.router, prefix=f"{settings.API_V1_STR}/psychology", tags=["psychology"])
 
@@ -46,6 +49,15 @@ app.include_router(psychology.router, prefix=f"{settings.API_V1_STR}/psychology"
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "journaling-assistant",
+        "version": "1.0.0"
+    }
+
+@app.get(f"{settings.API_V1_STR}/health")
+async def health_check_v1():
+    """Health check endpoint for v1 API"""
     return {
         "status": "healthy",
         "service": "journaling-assistant",

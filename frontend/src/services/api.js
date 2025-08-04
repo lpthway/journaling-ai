@@ -44,7 +44,7 @@ export const entryAPI = {
       params: { query, limit, topic_id: topicId } 
     }),
   advancedSearch: (filters) => api.post('/entries/search/advanced', filters),
-  getMoodStats: (days = 30) => api.get('/entries/stats/mood', { params: { days } }),
+  getMoodStats: (days = 30) => api.get('/insights/mood-stats', { params: { days } }),
   
   // Favorites
   toggleFavorite: (id) => api.patch(`/entries/${id}/favorite`),
@@ -72,10 +72,18 @@ export const topicAPI = {
 
 // Insights API
 export const insightsAPI = {
+  // Use new cached endpoints for blazing fast performance
+  getCachedInsights: (days = 30) => api.get('/insights/cached', { params: { time_range_days: days } }),
+  refreshCache: () => api.post('/insights/refresh'),
+  getStatus: () => api.get('/insights/status'),
+  
+  // Legacy AI endpoints (now cached internally)
   askQuestion: (question) => api.post('/insights/ask', null, { params: { question } }),
   getCoaching: () => api.get('/insights/coaching'),
+  
+  // Legacy compatibility (redirected to cached)
   getPatterns: () => api.get('/insights/patterns'),
-  getMoodTrends: (days = 30) => api.get('/insights/trends/mood', { params: { days } }),
+  getMoodTrends: (days = 30) => api.get('/insights/mood-stats', { params: { days } }),
 };
 
 // Session API - Add this to your existing api.js file
@@ -117,7 +125,7 @@ export const enhancedInsightsAPI = {
   askJournalOnly: (question) => api.post('/insights/ask-journal-only', null, { params: { question } }),
   getEnhancedCoaching: () => api.get('/insights/coaching'),
   getJournalOnlyCoaching: () => api.get('/insights/coaching-journal-only'),
-  getEnhancedPatterns: () => api.get('/insights/patterns-enhanced'),
+  getEnhancedPatterns: () => api.get('/insights/patterns'),
   getChatInsights: (days = 30) => api.get('/insights/chat-insights', { params: { days } }),
   getComprehensiveMoodAnalysis: (days = 30) => api.get('/insights/mood-analysis-comprehensive', { params: { days } }),
   getComprehensiveTrends: (days = 30) => api.get('/insights/trends/comprehensive', { params: { days } }),

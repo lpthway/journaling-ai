@@ -543,6 +543,86 @@ Generate only the tags as a comma-separated list, nothing else:"""
         except Exception as e:
             logger.error(f"Error generating automatic tags: {e}")
             return []
+    
+    async def extract_topics(self, text: str, max_topics: int = 5) -> List[str]:
+        """Extract main topics from text using LLM"""
+        try:
+            prompt = f"""Extract the main topics from this text. Return only a simple list of topics, one per line, maximum {max_topics} topics.
+
+Text: {text[:500]}...
+
+Topics:"""
+
+            response = self.client.generate(
+                model=self.model,
+                prompt=prompt,
+                stream=False
+            )
+            
+            # Parse topics from response
+            topics = []
+            for line in response['response'].strip().split('\n'):
+                topic = line.strip('- ').strip()
+                if topic and len(topic) > 2:
+                    topics.append(topic)
+                    
+            return topics[:max_topics]
+            
+        except Exception as e:
+            logger.error(f"Error extracting topics: {e}")
+            return []
+    
+    async def answer_insights_question(self, context: Dict[str, Any]) -> str:
+        """Answer insights questions using cached analytics and specific search results"""
+        try:
+            question = context['question']
+            cached_analytics = context.get('cached_analytics', {})
+            relevant_entries = context.get('relevant_entries', [])
+            
+            # Build context from cached analytics
+            analytics_summary = ""
+            if cached_analytics:
+                mood_data = cached_analytics.get('mood_trends', {})
+                entry_stats = cached_analytics.get('entry_stats', {})
+                
+                analytics_summary = f"""
+Based on your recent data:
+- Total entries: {entry_stats.get('total_entries', 0)}
+- Average mood: {mood_data.get('average_mood', 'neutral')}
+- Most common mood: {max(mood_data.get('mood_distribution', {}), key=mood_data.get('mood_distribution', {}).get, default='neutral')}
+"""
+            
+            # Build context from relevant entries
+            entries_context = ""
+            if relevant_entries:
+                entries_context = "\n".join([
+                    f"Entry: {entry.get('content', '')[:200]}..."
+                    for entry in relevant_entries[:3]
+                ])
+            
+            prompt = f"""You are helping someone understand insights about their journaling patterns. Answer their question using the provided data and context.
+
+Question: {question}
+
+{analytics_summary}
+
+Recent relevant entries:
+{entries_context}
+
+Provide a helpful, insightful answer that connects their question to their actual journaling data. Be specific and reference the data when possible."""
+
+            response = self.client.generate(
+                model=self.model,
+                prompt=prompt,
+                stream=False
+            )
+            
+            return response['response'].strip()
+            
+        except Exception as e:
+            logger.error(f"Error answering insights question: {e}")
+            return "I'm having trouble analyzing your data right now. Please try again later."
+
 
 # Global instance - replace the existing llm_service
 llm_service = EnhancedLLMService()

@@ -235,6 +235,35 @@ class SessionDatabaseService:
         base_title = titles.get(session_type, "Conversation session")
         timestamp = datetime.utcnow().strftime("%b %d")
         return f"{base_title} - {timestamp}"
+    
+    async def get_sessions_in_range(
+        self, 
+        start_date: datetime, 
+        end_date: datetime,
+        limit: Optional[int] = None
+    ) -> List[Session]:
+        """Get sessions within a date range"""
+        try:
+            sessions_data = await self._read_sessions()
+            sessions = []
+            
+            for session_data in sessions_data.values():
+                created_at = datetime.fromisoformat(session_data['created_at'])
+                if start_date <= created_at <= end_date:
+                    sessions.append(Session(**session_data))
+            
+            # Sort by creation date
+            sessions.sort(key=lambda x: x.created_at, reverse=True)
+            
+            # Apply limit if specified
+            if limit:
+                sessions = sessions[:limit]
+                
+            return sessions
+            
+        except Exception as e:
+            logger.error(f"Error getting sessions in range: {e}")
+            return []
 
 # Global instance
 session_service = SessionDatabaseService()

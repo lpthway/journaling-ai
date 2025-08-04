@@ -334,61 +334,6 @@ async def ask_question_journal_only(question: str):
         logger.error(f"Error processing journal question: {e}")
         raise HTTPException(status_code=500, detail="Failed to process your question")
 
-@router.get("/patterns")
-async def analyze_patterns():
-    """Analyze patterns in journal entries (original functionality)"""
-    try:
-        # Get mood statistics
-        mood_stats = await db_service.get_mood_statistics(30)
-        
-        # Get recent entries for trend analysis
-        recent_entries = await db_service.get_entries(limit=50)
-        
-        if not recent_entries:
-            return {
-                'message': "Not enough data for pattern analysis. Keep journaling!",
-                'patterns': {}
-            }
-        
-        # Analyze writing frequency
-        daily_counts = defaultdict(int)
-        word_counts = []
-        topic_usage = defaultdict(int)
-        
-        for entry in recent_entries:
-            date_str = entry.created_at.strftime('%Y-%m-%d')
-            daily_counts[date_str] += 1
-            word_counts.append(entry.word_count)
-            
-            if entry.topic_id:
-                topic_usage[entry.topic_id] += 1
-        
-        # Calculate averages and trends
-        avg_word_count = sum(word_counts) / len(word_counts) if word_counts else 0
-        writing_frequency = len(daily_counts) / 30  # entries per day over last 30 days
-        
-        patterns = {
-            'mood_distribution': mood_stats['mood_distribution'],
-            'writing_frequency': {
-                'entries_per_day': round(writing_frequency, 2),
-                'total_entries': len(recent_entries),
-                'avg_word_count': round(avg_word_count, 1)
-            },
-            'topic_usage': dict(topic_usage),
-            'recent_trend': 'improving' if len(recent_entries[:10]) > len(recent_entries[10:20]) else 'stable'
-        }
-        
-        return {
-            'analysis_period': '30 days',
-            'total_entries_analyzed': len(recent_entries),
-            'patterns': patterns,
-            'source': 'journal_only'
-        }
-        
-    except Exception as e:
-        logger.error(f"Error analyzing patterns: {e}")
-        raise HTTPException(status_code=500, detail="Failed to analyze patterns")
-
 @router.get("/trends/comprehensive")
 async def get_comprehensive_trends(days: int = Query(30, ge=7, le=365)):
     """Get comprehensive mood trends including journal entries AND chat conversations with all days filled"""

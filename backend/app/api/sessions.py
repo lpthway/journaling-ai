@@ -9,6 +9,7 @@ from app.models.session import (
 from app.services.session_service import session_service
 from app.services.conversation_service import conversation_service
 from app.services.llm_service import llm_service
+from app.services.background_analytics import on_session_updated, on_session_completed
 import logging
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,9 @@ async def send_message(session_id: str, message_data: MessageCreate):
                 await auto_tag_conversation(session_id)
         except Exception as e:
             logger.warning(f"Failed to auto-tag conversation {session_id}: {e}")
+        
+        # Trigger background analytics for session update
+        await on_session_updated(session_id)
         
         return MessageResponse(**ai_message.model_dump())
         
