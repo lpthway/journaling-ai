@@ -1,29 +1,48 @@
-### app/api/entries.py
+### app/api/entries.py - Enhanced Entries API with Enterprise Architecture
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from typing import List, Optional
 from datetime import datetime, date
+import logging
+
+# Enhanced architecture imports
+from app.core.exceptions import (
+    ValidationException, NotFoundException, DatabaseException, JournalingAIException
+)
 from app.models.entry import (
     Entry, EntryCreate, EntryUpdate, EntryResponse, EntryVersion, 
     EntryTemplate, EntryTemplateCreate, AdvancedSearchFilter, MoodType
 )
-from app.services.database_service import db_service
+from app.services.enhanced_database_adapter import enhanced_db_service
 from app.services.vector_service import vector_service
 from app.services.sentiment_service import sentiment_service  
 from app.services.llm_service import llm_service
 from app.services.background_analytics import on_entry_created, on_entry_updated
-import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.post("/", response_model=EntryResponse)
-async def create_entry(entry: EntryCreate):
-    """Create a new journal entry with automatic tagging"""
+async def create_entry(entry: EntryCreate, request: Request):
+    """Create a new journal entry with enhanced error handling and analytics."""
+    correlation_id = getattr(request.state, 'correlation_id', None)
+    
     try:
-        # Analyze sentiment  
-        mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
+        # Input validation
+        if not entry.content or len(entry.content.strip()) < 3:
+            raise ValidationException(
+                "Entry content must be at least 3 characters long",
+                context={"content_length": len(entry.content) if entry.content else 0},
+                correlation_id=correlation_id
+            )
+        
+        # Analyze sentiment with enhanced error handling
+        try:
+            mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
+        except Exception as e:
+            logger.warning(f"Sentiment analysis failed: {e}")
+            mood, sentiment_score = None, 0.0
         
         # Generate automatic tags if not provided
         auto_tags = []
@@ -46,7 +65,8 @@ async def create_entry(entry: EntryCreate):
         entry_with_tags.tags = final_tags
         
         # Create entry in database (mood already analyzed above)
-        db_entry = await db_service.create_entry(entry_with_tags, mood, sentiment_score)
+        # Create entry using enhanced adapter
+        db_entry = await enhanced_db_service.create_entry(entry_with_tags)
         
         # Prepare metadata for vector database
         metadata = {
@@ -87,7 +107,7 @@ async def get_entries(
         datetime_from = datetime.combine(date_from, datetime.min.time()) if date_from else None
         datetime_to = datetime.combine(date_to, datetime.max.time()) if date_to else None
         
-        entries = await db_service.get_entries(
+        entries = await enhanced_db_service.get_entries(
             skip=skip, 
             limit=limit, 
             topic_id=topic_id,
@@ -119,7 +139,7 @@ async def search_entries(
         # Enrich results with full entry data
         enriched_results = []
         for result in results:
-            entry = await db_service.get_entry(result['id'])
+            entry = await enhanced_db_service.get_entry(result['id'])
             if entry:
                 enriched_results.append({
                     'entry': EntryResponse(**entry.model_dump()),
@@ -139,7 +159,7 @@ async def search_entries(
 async def advanced_search(search_filter: AdvancedSearchFilter):
     """Advanced search with multiple filters"""
     try:
-        entries = await db_service.search_entries_advanced(search_filter)
+        entries = await enhanced_db_service.search_entries_advanced(search_filter)
         return {
             'entries': [EntryResponse(**entry.model_dump()) for entry in entries],
             'total_found': len(entries),
@@ -153,7 +173,7 @@ async def advanced_search(search_filter: AdvancedSearchFilter):
 async def get_favorite_entries(limit: int = Query(50, ge=1, le=100)):
     """Get all favorite entries"""
     try:
-        entries = await db_service.get_favorite_entries(skip=0, limit=limit)
+        entries = await enhanced_db_service.get_favorite_entries(skip=0, limit=limit)
         logger.info(f"Found {len(entries)} entries from database service")
         
         response_entries = []
@@ -176,7 +196,7 @@ async def get_favorite_entries(limit: int = Query(50, ge=1, le=100)):
 async def get_entry_templates():
     """Get all available entry templates"""
     try:
-        templates = await db_service.get_entry_templates()
+        templates = await enhanced_db_service.get_entry_templates()
         return templates
     except Exception as e:
         logger.error(f"Error getting templates: {e}")
@@ -186,7 +206,7 @@ async def get_entry_templates():
 async def create_entry_template(template: EntryTemplateCreate):
     """Create a new entry template"""
     try:
-        new_template = await db_service.create_entry_template(template)
+        new_template = await enhanced_db_service.create_entry_template(template)
         return new_template
     except Exception as e:
         logger.error(f"Error creating template: {e}")
@@ -196,7 +216,7 @@ async def create_entry_template(template: EntryTemplateCreate):
 async def get_entry_template(template_id: str):
     """Get a specific entry template"""
     try:
-        template = await db_service.get_entry_template(template_id)
+        template = await enhanced_db_service.get_entry_template(template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
         return template
@@ -211,7 +231,7 @@ async def get_entry_template(template_id: str):
 async def get_entry(entry_id: str):
     """Get a specific journal entry"""
     try:
-        entry = await db_service.get_entry(entry_id)
+        entry = await enhanced_db_service.get_entry(entry_id)
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
@@ -228,7 +248,7 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
     """Update a journal entry"""
     try:
         # Check if entry exists
-        existing_entry = await db_service.get_entry(entry_id)
+        existing_entry = await enhanced_db_service.get_entry(entry_id)
         if not existing_entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
@@ -239,7 +259,7 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
             mood, sentiment_score = sentiment_service.analyze_sentiment(entry_update.content)
         
         # Update entry in database
-        updated_entry = await db_service.update_entry(entry_id, entry_update, mood, sentiment_score)
+        updated_entry = await enhanced_db_service.update_entry(entry_id, entry_update, mood, sentiment_score)
         
         # Update vector database
         content_to_index = entry_update.content or existing_entry.content
@@ -273,12 +293,12 @@ async def delete_entry(entry_id: str):
     """Delete a journal entry"""
     try:
         # Check if entry exists
-        existing_entry = await db_service.get_entry(entry_id)
+        existing_entry = await enhanced_db_service.get_entry(entry_id)
         if not existing_entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
         # Delete from database
-        success = await db_service.delete_entry(entry_id)
+        success = await enhanced_db_service.delete_entry(entry_id)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete entry")
         
@@ -298,11 +318,11 @@ async def delete_entry(entry_id: str):
 async def toggle_favorite(entry_id: str):
     """Toggle favorite status of an entry"""
     try:
-        entry = await db_service.get_entry(entry_id)
+        entry = await enhanced_db_service.get_entry(entry_id)
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        updated_entry = await db_service.toggle_entry_favorite(entry_id)
+        updated_entry = await enhanced_db_service.toggle_entry_favorite(entry_id)
         return EntryResponse(**updated_entry.model_dump())
         
     except HTTPException:
@@ -316,7 +336,7 @@ async def toggle_favorite(entry_id: str):
 async def get_entry_versions(entry_id: str):
     """Get all versions of an entry"""
     try:
-        versions = await db_service.get_entry_versions(entry_id)
+        versions = await enhanced_db_service.get_entry_versions(entry_id)
         return versions
     except Exception as e:
         logger.error(f"Error getting entry versions: {e}")
@@ -326,7 +346,7 @@ async def get_entry_versions(entry_id: str):
 async def revert_entry(entry_id: str, version: int):
     """Revert an entry to a specific version"""
     try:
-        reverted_entry = await db_service.revert_entry_to_version(entry_id, version)
+        reverted_entry = await enhanced_db_service.revert_entry_to_version(entry_id, version)
         return EntryResponse(**reverted_entry.model_dump())
     except Exception as e:
         logger.error(f"Error reverting entry: {e}")
@@ -349,7 +369,7 @@ async def search_entries(
         # Enrich results with full entry data
         enriched_results = []
         for result in results:
-            entry = await db_service.get_entry(result['id'])
+            entry = await enhanced_db_service.get_entry(result['id'])
             if entry:
                 enriched_results.append({
                     'entry': EntryResponse(**entry.model_dump()),
@@ -372,7 +392,7 @@ async def search_entries(
 async def advanced_search(search_filter: AdvancedSearchFilter):
     """Advanced search with multiple filters"""
     try:
-        entries = await db_service.search_entries_advanced(search_filter)
+        entries = await enhanced_db_service.search_entries_advanced(search_filter)
         return {
             'entries': [EntryResponse(**entry.model_dump()) for entry in entries],
             'total_found': len(entries),
@@ -387,11 +407,11 @@ async def advanced_search(search_filter: AdvancedSearchFilter):
 async def toggle_favorite(entry_id: str):
     """Toggle favorite status of an entry"""
     try:
-        entry = await db_service.get_entry(entry_id)
+        entry = await enhanced_db_service.get_entry(entry_id)
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        updated_entry = await db_service.toggle_entry_favorite(entry_id)
+        updated_entry = await enhanced_db_service.toggle_entry_favorite(entry_id)
         return EntryResponse(**updated_entry.model_dump())
     except HTTPException:
         raise
@@ -403,7 +423,7 @@ async def toggle_favorite(entry_id: str):
 async def get_favorite_entries(limit: int = Query(50, ge=1, le=100)):
     """Get all favorite entries"""
     try:
-        entries = await db_service.get_favorite_entries(limit)
+        entries = await enhanced_db_service.get_favorite_entries(limit)
         return [EntryResponse(**entry.model_dump()) for entry in entries]
     except Exception as e:
         logger.error(f"Error getting favorite entries: {e}")
@@ -414,7 +434,7 @@ async def get_favorite_entries(limit: int = Query(50, ge=1, le=100)):
 async def get_entry_versions(entry_id: str):
     """Get all versions of an entry"""
     try:
-        versions = await db_service.get_entry_versions(entry_id)
+        versions = await enhanced_db_service.get_entry_versions(entry_id)
         return versions
     except Exception as e:
         logger.error(f"Error getting entry versions: {e}")
@@ -424,11 +444,11 @@ async def get_entry_versions(entry_id: str):
 async def revert_entry_to_version(entry_id: str, version: int):
     """Revert an entry to a specific version"""
     try:
-        entry = await db_service.get_entry(entry_id)
+        entry = await enhanced_db_service.get_entry(entry_id)
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        reverted_entry = await db_service.revert_entry_to_version(entry_id, version)
+        reverted_entry = await enhanced_db_service.revert_entry_to_version(entry_id, version)
         return EntryResponse(**reverted_entry.model_dump())
     except HTTPException:
         raise
@@ -441,7 +461,7 @@ async def revert_entry_to_version(entry_id: str, version: int):
 async def get_entry_templates():
     """Get all available entry templates"""
     try:
-        templates = await db_service.get_entry_templates()
+        templates = await enhanced_db_service.get_entry_templates()
         return templates
     except Exception as e:
         logger.error(f"Error getting templates: {e}")
@@ -451,7 +471,7 @@ async def get_entry_templates():
 async def create_entry_template(template: EntryTemplateCreate):
     """Create a new entry template"""
     try:
-        created_template = await db_service.create_entry_template(template)
+        created_template = await enhanced_db_service.create_entry_template(template)
         return created_template
     except Exception as e:
         logger.error(f"Error creating template: {e}")
@@ -461,7 +481,7 @@ async def create_entry_template(template: EntryTemplateCreate):
 async def get_entry_template(template_id: str):
     """Get a specific entry template"""
     try:
-        template = await db_service.get_entry_template(template_id)
+        template = await enhanced_db_service.get_entry_template(template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
         return template

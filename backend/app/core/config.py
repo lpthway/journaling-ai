@@ -1,10 +1,79 @@
 # backend/app/core/config.py - Enterprise PostgreSQL Configuration
 
 from pydantic_settings import BaseSettings
-from typing import Optional, List
+from pydantic import Field, validator
+from typing import Optional, List, Dict, Any
+from pathlib import Path
 import os
 
+class DatabaseSettings(BaseSettings):
+    """Database configuration with PostgreSQL optimization."""
+    
+    # Connection settings
+    url: str = Field(
+        default="postgresql+asyncpg://postgres:password@localhost:5432/journaling_ai",
+        description="PostgreSQL connection URL"
+    )
+    
+    # Connection pool settings
+    pool_size: int = Field(default=20, ge=1, le=100)
+    max_overflow: int = Field(default=0, ge=0, le=50)  
+    pool_timeout: int = Field(default=30, ge=1, le=300)
+    pool_recycle: int = Field(default=3600, ge=300, le=86400)
+    pool_pre_ping: bool = Field(default=True)
+    
+    # Query settings
+    query_timeout: int = Field(default=30, ge=1, le=300)
+    statement_timeout: int = Field(default=60, ge=1, le=600)
+    
+    # Development settings
+    echo: bool = Field(default=False)
+    echo_pool: bool = Field(default=False)
+    
+    class Config:
+        env_prefix = "DB_"
+
+class RedisSettings(BaseSettings):
+    """Redis configuration for caching and sessions."""
+    
+    url: str = Field(
+        default="redis://localhost:6379",
+        description="Redis connection URL"
+    )
+    password: Optional[str] = Field(default=None)
+    db: int = Field(default=0, ge=0, le=15)
+    
+    # Connection pool settings
+    max_connections: int = Field(default=20, ge=1, le=100)
+    retry_on_timeout: bool = Field(default=True)
+    health_check_interval: int = Field(default=30, ge=10, le=300)
+    
+    class Config:
+        env_prefix = "REDIS_"
+
+class SecuritySettings(BaseSettings):
+    """Security and authentication configuration."""
+    
+    # JWT settings
+    secret_key: str = Field(
+        default="your-secret-key-change-in-production",
+        description="Secret key for JWT tokens"
+    )
+    algorithm: str = Field(default="HS256")
+    access_token_expire_minutes: int = Field(default=1440, ge=15, le=10080)  # 24 hours default
+    
+    # Password settings
+    password_min_length: int = Field(default=8, ge=6, le=128)
+    password_require_uppercase: bool = Field(default=True)
+    password_require_lowercase: bool = Field(default=True)
+    password_require_numbers: bool = Field(default=True)
+    
+    class Config:
+        env_prefix = "SECURITY_"
+
 class Settings(BaseSettings):
+    """Main application settings with enhanced enterprise features."""
+    
     # Application
     PROJECT_NAME: str = "Local Journaling Assistant"
     VERSION: str = "2.0.0"
@@ -12,49 +81,50 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
     
-    # Security
-    SECRET_KEY: str = "your-secret-key-here-change-in-production"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Enhanced Database Configuration
+    database: DatabaseSettings = DatabaseSettings()
     
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    # Redis Configuration
+    redis: RedisSettings = RedisSettings()
     
-    # === POSTGRESQL DATABASE CONFIGURATION ===
-    # Primary Database
+    # Security Configuration
+    security: SecuritySettings = SecuritySettings()
+    
+    # Legacy database settings (for backward compatibility)
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/journaling_ai"
-    
-    # Database Pool Configuration (Enterprise-grade)
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 0
-    DB_POOL_RECYCLE: int = 3600  # 1 hour
-    DB_COMMAND_TIMEOUT: int = 30  # seconds
+    DB_POOL_RECYCLE: int = 3600
+    DB_COMMAND_TIMEOUT: int = 30
     DB_ECHO: bool = False
     DB_ECHO_POOL: bool = False
     
-    # Performance Targets (<50ms for 95th percentile)
+    # Performance Targets
     DB_PERFORMANCE_TARGET_MS: int = 50
-    DB_SLOW_QUERY_THRESHOLD: float = 0.1  # 100ms threshold
+    DB_SLOW_QUERY_THRESHOLD: float = 0.1
     
-    # Migration Configuration (Dual-write pattern)
-    ENABLE_DUAL_WRITE: bool = True  # Enable during migration period
+    # Migration Configuration
+    ENABLE_DUAL_WRITE: bool = True
     JSON_DATA_PATH: str = "data"
     MIGRATION_BATCH_SIZE: int = 1000
     MIGRATION_VALIDATION_ENABLED: bool = True
     
+    # CORS
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    
     # === AI MODEL CONFIGURATION ===
     # Ollama Settings
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3.2"  # ⬆️ UPGRADED: Newer, better reasoning
+    OLLAMA_MODEL: str = "llama3.2"
     
     # Vector Database Settings
     CHROMA_PERSIST_DIRECTORY: str = "./data/chroma_db"
     
-    # Embedding Model - KEEP THIS! Perfect for German/English
-    EMBEDDING_MODEL: str = "intfloat/multilingual-e5-large"  # ✅ EXCELLENT choice
+    # Embedding Model
+    EMBEDDING_MODEL: str = "intfloat/multilingual-e5-large"
     
-    # Sentiment Analysis - UPGRADED for multilingual emotion detection
-    SENTIMENT_MODEL: str = "j-hartmann/emotion-english-distilroberta-base"  # ⬆️ 6 emotions instead of 3
+    # Sentiment Analysis
+    SENTIMENT_MODEL: str = "j-hartmann/emotion-english-distilroberta-base"
     
     # Vector Search
     VECTOR_SIMILARITY_THRESHOLD: float = 0.7
@@ -67,7 +137,7 @@ class Settings(BaseSettings):
     # === CACHING & PERFORMANCE ===
     REDIS_URL: str = "redis://localhost:6379/0"
     ANALYTICS_CACHE_ENABLED: bool = True
-    ANALYTICS_CACHE_TTL: int = 3600  # 1 hour
+    ANALYTICS_CACHE_TTL: int = 3600
     
     # Background Tasks
     BACKGROUND_TASKS_ENABLED: bool = True
@@ -80,7 +150,7 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
-    RATE_LIMIT_WINDOW: int = 60  # seconds
+    RATE_LIMIT_WINDOW: int = 60
     
     # === FILE STORAGE ===
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
@@ -90,10 +160,25 @@ class Settings(BaseSettings):
     PSYCHOLOGY_DB_ENABLED: bool = True
     PSYCHOLOGY_CONTENT_PATH: str = "data/psychology_db"
     
+    # Validation for production
+    @validator('security')
+    def validate_security_settings(cls, v, values):
+        """Validate security settings for production."""
+        if values.get('ENVIRONMENT') == 'production':
+            if v.secret_key == "your-secret-key-change-in-production":
+                raise ValueError("Secret key must be changed for production")
+        return v
+    
+    @validator('DEBUG')
+    def validate_debug_mode(cls, v, values):
+        """Validate debug mode for production."""
+        if values.get('ENVIRONMENT') == 'production' and v:
+            raise ValueError("Debug mode must be disabled in production")
+        return v
+    
     class Config:
         case_sensitive = True
-        # Remove .env file dependency - all config in this file
-        env_file = None
+        env_file = None  # Remove .env dependency
 
 settings = Settings()
 

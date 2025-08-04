@@ -1,32 +1,87 @@
-### app/main.py
+### app/main.py - Enhanced FastAPI Application with Enterprise Architecture
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 import logging
 import os
 from pathlib import Path
 
+# Enhanced imports for enterprise architecture
 from app.core.config import settings
+from app.core.exceptions import JournalingAIException
+from app.core.enhanced_database import DatabaseManager, DatabaseConfig
 from app.api import entries, topics, insights, insights_v2, sessions, psychology
 from app.services.background_analytics import analytics_lifespan
 
-# Configure logging
+# Configure enhanced logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=getattr(logging, settings.LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(correlation_id)s' if settings.LOG_FORMAT == 'json' else '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app with background analytics lifespan
+# Global database manager instance with proper configuration
+db_config = DatabaseConfig(
+    url=settings.DATABASE_URL,
+    pool_size=20,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=3600,
+    pool_pre_ping=True,
+    query_timeout=30,
+    statement_timeout=60,
+    echo=settings.DEBUG
+)
+db_manager = DatabaseManager(db_config)
+
+# Create FastAPI app with enhanced configuration
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    description="A local-first journaling and coaching assistant with AI insights",
-    version="1.0.0",
+    description="Enterprise-grade journaling and coaching assistant with AI insights",
+    version="2.0.0",
     lifespan=analytics_lifespan  # Enable background analytics processing
 )
+
+# Enhanced exception handler for structured error responses
+@app.exception_handler(JournalingAIException)
+async def journaling_ai_exception_handler(request: Request, exc: JournalingAIException):
+    """Handle custom application exceptions with structured responses."""
+    logger.error(f"Application error: {exc.message}", extra={
+        "correlation_id": exc.correlation_id,
+        "error_code": exc.error_code,
+        "context": exc.context
+    })
+    
+    return JSONResponse(
+        status_code=getattr(exc, 'http_status_code', 500),
+        content=exc.to_dict()
+    )
+
+# Global exception handler for unexpected errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected exceptions with correlation ID."""
+    import uuid
+    correlation_id = str(uuid.uuid4())
+    
+    logger.error(f"Unexpected error: {str(exc)}", extra={
+        "correlation_id": correlation_id,
+        "request_url": str(request.url),
+        "request_method": request.method
+    })
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error_code": "INTERNAL_SERVER_ERROR",
+            "message": "An unexpected error occurred",
+            "correlation_id": correlation_id
+        }
+    )
 
 # Configure CORS
 app.add_middleware(

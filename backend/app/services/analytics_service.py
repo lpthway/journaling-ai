@@ -1,4 +1,4 @@
-# backend/app/services/analytics_service.py - High-Performance Analytics Caching
+# backend/app/services/analytics_service.py - Enhanced Analytics with Enterprise Architecture
 
 import asyncio
 import logging
@@ -8,6 +8,14 @@ from typing import Dict, List, Optional, Any, Tuple
 from collections import defaultdict
 import json
 
+# Enhanced imports for enterprise architecture
+from app.core.exceptions import (
+    DatabaseException, ValidationException, NotFoundException, AnalyticsException
+)
+from app.repositories.enhanced_base import EnhancedBaseRepository
+from app.repositories.entry_repository import EntryRepository
+from app.repositories.session_repository import SessionRepository
+from app.models.enhanced_models import Entry, ChatSession, User
 from app.models.analytics import (
     AnalyticsType, CacheStatus, AnalyticsCache, AnalyticsCacheCreate, 
     EntryAnalytics, SessionAnalytics, ProcessingStatus
@@ -129,9 +137,16 @@ class AnalyticsCacheService:
                 
             logger.info(f"Analyzing entry {entry_id} in background")
             
-            # Perform comprehensive analysis
-            sentiment_score, mood = sentiment_service.analyze_sentiment(entry.content)
-            emotion_scores = sentiment_service.analyze_emotions(entry.content)
+            # Perform comprehensive analysis with enhanced error handling
+            try:
+                mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
+                emotion_scores = sentiment_service.analyze_emotions(entry.content)
+            except Exception as e:
+                logger.error(f"Error analyzing sentiment for entry {entry_id}: {e}")
+                raise AnalyticsException(
+                    "Failed to analyze entry sentiment",
+                    context={"entry_id": entry_id, "error": str(e)}
+                )
             
             # Store individual entry analytics
             entry_analytics = EntryAnalytics(

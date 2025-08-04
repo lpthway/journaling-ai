@@ -220,3 +220,6 @@ config/secrets.py
 
 # ChromaDB specific
 chroma.sqlite3
+
+# Backup folder for archived/legacy files
+backup/
