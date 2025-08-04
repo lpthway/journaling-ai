@@ -192,18 +192,23 @@ async def send_message(session_id: str, message_data: MessageCreate):
         # Get conversation history for context
         conversation_history = await session_service.get_session_messages(session_id)
         
-        # Generate AI response
-        ai_response = await conversation_service.generate_response(
+        # Generate AI response - FIXED: Only expect string response
+        ai_response_text = await conversation_service.generate_response(
             session.session_type,
             message_data.content,
             conversation_history,
             session.metadata
         )
         
+        # Ensure ai_response_text is a string
+        if not isinstance(ai_response_text, str):
+            logger.error(f"Expected string response, got {type(ai_response_text)}: {ai_response_text}")
+            ai_response_text = str(ai_response_text)  # Force conversion to string
+        
         # Add AI response message
         ai_message = await session_service.add_message(
             session_id,
-            MessageCreate(content=ai_response, role=MessageRole.ASSISTANT)
+            MessageCreate(content=ai_response_text, role=MessageRole.ASSISTANT)  # ← FIXED: Pass string directly
         )
         
         # Auto-tag conversation every 6 messages (3 exchanges)
@@ -255,25 +260,64 @@ async def get_follow_up_suggestions(session_id: str):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
+        # Enhanced logging for debugging
+        logger.info(f"Getting suggestions for session {session_id}, type: {session.session_type}")
+        logger.info(f"Session type value: {session.session_type.value}")
+        
         # Get recent messages for context
         recent_messages = await session_service.get_recent_messages(session_id, 5)
+        logger.info(f"Found {len(recent_messages)} recent messages")
         
-        # Generate suggestions
-        suggestions = await conversation_service.suggest_follow_up_questions(
-            session.session_type,
-            recent_messages
-        )
-        
-        return {
-            "session_id": session_id,
-            "suggestions": suggestions
-        }
+        # Generate suggestions with enhanced error handling
+        try:
+            suggestions = await conversation_service.suggest_follow_up_questions(
+                session.session_type,
+                recent_messages
+            )
+            
+            logger.info(f"Generated {len(suggestions)} suggestions")
+            
+            return {
+                "session_id": session_id,
+                "session_type": session.session_type.value,
+                "suggestions": suggestions
+            }
+            
+        except AttributeError as ae:
+            logger.error(f"AttributeError in suggestion generation: {ae}")
+            logger.error(f"Session type: {type(session.session_type)}, value: {session.session_type}")
+            raise HTTPException(status_code=500, detail="Session type configuration error")
+            
+        except TypeError as te:
+            logger.error(f"TypeError in suggestion generation: {te}")
+            logger.error(f"Recent messages type: {type(recent_messages)}")
+            if recent_messages:
+                logger.error(f"First message type: {type(recent_messages[0])}")
+            raise HTTPException(status_code=500, detail="Message type configuration error")
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting suggestions for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get suggestions")
+        logger.error(f"Unexpected error getting suggestions for session {session_id}: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to get suggestions: {str(e)}")
+
+
+# Add this helper method to validate session types
+def validate_session_type(session_type) -> bool:
+    """Validate that session_type is a proper SessionType enum"""
+    from app.models.session import SessionType
+    
+    if not isinstance(session_type, SessionType):
+        logger.error(f"Invalid session type: {type(session_type)}, value: {session_type}")
+        return False
+    
+    if session_type not in SessionType:
+        logger.error(f"Unknown session type enum: {session_type}")
+        return False
+    
+    return True
 
 @router.post("/{session_id}/pause")
 async def pause_session(session_id: str):
