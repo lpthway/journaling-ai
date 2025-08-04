@@ -172,8 +172,8 @@ class AnalyticsCacheService:
                 
             combined_text = ' '.join([msg.content for msg in user_messages])
             
-            # Perform analysis
-            sentiment_score, mood = sentiment_service.analyze_sentiment(combined_text)
+            # Perform analysis - sentiment service returns (MoodType, float)
+            mood, sentiment_score = sentiment_service.analyze_sentiment(combined_text)
             
             session_analytics = SessionAnalytics(
                 session_id=session_id,

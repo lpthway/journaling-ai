@@ -91,8 +91,9 @@ class Settings(BaseSettings):
     PSYCHOLOGY_CONTENT_PATH: str = "data/psychology_db"
     
     class Config:
-        env_file = ".env"
         case_sensitive = True
+        # Remove .env file dependency - all config in this file
+        env_file = None
 
 settings = Settings()
 
