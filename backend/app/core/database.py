@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker
 )
-from sqlalchemy.pool import QueuePool
 from sqlalchemy import event, text
 from sqlalchemy.exc import DisconnectionError
 import time
@@ -41,8 +40,7 @@ class DatabaseConfig:
             self.engine = create_async_engine(
                 settings.DATABASE_URL,
                 
-                # Connection Pool Configuration
-                poolclass=QueuePool,
+                # Connection Pool Configuration (using default async pool)
                 pool_size=settings.DB_POOL_SIZE,
                 max_overflow=settings.DB_MAX_OVERFLOW,
                 pool_pre_ping=True,  # Validate connections

@@ -37,10 +37,10 @@ class RedisSettings(BaseSettings):
     """Redis configuration for caching and sessions."""
     
     url: str = Field(
-        default="redis://localhost:6379",
-        description="Redis connection URL"
+        default="redis://:password@localhost:6379",
+        description="Redis connection URL with authentication"
     )
-    password: Optional[str] = Field(default=None)
+    password: Optional[str] = Field(default="password")
     db: int = Field(default=0, ge=0, le=15)
     
     # Connection pool settings
@@ -135,14 +135,23 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None
     
     # === CACHING & PERFORMANCE ===
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = Field(
+        default="redis://:password@localhost:6379/0",
+        description="Redis connection URL with authentication for Docker Redis"
+    )
     ANALYTICS_CACHE_ENABLED: bool = True
     ANALYTICS_CACHE_TTL: int = 3600
     
     # Background Tasks
     BACKGROUND_TASKS_ENABLED: bool = True
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = Field(
+        default="redis://:password@localhost:6379/0",
+        description="Celery broker URL with authentication for Docker Redis"
+    )
+    CELERY_RESULT_BACKEND: str = Field(
+        default="redis://:password@localhost:6379/0", 
+        description="Celery result backend with authentication for Docker Redis"
+    )
     
     # === LOGGING & MONITORING ===
     LOG_LEVEL: str = "INFO"

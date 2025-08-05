@@ -7,7 +7,7 @@ from typing import Optional, List
 from contextlib import asynccontextmanager
 
 from app.services.analytics_service import analytics_cache_service
-from app.services.database_service import db_service
+from app.services.unified_database_service import unified_db_service
 from app.models.analytics import AnalyticsType
 
 logger = logging.getLogger(__name__)

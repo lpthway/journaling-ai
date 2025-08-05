@@ -6,14 +6,14 @@ from sqlalchemy import select, func, and_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.postgresql import JournalEntry, User
+from app.models.postgresql import Entry, User
 from app.repositories.base import BaseRepository
 
-class JournalEntryRepository(BaseRepository[JournalEntry]):
+class JournalEntryRepository(BaseRepository[Entry]):
     """Repository for journal entry operations with advanced querying"""
     
     def __init__(self, session: AsyncSession):
-        super().__init__(session, JournalEntry)
+        super().__init__(session, Entry)
     
     async def get_by_user_id(
         self, 
@@ -23,22 +23,22 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         include_archived: bool = False
-    ) -> List[JournalEntry]:
+    ) -> List[Entry]:
         """Get journal entries for a specific user with filtering"""
-        query = select(JournalEntry).where(JournalEntry.user_id == user_id)
+        query = select(Entry).where(Entry.user_id == user_id)
         
         # Date filtering
         if start_date:
-            query = query.where(JournalEntry.entry_date >= start_date)
+            query = query.where(Entry.entry_date >= start_date)
         if end_date:
-            query = query.where(JournalEntry.entry_date <= end_date)
+            query = query.where(Entry.entry_date <= end_date)
         
         # Archive filtering
         if not include_archived:
-            query = query.where(JournalEntry.is_archived == False)
+            query = query.where(Entry.is_archived == False)
         
         # Order by entry date (newest first)
-        query = query.order_by(desc(JournalEntry.entry_date), desc(JournalEntry.created_at))
+        query = query.order_by(desc(Entry.entry_date), desc(Entry.created_at))
         query = query.limit(limit).offset(offset)
         
         result = await self.session.execute(query)
@@ -49,16 +49,16 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
         user_id: str, 
         start_date: date, 
         end_date: date
-    ) -> List[JournalEntry]:
+    ) -> List[Entry]:
         """Get entries within a specific date range"""
-        query = select(JournalEntry).where(
+        query = select(Entry).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.entry_date >= start_date,
-                JournalEntry.entry_date <= end_date,
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.entry_date >= start_date,
+                Entry.entry_date <= end_date,
+                Entry.is_archived == False
             )
-        ).order_by(asc(JournalEntry.entry_date))
+        ).order_by(asc(Entry.entry_date))
         
         result = await self.session.execute(query)
         return result.scalars().all()
@@ -68,15 +68,15 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
         user_id: str, 
         search_term: str, 
         limit: int = 20
-    ) -> List[JournalEntry]:
+    ) -> List[Entry]:
         """Search entries by content using PostgreSQL full-text search"""
-        query = select(JournalEntry).where(
+        query = select(Entry).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.content.contains(search_term),  # Simple contains for now
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.content.contains(search_term),  # Simple contains for now
+                Entry.is_archived == False
             )
-        ).order_by(desc(JournalEntry.created_at)).limit(limit)
+        ).order_by(desc(Entry.created_at)).limit(limit)
         
         result = await self.session.execute(query)
         return result.scalars().all()
@@ -87,16 +87,16 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
         min_mood: float, 
         max_mood: float,
         limit: int = 50
-    ) -> List[JournalEntry]:
+    ) -> List[Entry]:
         """Get entries within a mood score range"""
-        query = select(JournalEntry).where(
+        query = select(Entry).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.mood_score >= min_mood,
-                JournalEntry.mood_score <= max_mood,
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.mood_score >= min_mood,
+                Entry.mood_score <= max_mood,
+                Entry.is_archived == False
             )
-        ).order_by(desc(JournalEntry.entry_date)).limit(limit)
+        ).order_by(desc(Entry.entry_date)).limit(limit)
         
         result = await self.session.execute(query)
         return result.scalars().all()
@@ -106,15 +106,15 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
         user_id: str, 
         tags: List[str], 
         limit: int = 50
-    ) -> List[JournalEntry]:
+    ) -> List[Entry]:
         """Get entries containing any of the specified tags"""
-        query = select(JournalEntry).where(
+        query = select(Entry).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.tags.overlap(tags),  # PostgreSQL array overlap
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.tags.overlap(tags),  # PostgreSQL array overlap
+                Entry.is_archived == False
             )
-        ).order_by(desc(JournalEntry.entry_date)).limit(limit)
+        ).order_by(desc(Entry.entry_date)).limit(limit)
         
         result = await self.session.execute(query)
         return result.scalars().all()
@@ -127,33 +127,33 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
     ) -> Dict[str, Any]:
         """Get analytics summary for date range"""
         # Count entries
-        count_query = select(func.count(JournalEntry.id)).where(
+        count_query = select(func.count(Entry.id)).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.entry_date >= start_date,
-                JournalEntry.entry_date <= end_date,
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.entry_date >= start_date,
+                Entry.entry_date <= end_date,
+                Entry.is_archived == False
             )
         )
         
         # Average mood
-        mood_query = select(func.avg(JournalEntry.mood_score)).where(
+        mood_query = select(func.avg(Entry.mood_score)).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.entry_date >= start_date,
-                JournalEntry.entry_date <= end_date,
-                JournalEntry.mood_score.isnot(None),
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.entry_date >= start_date,
+                Entry.entry_date <= end_date,
+                Entry.mood_score.isnot(None),
+                Entry.is_archived == False
             )
         )
         
         # Total words
-        words_query = select(func.sum(JournalEntry.word_count)).where(
+        words_query = select(func.sum(Entry.word_count)).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.entry_date >= start_date,
-                JournalEntry.entry_date <= end_date,
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.entry_date >= start_date,
+                Entry.entry_date <= end_date,
+                Entry.is_archived == False
             )
         )
         
@@ -177,17 +177,17 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
     ) -> List[Dict[str, Any]]:
         """Get daily mood trends for the last N days"""
         query = select(
-            JournalEntry.entry_date,
-            func.avg(JournalEntry.mood_score).label('avg_mood'),
-            func.count(JournalEntry.id).label('entry_count')
+            Entry.entry_date,
+            func.avg(Entry.mood_score).label('avg_mood'),
+            func.count(Entry.id).label('entry_count')
         ).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.entry_date >= date.today() - datetime.timedelta(days=days),
-                JournalEntry.mood_score.isnot(None),
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.entry_date >= date.today() - datetime.timedelta(days=days),
+                Entry.mood_score.isnot(None),
+                Entry.is_archived == False
             )
-        ).group_by(JournalEntry.entry_date).order_by(JournalEntry.entry_date)
+        ).group_by(Entry.entry_date).order_by(Entry.entry_date)
         
         result = await self.session.execute(query)
         return [
@@ -203,14 +203,14 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
         self, 
         user_id: str, 
         limit: int = 10
-    ) -> List[JournalEntry]:
+    ) -> List[Entry]:
         """Get most recent entries for a user"""
-        query = select(JournalEntry).where(
+        query = select(Entry).where(
             and_(
-                JournalEntry.user_id == user_id,
-                JournalEntry.is_archived == False
+                Entry.user_id == user_id,
+                Entry.is_archived == False
             )
-        ).order_by(desc(JournalEntry.created_at)).limit(limit)
+        ).order_by(desc(Entry.created_at)).limit(limit)
         
         result = await self.session.execute(query)
         return result.scalars().all()
@@ -230,7 +230,7 @@ class JournalEntryRepository(BaseRepository[JournalEntry]):
         emotion_analysis: Optional[Dict[str, Any]] = None,
         topic_analysis: Optional[Dict[str, Any]] = None,
         psychology_insights: Optional[Dict[str, Any]] = None
-    ) -> Optional[JournalEntry]:
+    ) -> Optional[Entry]:
         """Update AI analysis results for an entry"""
         update_data = {"updated_at": datetime.now()}
         

@@ -3,7 +3,8 @@
 from app.repositories.base import BaseRepository
 from app.repositories.journal import JournalEntryRepository
 from app.repositories.conversation import ConversationRepository
-from app.repositories.analytics import AnalyticsRepository
+# Analytics repository temporarily disabled due to missing models
+# from app.repositories.analytics import AnalyticsRepository
 
 __all__ = [
     "BaseRepository",

@@ -1,0 +1,135 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: journaling_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: journaling_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - journaling_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d journaling_ai"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: journaling_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - journaling_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  # Redis Commander (Optional Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: journaling_redis_gui
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:password
+    ports:
+      - "8081:8081"
+    networks:
+      - journaling_network
+    depends_on:
+      - redis
+    profiles:
+      - dev  # Only start with --profile dev
+
+  # pgAdmin (Optional PostgreSQL GUI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: journaling_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@journaling.ai
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - journaling_network
+    depends_on:
+      - postgres
+    profiles:
+      - dev  # Only start with --profile dev
+
+  # Journaling AI Backend (Optional)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: journaling_backend
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/journaling_ai
+      
+      # Redis
+      REDIS_URL: redis://:password@redis:6379/0
+      CELERY_BROKER_URL: redis://:password@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:password@redis:6379/0
+      
+      # Application
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+      
+      # AI Models
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    networks:
+      - journaling_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - app  # Only start with --profile app
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  journaling_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

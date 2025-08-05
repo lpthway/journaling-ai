@@ -31,7 +31,7 @@ from nltk.stem import WordNetLemmatizer
 # Internal imports
 from app.models.entry import Entry, MoodType
 from app.services.sentiment_service import MultilingualSentimentService
-from app.services.database_service import db_service
+from app.services.unified_database_service import unified_db_service
 
 # Import hardware-adaptive AI system (temporarily disabled)
 # from app.services.hardware_adaptive_ai import get_adaptive_ai, HardwareAdaptiveAI
@@ -897,7 +897,7 @@ class EnhancedAIService:
         
         try:
             # Get user's historical entries
-            entries = await db_service.get_entries(limit=100)
+            entries = await unified_db_service.get_entries(limit=100)
             
             if not entries:
                 return tags
@@ -1580,7 +1580,7 @@ class EnhancedAIService:
             # Get user's recent entries
             end_date = datetime.now()
             start_date = end_date - timedelta(days=user_history_days)
-            entries = await db_service.get_entries(date_from=start_date, limit=100)
+            entries = await unified_db_service.get_entries(date_from=start_date, limit=100)
             
             if not entries:
                 return self._get_default_prompts()

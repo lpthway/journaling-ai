@@ -4,7 +4,7 @@ import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import logging
-from app.services.database_service import db_service
+from app.services.unified_database_service import unified_db_service
 from app.services.session_service import session_service
 from app.services.vector_service import vector_service
 from app.services.sentiment_service import sentiment_service
@@ -63,7 +63,7 @@ class EnhancedInsightsService:
         """Get mood analysis from both journal entries and chat conversations"""
         try:
             # Analyze journal entry moods (existing functionality)
-            journal_mood_stats = await db_service.get_mood_statistics(days)
+            journal_mood_stats = await unified_db_service.get_mood_statistics(days)
             
             # Analyze chat conversation sentiments
             chat_sentiments = await self.analyze_chat_sentiments(days)
@@ -198,7 +198,7 @@ class EnhancedInsightsService:
         """Get journal entries from the last N days"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        return await db_service.get_entries(date_from=start_date, date_to=end_date, limit=100)
+        return await unified_db_service.get_entries(date_from=start_date, date_to=end_date, limit=100)
     
     async def get_chat_conversations(self, days: int) -> List[Dict]:
         """Get chat conversations from the last N days"""

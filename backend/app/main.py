@@ -19,7 +19,9 @@ from app.services.redis_service import redis_service
 from app.core.service_interfaces import service_registry
 
 # API routers
-from app.api import entries, topics, insights, insights_v2, sessions, psychology
+from app.api import entries, topics, insights, insights_v2, psychology
+# Temporarily disabled sessions API due to missing legacy dependencies
+# from app.api import sessions
 
 # Configure enhanced logging
 logging.basicConfig(
@@ -180,7 +182,8 @@ app.include_router(insights_v2.router, prefix=f"{settings.API_V1_STR}/insights",
 app.include_router(insights.router, prefix=f"{settings.API_V1_STR}/insights-legacy", tags=["insights-legacy"])
 app.include_router(entries.router, prefix=f"{settings.API_V1_STR}/entries", tags=["entries"])
 app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=["topics"])
-app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
+# Temporarily disabled sessions API due to missing legacy dependencies
+# app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
 app.include_router(psychology.router, prefix=f"{settings.API_V1_STR}/psychology", tags=["psychology"])
 
 # Enhanced health check endpoints

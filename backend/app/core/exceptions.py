@@ -95,3 +95,11 @@ class MigrationException(DatabaseException):
 class AnalyticsException(DatabaseException):
     """Analytics calculation errors."""
     pass
+
+class CacheException(JournalingAIException):
+    """Cache operation errors."""
+    http_status_code = 500
+
+class RepositoryException(DatabaseException):
+    """Repository operation errors."""
+    pass

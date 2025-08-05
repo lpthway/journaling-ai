@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 from app.models.topic import Topic, TopicCreate, TopicUpdate, TopicResponse
-from app.services.database_service import db_service
+from app.services.unified_database_service import unified_db_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ router = APIRouter()
 async def create_topic(topic: TopicCreate):
     """Create a new topic"""
     try:
-        db_topic = await db_service.create_topic(topic)
+        db_topic = await unified_db_service.create_topic(topic)
         return TopicResponse(**db_topic.model_dump())
         
     except Exception as e:
@@ -25,7 +25,7 @@ async def create_topic(topic: TopicCreate):
 async def get_topics():
     """Get all topics"""
     try:
-        topics = await db_service.get_topics()
+        topics = await unified_db_service.get_topics()
         return [TopicResponse(**topic.model_dump()) for topic in topics]
         
     except Exception as e:
@@ -36,7 +36,7 @@ async def get_topics():
 async def get_topic(topic_id: str):
     """Get a specific topic"""
     try:
-        topic = await db_service.get_topic(topic_id)
+        topic = await unified_db_service.get_topic(topic_id)
         if not topic:
             raise HTTPException(status_code=404, detail="Topic not found")
         
@@ -52,7 +52,7 @@ async def get_topic(topic_id: str):
 async def update_topic(topic_id: str, topic_update: TopicUpdate):
     """Update a topic"""
     try:
-        updated_topic = await db_service.update_topic(topic_id, topic_update)
+        updated_topic = await unified_db_service.update_topic(topic_id, topic_update)
         if not updated_topic:
             raise HTTPException(status_code=404, detail="Topic not found")
         
@@ -68,7 +68,7 @@ async def update_topic(topic_id: str, topic_update: TopicUpdate):
 async def delete_topic(topic_id: str):
     """Delete a topic"""
     try:
-        success = await db_service.delete_topic(topic_id)
+        success = await unified_db_service.delete_topic(topic_id)
         if not success:
             raise HTTPException(status_code=404, detail="Topic not found")
         
@@ -89,12 +89,12 @@ async def get_topic_entries(
     """Get all entries for a specific topic"""
     try:
         # Verify topic exists
-        topic = await db_service.get_topic(topic_id)
+        topic = await unified_db_service.get_topic(topic_id)
         if not topic:
             raise HTTPException(status_code=404, detail="Topic not found")
         
         # Get entries for this topic
-        entries = await db_service.get_entries(skip=skip, limit=limit, topic_id=topic_id)
+        entries = await unified_db_service.get_entries(skip=skip, limit=limit, topic_id=topic_id)
         
         from app.models.entry import EntryResponse
         return {

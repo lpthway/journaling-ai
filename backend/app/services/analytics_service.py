@@ -20,7 +20,7 @@ from app.models.analytics import (
     AnalyticsType, CacheStatus, AnalyticsCache, AnalyticsCacheCreate, 
     EntryAnalytics, SessionAnalytics, ProcessingStatus
 )
-from app.services.database_service import db_service
+from app.services.unified_database_service import unified_db_service
 from app.services.sentiment_service import sentiment_service
 from app.services.session_service import session_service
 from app.services.llm_service import llm_service
@@ -131,7 +131,7 @@ class AnalyticsCacheService:
     async def analyze_entry_background(self, entry_id: str) -> None:
         """Analyze a single entry in the background when it's created/updated"""
         try:
-            entry = await db_service.get_entry(entry_id)
+            entry = await unified_db_service.get_entry(entry_id)
             if not entry:
                 return
                 
@@ -318,7 +318,7 @@ class AnalyticsCacheService:
                     
             else:
                 # Fallback to live computation (limited sample for speed)
-                entries = await db_service.get_entries_in_range(start_date, end_date, limit=50)
+                entries = await unified_db_service.get_entries_in_range(start_date, end_date, limit=50)
                 daily_moods = defaultdict(list)
                 mood_distribution = defaultdict(int)
                 
@@ -349,7 +349,7 @@ class AnalyticsCacheService:
         """Fast sentiment analysis using sampling for large datasets"""
         try:
             # Get sample of recent entries for quick analysis
-            entries = await db_service.get_entries_in_range(start_date, end_date, limit=30)
+            entries = await unified_db_service.get_entries_in_range(start_date, end_date, limit=30)
             
             if not entries:
                 return {'sentiment_trend': [], 'average_sentiment': 0, 'sentiment_variance': 0}
@@ -382,7 +382,7 @@ class AnalyticsCacheService:
     async def _compute_entry_stats_fast(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """Fast entry statistics computation"""
         try:
-            entries = await db_service.get_entries_in_range(start_date, end_date)
+            entries = await unified_db_service.get_entries_in_range(start_date, end_date)
             
             total_entries = len(entries)
             total_words = sum(len(entry.content.split()) for entry in entries)
@@ -433,7 +433,7 @@ class AnalyticsCacheService:
         """Fast topic analysis using basic keyword extraction"""
         try:
             # Sample entries for quick topic extraction
-            entries = await db_service.get_entries_in_range(start_date, end_date, limit=20)
+            entries = await unified_db_service.get_entries_in_range(start_date, end_date, limit=20)
             
             if not entries:
                 return {'top_topics': [], 'topic_trends': {}}
