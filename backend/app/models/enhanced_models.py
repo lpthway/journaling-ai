@@ -207,6 +207,11 @@ class Topic(Base):
         Index('ix_topics_user_name', 'user_id', 'name'),
         Index('ix_topics_parent_sort', 'parent_id', 'sort_order'),
         Index('ix_topics_psychology_gin', 'psychology_domains', postgresql_using='gin'),
+        
+        # Trigram indexes for fuzzy search (requires pg_trgm extension)
+        Index('ix_topics_name_trgm', 'name', postgresql_using='gin', postgresql_ops={'name': 'gin_trgm_ops'}),
+        Index('ix_topics_description_trgm', 'description', postgresql_using='gin', postgresql_ops={'description': 'gin_trgm_ops'}),
+        
         UniqueConstraint('user_id', 'name', 'parent_id', name='uq_topics_user_name_parent'),
     )
 
@@ -377,8 +382,10 @@ class Entry(Base):
         
         # Full-text search indexes
         Index('ix_entries_search_vector', 'search_vector', postgresql_using='gin'),
-        # Remove the problematic gin_trgm_ops index for now
-        # Index('ix_entries_title_text', 'title', postgresql_using='gin', postgresql_ops={'title': 'gin_trgm_ops'}),
+        
+        # Trigram indexes for fuzzy search (requires pg_trgm extension)
+        Index('ix_entries_title_trgm', 'title', postgresql_using='gin', postgresql_ops={'title': 'gin_trgm_ops'}),
+        Index('ix_entries_content_trgm', 'content', postgresql_using='gin', postgresql_ops={'content': 'gin_trgm_ops'}),
         
         # JSONB indexes for metadata queries
         Index('ix_entries_tags_gin', 'tags', postgresql_using='gin'),
