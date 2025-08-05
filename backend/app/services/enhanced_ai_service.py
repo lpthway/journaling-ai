@@ -6,6 +6,8 @@ Provides intelligent features like smart prompts, auto-tagging, style analysis, 
 import logging
 import re
 import gc
+import time
+import traceback
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
@@ -33,10 +35,6 @@ from app.models.entry import Entry, MoodType
 from app.services.sentiment_service import MultilingualSentimentService
 from app.services.unified_database_service import unified_db_service
 
-# Import hardware-adaptive AI system (temporarily disabled)
-# from app.services.hardware_adaptive_ai import get_adaptive_ai, HardwareAdaptiveAI
-# from app.core.gpu_memory_manager import get_gpu_memory_manager
-
 logger = logging.getLogger(__name__)
 
 class EnhancedAIService:
@@ -52,12 +50,6 @@ class EnhancedAIService:
         self.emotion_classifier = None
         self.multilingual_classifier = None
         self.backup_classifier = None
-        
-        # Initialize hardware-adaptive AI system (temporarily disabled)
-        # self.adaptive_ai: Optional[HardwareAdaptiveAI] = None
-        # self.gpu_memory_manager = get_gpu_memory_manager()
-        self.adaptive_ai = None
-        self.gpu_memory_manager = None
         
         # Initialize TfidfVectorizer with memory-safe settings
         self.tfidf_vectorizer = TfidfVectorizer(
@@ -126,23 +118,13 @@ class EnhancedAIService:
             return model_name
         
     async def initialize(self):
-        """Initialize the AI service and load models with hardware-adaptive AI"""
+        """Initialize the AI service and load models"""
         if self._models_initialized:
             return
             
-        logger.info("🚀 Initializing Enhanced AI Service with Hardware-Adaptive AI...")
+        logger.info("🚀 Initializing Enhanced AI Service...")
         
-        # Initialize hardware-adaptive AI system (temporarily disabled)
-        try:
-            # self.adaptive_ai = await get_adaptive_ai()
-            # logger.info("✅ Hardware-Adaptive AI initialized successfully")
-            logger.info("⚠️ Hardware-Adaptive AI temporarily disabled")
-            self.adaptive_ai = None
-        except Exception as e:
-            logger.warning(f"Hardware-Adaptive AI initialization failed: {e}")
-            self.adaptive_ai = None
-        
-        # Initialize traditional models as fallback
+        # Initialize traditional models
         self._initialize_models()
         self._models_initialized = True
         logger.info("✅ Enhanced AI Service initialized")
@@ -169,12 +151,6 @@ class EnhancedAIService:
             # Force clear all cached memory
             torch.cuda.reset_peak_memory_stats()
         
-        # GPU memory cleanup (temporarily disabled)
-        # # await self.gpu_memory_manager.cleanup_manager.emergency_gpu_cleanup()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-        
         # Log memory status
         if torch.cuda.is_available():
             free_memory = torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)
@@ -184,7 +160,7 @@ class EnhancedAIService:
         logger.info("✅ Enhanced AI Service cleaned up")
         
     def _safe_load_model(self, model_name: str, task: str, max_retries: int = 2, config: Dict[str, Any] = None) -> Optional[Any]:
-        """Safely load a model with GPU memory management and hardware-adaptive optimizations"""
+        """Safely load a model with GPU memory management"""
         
         if config is None:
             config = {}
@@ -206,7 +182,7 @@ class EnhancedAIService:
                     logger.info(f"⏳ Rate limiting: waiting {delay}s before retry {attempt}")
                     time.sleep(delay)
                 
-                # Determine device based on hardware tier and memory pressure
+                # Determine device based on memory pressure
                 if cpu_optimized or not self._use_gpu:
                     device = -1  # CPU
                     device_name = "cpu"
@@ -318,8 +294,8 @@ class EnhancedAIService:
             except Exception as e:
                 logger.warning(f"NLTK setup issue: {e}")
             
-            # Initialize hardware-adaptive model configurations
-            self.model_configs = self._get_hardware_adaptive_model_configs()
+            # Initialize model configurations
+            self.model_configs = self._get_model_configs()
             
             logger.info(f"📊 Model configs initialized for hardware tier: {self._get_current_hardware_tier()}")
             
@@ -344,7 +320,7 @@ class EnhancedAIService:
                 torch.cuda.synchronize()
             
     def _load_model_on_demand(self, model_key: str, max_retries: int = 2) -> Optional[Any]:
-        """Load a specific model on demand with hardware-adaptive selection"""
+        """Load a specific model on demand"""
         
         # Throttle model loading to prevent Hugging Face rate limiting
         import time
@@ -360,8 +336,8 @@ class EnhancedAIService:
         
         # Ensure service is initialized
         if not hasattr(self, 'model_configs') or not self.model_configs:
-            logger.warning("Model configs not initialized, refreshing hardware-adaptive configs")
-            self.model_configs = self._get_hardware_adaptive_model_configs()
+            logger.warning("Model configs not initialized, refreshing configs")
+            self.model_configs = self._get_model_configs()
             
         if model_key not in self.model_configs:
             logger.warning(f"Model {model_key} not available in current hardware tier: {self._get_current_hardware_tier()}")
@@ -380,17 +356,7 @@ class EnhancedAIService:
         
         logger.info(f"🔄 Loading {model_key}: {model_name} (estimated: {memory_estimate}MB)")
         
-        # Check memory availability before loading (temporarily disabled)
-        # if self.gpu_memory_manager:
-        #     try:
-        #         memory_check = self.gpu_memory_manager.gpu_monitor.can_load_model(memory_estimate)
-        #         if not memory_check.get('can_load', False):
-        #             logger.warning(f"⚠️ Insufficient memory for {model_key}, trying CPU fallback")
-        #             self._use_gpu = False
-        #     except Exception as e:
-        #         logger.warning(f"Memory check failed: {e}")
-        
-        # Simple fallback memory check
+        # Simple memory check
         if torch.cuda.is_available():
             allocated = torch.cuda.memory_allocated(0) / 1024 / 1024
             total = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024
@@ -402,7 +368,7 @@ class EnhancedAIService:
         # Free up space by unloading other models first
         self._unload_all_models_except(model_key)
         
-        # Load the requested model with hardware optimization
+        # Load the requested model
         model = self._safe_load_model(model_name, task, max_retries, config)
         
         if model is not None:
@@ -442,11 +408,7 @@ class EnhancedAIService:
     def _get_current_hardware_tier(self) -> str:
         """Get current hardware tier based on available hardware"""
         try:
-            # If adaptive AI is available, use it
-            if self.adaptive_ai and hasattr(self.adaptive_ai, 'feature_manager'):
-                return self.adaptive_ai.feature_manager.current_tier
-            
-            # Otherwise, detect tier based on GPU memory
+            # Detect tier based on GPU memory
             if torch.cuda.is_available():
                 total_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 
@@ -465,19 +427,13 @@ class EnhancedAIService:
             logger.warning(f"Hardware tier detection failed: {e}")
             return "BASIC"
     
-    def _get_hardware_adaptive_model_configs(self) -> Dict[str, Dict[str, Any]]:
+    def _get_model_configs(self) -> Dict[str, Dict[str, Any]]:
         """Get model configurations based on current hardware tier and memory pressure"""
         tier = self._get_current_hardware_tier()
         
-        # Get current GPU memory status (temporarily disabled)
+        # Get current GPU memory status
         gpu_memory_info = {}
-        # if self.gpu_memory_manager:
-        #     try:
-        #         gpu_memory_info = self.gpu_memory_manager.gpu_monitor.get_detailed_gpu_memory()
-        #     except Exception:
-        #         pass
-        
-        # Simple fallback memory info
+        # Simple memory info
         if torch.cuda.is_available():
             allocated = torch.cuda.memory_allocated(0) / 1024 / 1024
             total = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024
@@ -665,7 +621,7 @@ class EnhancedAIService:
                     optimized_config[model_key] = model_config
             return optimized_config
     
-    def refresh_hardware_adaptive_models(self):
+    def refresh_models(self):
         """Refresh model configurations when hardware tier changes"""
         old_tier = getattr(self, '_last_hardware_tier', None)
         current_tier = self._get_current_hardware_tier()
@@ -677,7 +633,7 @@ class EnhancedAIService:
             self._unload_all_models_except()
             
             # Update model configurations
-            self.model_configs = self._get_hardware_adaptive_model_configs()
+            self.model_configs = self._get_model_configs()
             
             # Reset GPU usage flag for new tier
             self._use_gpu = torch.cuda.is_available() and current_tier not in ['MINIMAL']
@@ -688,7 +644,7 @@ class EnhancedAIService:
     def get_available_models_for_tier(self) -> Dict[str, str]:
         """Get list of available models for current hardware tier"""
         tier = self._get_current_hardware_tier()
-        configs = self._get_hardware_adaptive_model_configs()
+        configs = self._get_model_configs()
         
         return {
             model_key: {
@@ -704,7 +660,7 @@ class EnhancedAIService:
     
     async def suggest_tags(self, content: str, title: str, existing_tags: List[str] = None) -> List[Dict[str, Any]]:
         """
-        Generate intelligent tag suggestions based on content analysis with hardware-adaptive AI
+        Generate intelligent tag suggestions based on content analysis
         
         Args:
             content: Entry content
@@ -724,28 +680,7 @@ class EnhancedAIService:
             
             logger.info(f"🏷️ Generating tags for text: {text[:100]}...")
             
-            # Try hardware-adaptive AI first
-            if self.adaptive_ai:
-                try:
-                    result = await self.adaptive_ai.analyze_text(text, "topic")
-                    if result["success"]:
-                        # Convert topic result to tag format
-                        topic_result = result["result"]
-                        if isinstance(topic_result, dict) and 'topics' in topic_result:
-                            adaptive_tags = []
-                            for topic in topic_result['topics'][:5]:  # Top 5 topics
-                                adaptive_tags.append({
-                                    'tag': topic.lower().replace(' ', '_'),
-                                    'confidence': result["confidence"],
-                                    'source': f"adaptive_ai_{result['method_used']}",
-                                    'reasoning': f"Hardware-adaptive AI topic analysis"
-                                })
-                            suggestions.extend(adaptive_tags)
-                            logger.info(f"🤖 Adaptive AI tags: {len(adaptive_tags)} found")
-                except Exception as e:
-                    logger.warning(f"Hardware-adaptive AI tag suggestion failed: {e}")
-            
-            # Method 1: NLP-based entity and keyword extraction (fallback)
+            # Method 1: NLP-based entity and keyword extraction
             nlp_tags = await self._extract_nlp_tags(text)
             suggestions.extend(nlp_tags)
             logger.info(f"🔤 NLP tags: {len(nlp_tags)} found")
@@ -782,7 +717,6 @@ class EnhancedAIService:
         finally:
             # Always cleanup after tag suggestions to prevent memory leaks
             self._unload_all_models_except()
-            # await self.gpu_memory_manager.cleanup_manager.emergency_gpu_cleanup()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
@@ -1032,7 +966,7 @@ class EnhancedAIService:
     
     async def predict_mood(self, content: str, title: str = "") -> Dict[str, Any]:
         """
-        Main mood prediction method - analyzes entry content and predicts emotional state with hardware-adaptive AI
+        Main mood prediction method - analyzes entry content and predicts emotional state
         
         Args:
             content: Full entry content
@@ -1042,8 +976,8 @@ class EnhancedAIService:
             Mood prediction with confidence and analysis
         """
         try:
-            # Refresh hardware-adaptive configurations if needed
-            self.refresh_hardware_adaptive_models()
+            # Refresh configurations if needed
+            self.refresh_models()
             
             text = f"{title} {content}".strip()
             
@@ -1054,33 +988,6 @@ class EnhancedAIService:
                     'analysis': 'Insufficient content for mood analysis',
                     'method': 'insufficient_content'
                 }
-            
-            # Try hardware-adaptive AI first
-            if self.adaptive_ai:
-                try:
-                    result = await self.adaptive_ai.analyze_text(text, "sentiment")
-                    if result["success"]:
-                        # Convert sentiment result to mood format
-                        sentiment_result = result["result"]
-                        mood_mapping = {
-                            'positive': 'happy',
-                            'negative': 'sad', 
-                            'neutral': 'neutral'
-                        }
-                        
-                        predicted_mood = mood_mapping.get(sentiment_result.get('sentiment', 'neutral'), 'neutral')
-                        
-                        return {
-                            'predicted_mood': predicted_mood,
-                            'confidence': result["confidence"],
-                            'analysis': f"Hardware-adaptive AI analysis using {result['method_used']}",
-                            'method': f"adaptive_ai_{result['method_used']}",
-                            'hardware_tier': result.get('hardware_tier', 'unknown'),
-                            'processing_time': result.get('processing_time', 0),
-                            'fallback_used': result.get('fallback_used', False)
-                        }
-                except Exception as e:
-                    logger.warning(f"Hardware-adaptive AI mood prediction failed: {e}")
             
             # Fallback to traditional models for robust prediction
             predictions = []
@@ -1178,7 +1085,6 @@ class EnhancedAIService:
                     confidence = 0.5
                     
             # Final cleanup
-            # await self.gpu_memory_manager.cleanup_manager.emergency_gpu_cleanup()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
@@ -1329,7 +1235,6 @@ class EnhancedAIService:
         finally:
             # Always cleanup after prediction to prevent memory leaks
             self._unload_all_models_except()
-            # await self.gpu_memory_manager.cleanup_manager.emergency_gpu_cleanup()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
@@ -1566,7 +1471,7 @@ class EnhancedAIService:
 
     async def generate_smart_prompts(self, user_history_days: int = 30, current_content: Optional[str] = None, current_title: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Generate context-aware writing prompts based on user history and patterns with hardware-adaptive AI
+        Generate context-aware writing prompts based on user history and patterns
         
         Args:
             user_history_days: Number of days to look back for pattern analysis
@@ -1585,25 +1490,10 @@ class EnhancedAIService:
             if not entries:
                 return self._get_default_prompts()
             
-            # Try hardware-adaptive AI for smart prompt generation
-            if self.adaptive_ai and current_content:
-                try:
-                    context = {
-                        'user_history_days': user_history_days,
-                        'recent_entries_count': len(entries),
-                        'current_title': current_title,
-                        'analysis_type': 'smart_prompts'
-                    }
-                    
-                    result = await self.adaptive_ai.analyze_text(current_content, "auto", context)
-                    if result["success"]:
-                        # Generate contextual prompts based on AI analysis
-                        adaptive_prompts = self._generate_contextual_prompts_from_ai(result, current_content)
-                        if adaptive_prompts:
-                            logger.info(f"🤖 Generated {len(adaptive_prompts)} adaptive AI prompts")
-                            return adaptive_prompts
-                except Exception as e:
-                    logger.warning(f"Hardware-adaptive AI prompt generation failed: {e}")
+            # Generate contextual prompts based on content analysis
+            contextual_prompts = await self._generate_contextual_prompts(current_content, entries, current_title, user_history_days)
+            if contextual_prompts:
+                return contextual_prompts
             
             # Analyze user patterns (fallback)
             patterns = await self._analyze_user_patterns(entries)
@@ -1650,6 +1540,67 @@ class EnhancedAIService:
             logger.error(f"Smart prompts generation error: {e}")
             return self._get_default_prompts()
     
+    async def _generate_contextual_prompts(self, current_content: str, entries: List[Entry], current_title: str, user_history_days: int) -> List[Dict[str, Any]]:
+        """Generate contextual prompts based on content analysis"""
+        try:
+            if not current_content:
+                return []
+                
+            prompts = []
+            
+            # Analyze current content for topics and mood
+            content_topics = self._extract_topics_from_text(current_content)
+            mood_indicators = self._extract_mood_indicators(current_content)
+            
+            # Generate topic-based follow-up prompts
+            if content_topics:
+                for topic in content_topics[:3]:  # Top 3 topics
+                    prompts.append({
+                        'text': f"How does {topic} make you feel today?",
+                        'type': 'topic_exploration',
+                        'confidence': 0.8,
+                        'category': 'reflection'
+                    })
+            
+            # Generate mood-based prompts
+            if mood_indicators:
+                if any(indicator in ['stress', 'anxiety', 'worry'] for indicator in mood_indicators):
+                    prompts.append({
+                        'text': "What could help you feel more calm and centered right now?",
+                        'type': 'coping_strategy',
+                        'confidence': 0.9,
+                        'category': 'wellbeing'
+                    })
+                elif any(indicator in ['happy', 'excited', 'grateful'] for indicator in mood_indicators):
+                    prompts.append({
+                        'text': "What would you like to remember about this positive moment?",
+                        'type': 'positive_reflection',
+                        'confidence': 0.9,
+                        'category': 'gratitude'
+                    })
+            
+            # Generate content-length appropriate prompts
+            if len(current_content.split()) < 50:
+                prompts.append({
+                    'text': "Can you tell me more about what's on your mind?",
+                    'type': 'elaboration',
+                    'confidence': 0.7,
+                    'category': 'exploration'
+                })
+            else:
+                prompts.append({
+                    'text': "How do you think this situation might evolve?",
+                    'type': 'future_thinking',
+                    'confidence': 0.7,
+                    'category': 'planning'
+                })
+            
+            return prompts[:5]  # Return top 5 contextual prompts
+            
+        except Exception as e:
+            logger.warning(f"Contextual prompt generation failed: {e}")
+            return []
+
     async def _analyze_user_patterns(self, entries: List[Entry]) -> Dict[str, Any]:
         """Analyze user writing patterns and preferences"""
         patterns = {
@@ -2150,7 +2101,6 @@ class EnhancedAIService:
         finally:
             # Always cleanup after style analysis to prevent memory leaks
             self._unload_all_models_except()
-            # await self.gpu_memory_manager.cleanup_manager.emergency_gpu_cleanup()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
@@ -2377,7 +2327,7 @@ class EnhancedAIService:
             return 0
     
     def _generate_contextual_prompts_from_ai(self, ai_result: Dict[str, Any], current_content: str) -> List[Dict[str, Any]]:
-        """Generate contextual prompts based on hardware-adaptive AI analysis"""
+        """Generate contextual prompts based on AI analysis"""
         try:
             prompts = []
             analysis = ai_result.get("result", {})
@@ -2487,15 +2437,7 @@ class EnhancedAIService:
             # Clear TfidfVectorizer to prevent memory leaks
             self.tfidf_vectorizer = None
             
-            # Shutdown hardware-adaptive AI
-            if self.adaptive_ai:
-                await self.adaptive_ai.shutdown()
-                self.adaptive_ai = None
-            
             # Final GPU memory cleanup
-            if self.gpu_memory_manager:
-                # await self.gpu_memory_manager.cleanup_manager.emergency_gpu_cleanup()
-                pass
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
