@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Dict, Any
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import (
     AsyncSession, 
@@ -213,6 +213,24 @@ class DatabaseConfig:
                 "error": str(e),
                 "pool_stats": None,
             }
+    
+    async def get_pool_status(self) -> Dict[str, Any]:
+        """Get database connection pool status for performance monitoring"""
+        try:
+            if not self.engine:
+                return {"size": 0, "checked_in": 0, "checked_out": 0, "overflow": 0, "total_connections": 0}
+            
+            pool = self.engine.pool
+            return {
+                "size": pool.size(),
+                "checked_in": pool.checkedin(),
+                "checked_out": pool.checkedout(),
+                "overflow": pool.overflow(),
+                "total_connections": pool.size() + pool.overflow(),
+            }
+        except Exception as e:
+            logger.error(f"Error getting pool status: {e}")
+            return {"size": 0, "checked_in": 0, "checked_out": 0, "overflow": 0, "total_connections": 0}
     
     async def close(self) -> None:
         """Gracefully close database connections."""

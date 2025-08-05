@@ -40,7 +40,20 @@ class CachedRepositoryMixin(Generic[T]):
     
     def _get_list_cache_key(self, filters: Dict[str, Any]) -> str:
         """Generate cache key for list queries"""
-        filter_hash = hashlib.md5(json.dumps(filters, sort_keys=True).encode()).hexdigest()
+        from datetime import datetime
+        import uuid
+        
+        # Convert filters to JSON-serializable format
+        serializable_filters = {}
+        for key, value in filters.items():
+            if isinstance(value, datetime):
+                serializable_filters[key] = value.isoformat()
+            elif isinstance(value, uuid.UUID):
+                serializable_filters[key] = str(value)
+            else:
+                serializable_filters[key] = value
+        
+        filter_hash = hashlib.md5(json.dumps(serializable_filters, sort_keys=True).encode()).hexdigest()
         return f"{self.cache_prefix}:list:{filter_hash}"
     
     async def _get_from_cache(self, key: str) -> Optional[T]:
@@ -101,15 +114,57 @@ class CachedRepositoryMixin(Generic[T]):
     
     def _serialize_entity(self, entity: T) -> Dict[str, Any]:
         """Serialize entity for caching"""
-        # Convert SQLAlchemy model to dictionary
+        from datetime import datetime, date
+        import uuid
+        
+        # Convert SQLAlchemy model to dictionary with JSON-serializable values
         if hasattr(entity, '__table__'):
-            return {c.name: getattr(entity, c.name) for c in entity.__table__.columns}
+            result = {}
+            for c in entity.__table__.columns:
+                value = getattr(entity, c.name)
+                # Handle different data types for JSON serialization
+                if value is None:
+                    result[c.name] = None
+                elif isinstance(value, (datetime, date)):
+                    result[c.name] = value.isoformat()
+                elif isinstance(value, uuid.UUID):
+                    result[c.name] = str(value)
+                elif isinstance(value, (dict, list)):
+                    result[c.name] = value  # Already JSON serializable
+                else:
+                    result[c.name] = value
+            return result
         return entity.__dict__
     
     def _deserialize_entity(self, data: Dict[str, Any]) -> T:
         """Deserialize entity from cache"""
-        # Create entity instance from cached data
-        return self.model_class(**data)
+        from datetime import datetime
+        import uuid
+        
+        # Convert data back to proper types
+        processed_data = {}
+        for key, value in data.items():
+            if value is None:
+                processed_data[key] = None
+            elif isinstance(value, str):
+                # Try to convert ISO datetime strings back to datetime objects
+                if 'T' in value and len(value) > 10:  # Likely datetime ISO string
+                    try:
+                        processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    except ValueError:
+                        # If it's not a datetime, treat as regular string
+                        # Also try to convert UUID strings back to UUID
+                        try:
+                            processed_data[key] = uuid.UUID(value)
+                        except ValueError:
+                            processed_data[key] = value
+                else:
+                    processed_data[key] = value
+            else:
+                processed_data[key] = value
+        
+        # Create entity instance from processed data
+        return self.model_class(**processed_data)
 
 class EnhancedBaseRepository(CachedRepositoryMixin[T], CacheableServiceInterface[T]):
     """

@@ -5,7 +5,8 @@ Replaces multiple database services with single, consistent interface
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+import uuid
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
@@ -19,6 +20,9 @@ from app.models.enhanced_models import Entry, ChatSession, ChatMessage, Topic, U
 
 logger = logging.getLogger(__name__)
 
+# Default user UUID for single-user mode
+DEFAULT_USER_UUID = uuid.UUID("00000000-0000-4000-8000-000000000001")
+
 class UnifiedDatabaseService:
     """
     Unified database service combining PostgreSQL and Redis
@@ -27,6 +31,19 @@ class UnifiedDatabaseService:
     
     def __init__(self):
         self._initialized = False
+    
+    def _ensure_uuid(self, user_id: Union[str, uuid.UUID]) -> uuid.UUID:
+        """Convert user_id string to UUID, using default for 'default_user'"""
+        if isinstance(user_id, uuid.UUID):
+            return user_id
+        elif user_id == "default_user":
+            return DEFAULT_USER_UUID
+        else:
+            try:
+                return uuid.UUID(user_id)
+            except ValueError:
+                logger.warning(f"Invalid user_id format: {user_id}, using default")
+                return DEFAULT_USER_UUID
     
     async def initialize(self) -> None:
         """Initialize database connections and caching"""
@@ -79,10 +96,13 @@ class UnifiedDatabaseService:
             try:
                 entry_repo = RepositoryFactory.create_entry_repository(session)
                 
+                # Convert user_id to proper UUID
+                user_uuid = self._ensure_uuid(user_id)
+                
                 entry_data = {
                     "title": title,
                     "content": content,
-                    "user_id": user_id,
+                    "user_id": user_uuid,
                     "topic_id": topic_id,
                     "mood": mood,
                     "sentiment_score": sentiment_score,
@@ -100,7 +120,7 @@ class UnifiedDatabaseService:
                 await redis_analytics_service.increment_usage_counter("total_entries")
                 
                 # Invalidate related analytics caches
-                await redis_service.invalidate_pattern(f"analytics:*:{user_id}:*")
+                await redis_service.invalidate_pattern(f"analytics:*:{user_uuid}:*")
                 
                 logger.info(f"Created entry {entry.id} with caching")
                 return entry
@@ -131,7 +151,10 @@ class UnifiedDatabaseService:
         async with self.get_session() as session:
             entry_repo = RepositoryFactory.create_entry_repository(session)
             
-            filters = {"user_id": user_id}
+            # Convert user_id to proper UUID
+            user_uuid = self._ensure_uuid(user_id)
+            
+            filters = {"user_id": user_uuid}
             if topic_id:
                 filters["topic_id"] = topic_id
             if mood_filter:
@@ -266,8 +289,8 @@ class UnifiedDatabaseService:
                 logger.error(f"Error creating session: {e}")
                 raise DatabaseException(f"Failed to create session", context={"error": str(e)})
     
-    async def get_session(self, session_id: str, use_cache: bool = True) -> Optional[ChatSession]:
-        """Get session with Redis caching"""
+    async def get_chat_session(self, session_id: str, use_cache: bool = True) -> Optional[ChatSession]:
+        """Get chat session with Redis caching"""
         # Try Redis cache first
         if use_cache:
             cached_data = await redis_session_service.get_session(session_id)
@@ -397,6 +420,185 @@ class UnifiedDatabaseService:
                 logger.error(f"Error getting writing statistics: {e}")
                 raise DatabaseException(f"Failed to get writing statistics", context={"error": str(e)})
     
+    # === TOPIC OPERATIONS WITH CACHING ===
+    
+    async def create_topic(
+        self,
+        topic_data: Dict[str, Any],
+        user_id: str = "default_user"
+    ) -> Topic:
+        """Create a new topic with caching"""
+        async with self.get_session() as session:
+            try:
+                from app.models.enhanced_models import Topic
+                
+                # Convert user_id to proper UUID
+                user_uuid = self._ensure_uuid(user_id)
+                
+                topic = Topic(
+                    user_id=user_uuid,
+                    name=topic_data.get('name', 'Untitled Topic'),
+                    description=topic_data.get('description'),
+                    color=topic_data.get('color', '#3B82F6'),
+                    icon=topic_data.get('icon'),
+                    tags=topic_data.get('tags', []),
+                    metadata_info=topic_data.get('metadata', {})
+                )
+                
+                session.add(topic)
+                await session.flush()
+                await session.refresh(topic)
+                await session.commit()
+                
+                # Invalidate topics cache
+                await redis_service.invalidate_pattern(f"topics:*:{user_id}:*")
+                
+                logger.info(f"Created topic {topic.id} with caching")
+                return topic
+                
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error creating topic: {e}")
+                raise DatabaseException(f"Failed to create topic", context={"error": str(e)})
+    
+    async def get_topics(
+        self,
+        user_id: str = "default_user",
+        include_entry_count: bool = True,
+        use_cache: bool = True
+    ) -> List[Topic]:
+        """Get all topics for a user with caching"""
+        # Convert user_id to proper UUID
+        user_uuid = self._ensure_uuid(user_id)
+        
+        if use_cache:
+            cache_key = f"topics:{user_uuid}:list"
+            cached_topics = await redis_service.get(cache_key)
+            if cached_topics:
+                return cached_topics
+        
+        async with self.get_session() as session:
+            try:
+                from app.models.enhanced_models import Topic
+                from sqlalchemy import select, and_
+                from sqlalchemy.orm import selectinload
+                
+                query = select(Topic).where(
+                    and_(
+                        Topic.user_id == user_uuid,
+                        Topic.deleted_at.is_(None)
+                    )
+                ).order_by(Topic.name)
+                
+                if include_entry_count:
+                    query = query.options(selectinload(Topic.entries))
+                
+                result = await session.execute(query)
+                topics = list(result.scalars().all())
+                
+                # Cache the results
+                if use_cache:
+                    await redis_service.set(cache_key, topics, ttl=3600)
+                
+                return topics
+                
+            except Exception as e:
+                logger.error(f"Error getting topics: {e}")
+                raise DatabaseException(f"Failed to get topics", context={"error": str(e)})
+    
+    async def get_topic(self, topic_id: str, use_cache: bool = True) -> Optional[Topic]:
+        """Get topic by ID with caching"""
+        if use_cache:
+            cache_key = f"topic:{topic_id}"
+            cached_topic = await redis_service.get(cache_key)
+            if cached_topic:
+                return cached_topic
+        
+        async with self.get_session() as session:
+            try:
+                from app.models.enhanced_models import Topic
+                from sqlalchemy import select
+                
+                query = select(Topic).where(Topic.id == topic_id)
+                result = await session.execute(query)
+                topic = result.scalar_one_or_none()
+                
+                # Cache the result
+                if topic and use_cache:
+                    await redis_service.set(cache_key, topic, ttl=3600)
+                
+                return topic
+                
+            except Exception as e:
+                logger.error(f"Error getting topic {topic_id}: {e}")
+                return None
+    
+    async def update_topic(
+        self,
+        topic_id: str,
+        topic_update: Dict[str, Any]
+    ) -> Optional[Topic]:
+        """Update a topic with cache invalidation"""
+        async with self.get_session() as session:
+            try:
+                from app.models.enhanced_models import Topic
+                from sqlalchemy import select
+                
+                query = select(Topic).where(Topic.id == topic_id)
+                result = await session.execute(query)
+                topic = result.scalar_one_or_none()
+                
+                if not topic:
+                    return None
+                
+                # Update topic fields
+                for field, value in topic_update.items():
+                    if hasattr(topic, field):
+                        setattr(topic, field, value)
+                
+                await session.commit()
+                await session.refresh(topic)
+                
+                # Invalidate caches
+                await redis_service.invalidate_pattern(f"topic:{topic_id}")
+                await redis_service.invalidate_pattern(f"topics:*:{topic.user_id}:*")
+                
+                return topic
+                
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error updating topic: {e}")
+                raise DatabaseException(f"Failed to update topic", context={"error": str(e)})
+    
+    async def delete_topic(self, topic_id: str) -> bool:
+        """Delete a topic (soft delete) with cache invalidation"""
+        async with self.get_session() as session:
+            try:
+                from app.models.enhanced_models import Topic
+                from sqlalchemy import select
+                
+                query = select(Topic).where(Topic.id == topic_id)
+                result = await session.execute(query)
+                topic = result.scalar_one_or_none()
+                
+                if not topic:
+                    return False
+                
+                # Soft delete
+                topic.deleted_at = datetime.utcnow()
+                await session.commit()
+                
+                # Invalidate caches
+                await redis_service.invalidate_pattern(f"topic:{topic_id}")
+                await redis_service.invalidate_pattern(f"topics:*:{topic.user_id}:*")
+                
+                return True
+                
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error deleting topic: {e}")
+                return False
+
     # === HEALTH CHECK AND MONITORING ===
     
     async def health_check(self) -> Dict[str, Any]:

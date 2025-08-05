@@ -377,7 +377,8 @@ class Entry(Base):
         
         # Full-text search indexes
         Index('ix_entries_search_vector', 'search_vector', postgresql_using='gin'),
-        Index('ix_entries_title_text', 'title', postgresql_using='gin', postgresql_ops={'title': 'gin_trgm_ops'}),
+        # Remove the problematic gin_trgm_ops index for now
+        # Index('ix_entries_title_text', 'title', postgresql_using='gin', postgresql_ops={'title': 'gin_trgm_ops'}),
         
         # JSONB indexes for metadata queries
         Index('ix_entries_tags_gin', 'tags', postgresql_using='gin'),

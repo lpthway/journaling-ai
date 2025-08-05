@@ -124,7 +124,8 @@ class PerformanceMonitor:
         name: str,
         value: float,
         metric_type: MetricType,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        tags: Dict[str, str] = None
     ) -> None:
         """Record performance metric with automatic history management"""
         metric = PerformanceMetric(
@@ -132,7 +133,7 @@ class PerformanceMonitor:
             value=value,
             metric_type=metric_type,
             timestamp=datetime.utcnow(),
-            tags=tags,
+            tags=tags or {},
             description=description
         )
         
