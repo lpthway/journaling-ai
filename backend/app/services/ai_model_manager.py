@@ -4,6 +4,7 @@
 AI Model Manager Service for Journaling AI
 Provides centralized AI model loading, caching, and memory management
 Integrates with Phase 2 unified cache patterns and service registry
+Hardware-adaptive model selection for optimal performance
 """
 
 import logging
@@ -21,6 +22,9 @@ import psutil
 from app.core.cache_patterns import CacheDomain, CachePatterns, CacheKeyBuilder
 from app.services.cache_service import unified_cache_service
 from app.core.service_interfaces import ServiceRegistry
+
+# Hardware-adaptive model selection
+from app.services.hardware_service import hardware_service
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +60,22 @@ class AIModelManager:
         self.has_gpu = torch.cuda.is_available()
         self.gpu_memory = self._get_gpu_memory() if self.has_gpu else 0
         
-        # Model configuration
-        self.model_configs = self._initialize_model_configs()
+        # Model configuration will be initialized async
+        self.model_configs: Dict[str, Dict[str, Any]] = {}
+        self._initialized = False
         
-        logger.info(f"🤖 AI Model Manager initialized")
+        logger.info(f"🤖 AI Model Manager initializing...")
         logger.info(f"   GPU Available: {self.has_gpu}")
         if self.has_gpu:
             logger.info(f"   GPU Memory: {self.gpu_memory:.1f} GB")
         logger.info(f"   Max Memory Usage: {self.max_memory_usage:.1f} GB")
+        
+    async def initialize(self):
+        """Initialize hardware-adaptive model configurations"""
+        if not self._initialized:
+            self.model_configs = await self._initialize_model_configs()
+            self._initialized = True
+            logger.info(f"✅ AI Model Manager fully initialized")
         logger.info(f"   Models Directory: {self.models_directory}")
 
     def _get_max_memory_usage(self) -> float:
@@ -78,31 +90,56 @@ class AIModelManager:
             return torch.cuda.get_device_properties(0).total_memory / (1024**3)
         return 0.0
 
-    def _initialize_model_configs(self) -> Dict[str, Dict[str, Any]]:
-        """Initialize configuration for available AI models"""
+    async def _initialize_model_configs(self) -> Dict[str, Dict[str, Any]]:
+        """Initialize configuration for available AI models with hardware adaptation"""
+        
+        # Detect hardware first
+        await hardware_service.detect_hardware()
+        hardware_summary = hardware_service.get_hardware_summary()
+        optimal_models = hardware_service.get_all_optimal_models()
+        
+        logger.info(f"🔧 Hardware-adaptive model selection enabled")
+        logger.info(f"   Performance tier: {hardware_summary['performance_tier']}")
+        logger.info(f"   GPU: {hardware_summary['gpu']['name']} ({hardware_summary['gpu']['memory_gb']:.1f}GB)")
+        
+        # Get optimal models for each task
+        emotion_model, emotion_gpu = optimal_models["emotion"]
+        sentiment_model, sentiment_gpu = optimal_models["sentiment"]
+        embedding_model, embedding_gpu = optimal_models["embeddings"]
+        classification_model, classification_gpu = optimal_models["classification"]
+        
+        logger.info(f"🎯 Selected models:")
+        logger.info(f"   Emotion: {emotion_model} (GPU: {emotion_gpu})")
+        logger.info(f"   Sentiment: {sentiment_model} (GPU: {sentiment_gpu})")
+        logger.info(f"   Embeddings: {embedding_model} (GPU: {embedding_gpu})")
+        logger.info(f"   Classification: {classification_model} (GPU: {classification_gpu})")
+        
         return {
-            # Emotion Analysis Models
+            # Hardware-optimized Emotion Analysis
             "emotion_classifier": {
-                "model_name": "j-hartmann/emotion-english-distilroberta-base",
+                "model_name": emotion_model,
                 "model_type": "text-classification",
                 "task": "emotion-analysis",
                 "languages": ["en"],
-                "memory_estimate": 0.5,  # GB
+                "memory_estimate": 2.0 if emotion_gpu else 0.8,  # GB
                 "priority": "high",
-                "fallback": "sentiment_classifier"
+                "use_gpu": emotion_gpu,
+                "fallback": "j-hartmann/emotion-english-distilroberta-base"
             },
             
-            # Sentiment Analysis Models
+            # Hardware-optimized Sentiment Analysis
             "sentiment_classifier": {
-                "model_name": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+                "model_name": sentiment_model,
                 "model_type": "text-classification", 
                 "task": "sentiment-analysis",
                 "languages": ["en"],
-                "memory_estimate": 0.6,  # GB
+                "memory_estimate": 1.5 if sentiment_gpu else 0.6,  # GB
                 "priority": "high",
-                "fallback": "multilingual_sentiment"
+                "use_gpu": sentiment_gpu,
+                "fallback": "cardiffnlp/twitter-roberta-base-sentiment-latest"
             },
             
+            # Multilingual sentiment (always available)
             "multilingual_sentiment": {
                 "model_name": "cardiffnlp/twitter-xlm-roberta-base-sentiment",
                 "model_type": "text-classification",
@@ -110,9 +147,11 @@ class AIModelManager:
                 "languages": ["en", "de", "es", "fr"],
                 "memory_estimate": 1.2,  # GB
                 "priority": "medium",
-                "fallback": "distilbert_sentiment"
+                "use_gpu": sentiment_gpu,
+                "fallback": "distilbert-base-uncased-finetuned-sst-2-english"
             },
             
+            # Lightweight fallback
             "distilbert_sentiment": {
                 "model_name": "distilbert-base-uncased-finetuned-sst-2-english",
                 "model_type": "text-classification",
@@ -120,10 +159,11 @@ class AIModelManager:
                 "languages": ["en"],
                 "memory_estimate": 0.3,  # GB
                 "priority": "low",
+                "use_gpu": False,
                 "fallback": None
             },
             
-            # Text Generation Models
+            # Hardware-optimized Text Generation
             "text_generator": {
                 "model_name": "facebook/bart-base",
                 "model_type": "text2text-generation",
@@ -131,6 +171,7 @@ class AIModelManager:
                 "languages": ["en"],
                 "memory_estimate": 0.8,  # GB
                 "priority": "medium",
+                "use_gpu": classification_gpu,
                 "fallback": None
             },
             
@@ -141,29 +182,32 @@ class AIModelManager:
                 "languages": ["en"],
                 "memory_estimate": 1.6,  # GB
                 "priority": "low",
+                "use_gpu": classification_gpu,
                 "fallback": "text_generator"
             },
             
-            # Zero-shot Classification
+            # Hardware-optimized Zero-shot Classification
             "zero_shot_classifier": {
-                "model_name": "facebook/bart-large-mnli",
+                "model_name": classification_model,
                 "model_type": "zero-shot-classification",
                 "task": "zero-shot-classification",
                 "languages": ["en"],
-                "memory_estimate": 1.6,  # GB
+                "memory_estimate": 6.0 if classification_gpu else 1.6,  # GB
                 "priority": "medium",
-                "fallback": None
+                "use_gpu": classification_gpu,
+                "fallback": "facebook/bart-large-mnli"
             },
             
-            # Embedding Models
+            # Hardware-optimized Embeddings
             "sentence_embeddings": {
-                "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+                "model_name": embedding_model,
                 "model_type": "sentence-transformers",
                 "task": "embeddings",
-                "languages": ["en"],
-                "memory_estimate": 0.4,  # GB
+                "languages": ["en", "multilingual"],
+                "memory_estimate": 4.0 if embedding_gpu else 0.4,  # GB
                 "priority": "high",
-                "fallback": None
+                "use_gpu": embedding_gpu,
+                "fallback": "sentence-transformers/all-MiniLM-L6-v2"
             },
             
             "large_embeddings": {
@@ -173,6 +217,7 @@ class AIModelManager:
                 "languages": ["en"],
                 "memory_estimate": 0.8,  # GB
                 "priority": "medium",
+                "use_gpu": embedding_gpu,
                 "fallback": "sentence_embeddings"
             }
         }
@@ -191,6 +236,10 @@ class AIModelManager:
             Loaded model pipeline or None if unavailable
         """
         try:
+            # Ensure we're initialized
+            if not self._initialized:
+                await self.initialize()
+            
             # Check if model is already loaded
             if model_key in self.loaded_models:
                 self._update_model_usage(model_key)
@@ -257,9 +306,15 @@ class AIModelManager:
         """Load a single AI model based on configuration"""
         model_name = config["model_name"]
         model_type = config["model_type"]
+        use_gpu = config.get("use_gpu", False) and self.has_gpu
+        
+        # Determine device
+        device = 0 if use_gpu else -1  # 0 for GPU, -1 for CPU
         
         # Prepare model path
         model_path = self._get_model_path(model_name)
+        
+        logger.info(f"🔄 Loading {model_key} on {'GPU' if use_gpu else 'CPU'}")
         
         try:
             if model_type == "text-classification":
@@ -268,6 +323,7 @@ class AIModelManager:
                     model=model_path,
                     tokenizer=model_path,
                     return_all_scores=True,
+                    device=device,
                     **kwargs
                 )
             
@@ -276,6 +332,7 @@ class AIModelManager:
                     "text2text-generation",
                     model=model_path,
                     tokenizer=model_path,
+                    device=device,
                     **kwargs
                 )
             
@@ -284,13 +341,17 @@ class AIModelManager:
                     "zero-shot-classification",
                     model=model_path,
                     tokenizer=model_path,
+                    device=device,
                     **kwargs
                 )
             
             elif model_type == "sentence-transformers":
                 # Special handling for sentence transformers
                 from sentence_transformers import SentenceTransformer
-                return SentenceTransformer(str(model_path))
+                model = SentenceTransformer(str(model_path))
+                if use_gpu:
+                    model = model.to('cuda')
+                return model
             
             else:
                 logger.error(f"Unsupported model type: {model_type}")

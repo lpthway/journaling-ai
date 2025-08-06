@@ -1,0 +1,205 @@
+version: '3.8'
+
+services:
+  # === GPU-Enabled Backend Service ===
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:your_password@postgres:5432/journaling_ai
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/models:/app/models
+      - ./data/chroma_db:/app/data/chroma_db
+    depends_on:
+      - redis
+    networks:
+      - journaling_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - gpu
+
+  # === CPU-Only Backend (Fallback) ===
+  backend-cpu:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:your_password@postgres:5432/journaling_ai
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CUDA_VISIBLE_DEVICES=""
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/models:/app/models
+      - ./data/chroma_db:/app/data/chroma_db
+    depends_on:
+      - redis
+    networks:
+      - journaling_network
+    profiles:
+      - cpu
+
+  # === GPU-Enabled Celery Worker ===
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/models:/app/models
+      - ./data/chroma_db:/app/data/chroma_db
+    depends_on:
+      - redis
+    networks:
+      - journaling_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - gpu
+      - celery
+
+  # === CPU-Only Celery Worker ===
+  celery-worker-cpu:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - CUDA_VISIBLE_DEVICES=""
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/models:/app/models
+      - ./data/chroma_db:/app/data/chroma_db
+    depends_on:
+      - redis
+    networks:
+      - journaling_network
+    profiles:
+      - cpu
+      - celery
+
+  # === Celery Beat Scheduler ===
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      - redis
+    networks:
+      - journaling_network
+    profiles:
+      - celery
+
+  # === Database ===
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: journaling_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - journaling_network
+
+  # === Redis ===
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - journaling_network
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  # === Monitoring ===
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    networks:
+      - journaling_network
+    profiles:
+      - monitoring
+      - celery
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - journaling_network
+    profiles:
+      - monitoring
+
+networks:
+  journaling_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

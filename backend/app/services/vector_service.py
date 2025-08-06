@@ -4,6 +4,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 from sentence_transformers import SentenceTransformer
 import uuid
+import torch
 from typing import List, Dict, Any, Optional
 import logging
 from app.core.config import settings
@@ -25,18 +26,42 @@ class VectorService:
         )
         logger.info("🔧 Vector service initialized (embedding model will load on demand)")
         
-    def _ensure_model_loaded(self):
+    async def _ensure_model_loaded(self):
         """Load embedding model on first use"""
         if self.model_loaded:
             return
         
         try:
-            self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+            # Import hardware service for optimal model selection
+            from app.services.hardware_service import hardware_service
+            
+            # Get optimal embedding model based on hardware
+            if not hardware_service.specs:
+                await hardware_service.detect_hardware()
+            
+            embedding_model, use_gpu = hardware_service.get_optimal_model("embeddings")
+            
+            logger.info(f"🔄 Loading optimal embedding model: {embedding_model} (GPU: {use_gpu})")
+            
+            self.embedding_model = SentenceTransformer(embedding_model)
+            
+            # Move to GPU if available and recommended
+            if use_gpu and torch.cuda.is_available():
+                self.embedding_model = self.embedding_model.to('cuda')
+                logger.info("🚀 Embedding model moved to GPU")
+            
             self.model_loaded = True
             logger.info("✅ Loaded embedding model on demand")
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
-            raise
+            # Fallback to basic model
+            try:
+                self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+                self.model_loaded = True
+                logger.info("✅ Loaded fallback embedding model")
+            except Exception as fallback_error:
+                logger.error(f"Fallback embedding model also failed: {fallback_error}")
+                raise
     
     def _prepare_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare metadata for ChromaDB by converting unsupported types"""
@@ -62,7 +87,7 @@ class VectorService:
         """Add an entry to the vector database"""
         try:
             # Ensure embedding model is loaded
-            self._ensure_model_loaded()
+            await self._ensure_model_loaded()
             
             # Generate embedding
             embedding = self.embedding_model.encode(content).tolist()
@@ -86,7 +111,7 @@ class VectorService:
         """Update an entry in the vector database"""
         try:
             # Ensure embedding model is loaded
-            self._ensure_model_loaded()
+            await self._ensure_model_loaded()
             
             embedding = self.embedding_model.encode(content).tolist()
             
@@ -118,7 +143,7 @@ class VectorService:
         """Search for similar entries"""
         try:
             # Ensure embedding model is loaded
-            self._ensure_model_loaded()
+            await self._ensure_model_loaded()
             
             query_embedding = self.embedding_model.encode(query).tolist()
             

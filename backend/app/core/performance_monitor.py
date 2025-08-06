@@ -15,7 +15,6 @@ from enum import Enum
 import psutil
 import json
 
-from app.services.redis_service import redis_service
 from app.core.database import database
 
 logger = logging.getLogger(__name__)
@@ -144,6 +143,8 @@ class PerformanceMonitor:
         
         # Store in Redis for distributed monitoring
         try:
+            # Lazy import to avoid circular dependency
+            from app.services.redis_service import redis_service
             await redis_service.set(
                 f"metrics:{name}:{int(time.time())}",
                 asdict(metric),
@@ -268,6 +269,9 @@ class PerformanceMonitor:
     async def collect_cache_metrics(self) -> CacheMetrics:
         """Collect Redis cache performance metrics"""
         try:
+            # Lazy import to avoid circular dependency
+            from app.services.redis_service import redis_service
+            
             # Get Redis info and metrics
             redis_info = await redis_service.get_info()
             cache_metrics = await redis_service.get_metrics()

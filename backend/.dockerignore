@@ -1,0 +1,18 @@
+# Exclude large model files and unnecessary directories
+models/
+*.pyc
+__pycache__/
+.git/
+.vscode/
+.pytest_cache/
+*.log
+*.tmp
+.env
+.DS_Store
+backup/
+screenshots/
+docs/
+.gitignore
+README.md
+CHANGELOG.md
+*.md

@@ -1,0 +1,28 @@
+# GPU-Optimized Dockerfile for Journaling AI Backend
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies for compilation and GPU support
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy GPU requirements first for better caching
+COPY requirements-gpu.txt .
+
+# Install Python dependencies with GPU support
+RUN pip install --no-cache-dir -r requirements-gpu.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/data
+
+# Expose port
+EXPOSE 8000
+
+# Default command (can be overridden in docker-compose)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

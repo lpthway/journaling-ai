@@ -1,3 +1,6 @@
+# GPU-Optimized Requirements for RTX 3500 Ada
+# This file installs CUDA-enabled versions for maximum performance
+
 # Core FastAPI and async dependencies
 fastapi==0.104.1
 uvicorn==0.24.0
@@ -20,12 +23,17 @@ passlib[bcrypt]==1.7.4
 redis==5.0.1
 celery==5.3.4
 
-# AI and ML Core (CPU-Compatible, GPU will auto-upgrade)
-torch==2.0.1
+# AI and ML Core (GPU-Optimized)
+--index-url https://download.pytorch.org/whl/cu118
+torch==2.0.1+cu118
+--index-url https://pypi.org/simple/
 transformers==4.35.0
 sentence-transformers==2.2.2
 accelerate==0.24.0
 numpy==1.26.0
+
+# GPU Acceleration
+bitsandbytes==0.41.1
 
 # LLM Service
 ollama==0.1.9

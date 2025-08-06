@@ -112,18 +112,19 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
     
-    # === AI MODEL CONFIGURATION ===
-    # Ollama Settings
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
+        # === AI MODEL CONFIGURATION ===
+    # Note: Models are now selected automatically based on hardware capabilities
+    # See app/services/hardware_service.py for adaptive model selection
+    
+    # LLM Configuration (Ollama on host)
+    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
     OLLAMA_MODEL: str = "llama3.2"
     
-    # Vector Database Settings
-    CHROMA_PERSIST_DIRECTORY: str = "./data/chroma_db"
-    
+    # Fallback model configurations (used if hardware detection fails)
     # Embedding Model
-    EMBEDDING_MODEL: str = "intfloat/multilingual-e5-large"
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     
-    # Sentiment Analysis
+    # Sentiment Analysis Model
     SENTIMENT_MODEL: str = "j-hartmann/emotion-english-distilroberta-base"
     
     # Vector Search
@@ -191,27 +192,31 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Model Performance Info
+# Hardware-Adaptive Model Performance Info
+# Models are automatically selected based on your hardware capabilities
 MODEL_SPECS = {
-    "embedding": {
-        "model": "intfloat/multilingual-e5-large",
-        "size": "2.24GB",
-        "languages": "100+ including German & English",
-        "quality": "⭐⭐⭐⭐⭐ Excellent",
-        "best_for": "Multilingual semantic search",
-        "why_chosen": "Best multilingual embedding model available"
+    "RTX_3500_Ada_Optimal": {
+        "embedding_model": "intfloat/multilingual-e5-large",
+        "emotion_model": "microsoft/DialoGPT-medium", 
+        "sentiment_model": "microsoft/deberta-v3-base",
+        "classification_model": "microsoft/deberta-v2-xlarge-mnli",
+        "gpu_memory_required": "8GB+",
+        "performance_gain": "5-10x faster",
+        "why_chosen": "Optimized for RTX 3500 Ada with 12GB VRAM - enterprise-tier models"
     },
-    "sentiment": {
-        "model": "j-hartmann/emotion-english-distilroberta-base", 
-        "size": "255MB",
-        "emotions": ["joy", "sadness", "anger", "fear", "surprise", "disgust"],
-        "languages": "English (primary)",
-        "upgrade_from": "3 sentiments → 6 detailed emotions",
-        "alternative": "nlptown/bert-base-multilingual-uncased-sentiment (for German)"
+    "fallback_cpu": {
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "emotion_model": "j-hartmann/emotion-english-distilroberta-base", 
+        "sentiment_model": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        "classification_model": "facebook/bart-large-mnli",
+        "gpu_memory_required": "0GB",
+        "performance_gain": "baseline",
+        "why_chosen": "CPU-optimized lightweight models for compatibility"
     },
-    "llm": {
+    "llm_service": {
         "model": "llama3.2",
-        "improvement": "Better reasoning, updated knowledge",
-        "languages": "Multilingual including German"
+        "inference_engine": "ollama",
+        "deployment": "host_gpu",
+        "why_chosen": "Host GPU deployment for maximum LLM performance"
     }
 }
