@@ -21,7 +21,7 @@ from app.models.analytics import (
     EntryAnalytics, SessionAnalytics, ProcessingStatus
 )
 from app.services.unified_database_service import unified_db_service
-from app.services.sentiment_service import sentiment_service
+from app.services.ai_emotion_service import ai_emotion_service, analyze_sentiment
 from app.services.session_service import session_service
 from app.services.llm_service import llm_service
 
@@ -139,8 +139,13 @@ class AnalyticsCacheService:
             
             # Perform comprehensive analysis with enhanced error handling
             try:
-                mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
-                emotion_scores = sentiment_service.analyze_emotions(entry.content)
+                mood, sentiment_score = analyze_sentiment(entry.content)
+                # Use modern AI emotion analysis for detailed emotions
+                emotion_analysis = await ai_emotion_service.analyze_emotions(entry.content)
+                emotion_scores = {
+                    emotion.emotion.value: emotion.confidence 
+                    for emotion in [emotion_analysis.primary_emotion] + emotion_analysis.secondary_emotions
+                }
             except Exception as e:
                 logger.error(f"Error analyzing sentiment for entry {entry_id}: {e}")
                 raise AnalyticsException(
@@ -188,7 +193,7 @@ class AnalyticsCacheService:
             combined_text = ' '.join([msg.content for msg in user_messages])
             
             # Perform analysis - sentiment service returns (MoodType, float)
-            mood, sentiment_score = sentiment_service.analyze_sentiment(combined_text)
+            mood, sentiment_score = analyze_sentiment(combined_text)
             
             session_analytics = SessionAnalytics(
                 session_id=session_id,
@@ -323,7 +328,7 @@ class AnalyticsCacheService:
                 mood_distribution = defaultdict(int)
                 
                 for entry in entries:
-                    mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
+                    mood, sentiment_score = analyze_sentiment(entry.content)
                     date_str = entry.created_at.strftime('%Y-%m-%d')
                     daily_moods[date_str].append(sentiment_score)
                     mood_distribution[mood.value] += 1
@@ -358,7 +363,7 @@ class AnalyticsCacheService:
             sentiment_trend = []
             
             for entry in entries:
-                mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
+                mood, sentiment_score = analyze_sentiment(entry.content)
                 sentiments.append(sentiment_score)
                 sentiment_trend.append({
                     'date': entry.created_at.strftime('%Y-%m-%d'),

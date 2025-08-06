@@ -10,7 +10,8 @@ from app.core.exceptions import ValidationException, NotFoundException, Database
 from app.models.entry import Entry, EntryCreate, EntryUpdate, EntryResponse, MoodType
 from app.services.unified_database_service import unified_db_service
 from app.services.vector_service import vector_service
-from app.services.sentiment_service import sentiment_service  
+from app.services.ai_emotion_service import ai_emotion_service
+from app.services.ai_intervention_service import ai_intervention_service  
 from app.services.llm_service import llm_service
 from app.decorators.cache_decorators import cached, cache_invalidate, timed_operation, CachePatterns
 from app.core.performance_monitor import performance_monitor
@@ -39,7 +40,17 @@ async def create_entry(entry: EntryCreate, request: Request):
         sentiment_score = 0.0
         
         try:
-            mood, sentiment_score = sentiment_service.analyze_sentiment(entry.content)
+            # Use modern AI emotion analysis instead of legacy sentiment analysis
+            emotion_analysis = await ai_emotion_service.analyze_emotions(entry.content)
+            
+            # Convert emotion analysis to mood for backward compatibility
+            mood = emotion_analysis.primary_emotion.emotion.value  # Gets the EmotionCategory value
+            sentiment_score = emotion_analysis.primary_emotion.confidence
+            
+            # Check for crisis indicators using AI intervention service
+            intervention_assessment = await ai_intervention_service.assess_crisis_risk(
+                entry.content, user_context={"user_id": str(entry.user_id)}
+            )
         except Exception as e:
             logger.warning(f"Sentiment analysis failed: {e}")
         
@@ -224,9 +235,15 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
         
         if entry_update.content:
             try:
-                mood, sentiment_score = sentiment_service.analyze_sentiment(entry_update.content)
+                # Use modern AI emotion analysis for content updates
+                emotion_analysis = await ai_emotion_service.analyze_emotions(entry_update.content)
+                mood = emotion_analysis.primary_emotion.emotion.value
+                sentiment_score = emotion_analysis.primary_emotion.confidence
             except Exception as e:
-                logger.warning(f"Sentiment analysis failed: {e}")
+                logger.warning(f"AI emotion analysis failed: {e}")
+                # Fallback to basic mood if AI analysis fails
+                mood = "neutral"
+                sentiment_score = 0.5
         
         # Update entry using unified service
         async with performance_monitor.timed_operation("unified_update_entry", {"entry_id": entry_id}):

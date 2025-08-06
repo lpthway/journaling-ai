@@ -34,8 +34,8 @@ class BackgroundAnalyticsProcessor:
         
         # Preload AI models for optimal performance
         try:
-            from app.services.sentiment_service import sentiment_service
-            await sentiment_service.preload_models()
+            from app.services.ai_emotion_service import ai_emotion_service
+            await ai_emotion_service.preload_models()
         except Exception as e:
             logger.warning(f"Model preloading failed, will load on demand: {e}")
         

@@ -764,3 +764,50 @@ def register_ai_emotion_service():
 
 # Auto-register when module is imported
 register_ai_emotion_service()
+
+# ==================== LEGACY COMPATIBILITY ====================
+
+def analyze_sentiment(text: str) -> Tuple:
+    """
+    Legacy compatibility function for sentiment_service.analyze_sentiment()
+    Maps to modern AI emotion analysis
+    
+    Returns:
+        Tuple of (mood, confidence_score) for backward compatibility
+    """
+    try:
+        import asyncio
+        # Run async emotion analysis in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            emotion_analysis = loop.run_until_complete(
+                ai_emotion_service.analyze_emotions(text)
+            )
+            # Convert EmotionCategory to MoodType for backward compatibility
+            from app.models.entry import MoodType
+            emotion_to_mood_map = {
+                "joy": MoodType.HAPPY,
+                "sadness": MoodType.SAD,
+                "anger": MoodType.ANGRY,
+                "fear": MoodType.ANXIOUS,
+                "surprise": MoodType.EXCITED,
+                "trust": MoodType.CALM,
+                "anticipation": MoodType.EXCITED,
+                "disgust": MoodType.FRUSTRATED
+            }
+            
+            primary_emotion = emotion_analysis.primary_emotion.emotion.value
+            mood = emotion_to_mood_map.get(primary_emotion, MoodType.NEUTRAL)
+            confidence = emotion_analysis.primary_emotion.confidence
+            
+            return mood, confidence
+            
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        logger.error(f"Legacy sentiment analysis failed: {e}")
+        from app.models.entry import MoodType
+        return MoodType.NEUTRAL, 0.5

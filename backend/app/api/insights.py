@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from app.services.vector_service import vector_service
 from app.services.llm_service import llm_service
 from app.services.unified_database_service import unified_db_service
-from app.services.sentiment_service import sentiment_service
+from app.services.ai_emotion_service import ai_emotion_service
 import logging
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -251,8 +251,15 @@ async def get_coaching_suggestions():
             if user_messages:
                 conversation_text = ' '.join([msg['content'] for msg in user_messages])
                 
-                # Analyze sentiment of the conversation
-                mood, sentiment_score = sentiment_service.analyze_sentiment(conversation_text)
+                # Analyze emotions using modern AI emotion service
+                try:
+                    emotion_analysis = await ai_emotion_service.analyze_emotions(conversation_text)
+                    mood = emotion_analysis.primary_emotion.emotion.value
+                    sentiment_score = emotion_analysis.primary_emotion.confidence
+                except Exception as e:
+                    logger.warning(f"AI emotion analysis failed: {e}")
+                    mood = "neutral"
+                    sentiment_score = 0.5
                 
                 combined_content.append({
                     'type': 'chat',
@@ -401,11 +408,19 @@ async def get_comprehensive_trends(days: int = Query(30, ge=7, le=365)):
                 date_str = conv_date.strftime('%Y-%m-%d')
                 
                 if date_str in daily_data:
-                    # Get user messages for sentiment analysis
+                    # Get user messages for emotion analysis
                     user_messages = [msg for msg in conv['messages'] if msg['role'] == 'user']
                     if user_messages:
                         combined_text = ' '.join([msg['content'] for msg in user_messages])
-                        mood, sentiment_score = sentiment_service.analyze_sentiment(combined_text)
+                        try:
+                            emotion_analysis = await ai_emotion_service.analyze_emotions(combined_text)
+                            mood = emotion_analysis.primary_emotion.emotion
+                            sentiment_score = emotion_analysis.primary_emotion.confidence
+                        except Exception as e:
+                            logger.warning(f"AI emotion analysis failed: {e}")
+                            from app.models.entry import MoodType
+                            mood = MoodType.NEUTRAL
+                            sentiment_score = 0.5
                         mood_score = mood_values.get(mood.value, 0)
                         
                         daily_data[date_str]['chat_conversations'].append({
@@ -655,11 +670,19 @@ async def analyze_chat_sentiments(days: int) -> Dict[str, Any]:
             user_messages = [msg for msg in conv['messages'] if msg['role'] == 'user']
             
             if user_messages:
-                # Combine user messages for sentiment analysis
+                # Combine user messages for emotion analysis
                 combined_text = ' '.join([msg['content'] for msg in user_messages])
                 
-                # Analyze sentiment
-                mood, sentiment_score = sentiment_service.analyze_sentiment(combined_text)
+                # Analyze emotions using modern AI emotion service
+                try:
+                    emotion_analysis = await ai_emotion_service.analyze_emotions(combined_text)
+                    mood = emotion_analysis.primary_emotion.emotion
+                    sentiment_score = emotion_analysis.primary_emotion.confidence
+                except Exception as e:
+                    logger.warning(f"AI emotion analysis failed: {e}")
+                    from app.models.entry import MoodType
+                    mood = MoodType.NEUTRAL
+                    sentiment_score = 0.5
                 
                 # Update mood distribution
                 mood_str = mood.value
