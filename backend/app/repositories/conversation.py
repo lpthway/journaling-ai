@@ -6,7 +6,7 @@ from sqlalchemy import select, func, and_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.postgresql import ChatSession, ChatMessage, Entry
+from app.models.enhanced_models import ChatSession, ChatMessage, Entry
 from app.repositories.base import BaseRepository
 
 class ConversationRepository(BaseRepository[ChatMessage]):
