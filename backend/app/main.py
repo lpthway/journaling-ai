@@ -19,7 +19,7 @@ from app.services.redis_service import redis_service
 from app.core.service_interfaces import service_registry
 
 # API routers
-from app.api import entries, topics, insights, insights_v2, psychology
+from app.api import entries, topics, insights_v2, psychology
 # Temporarily disabled sessions API due to missing legacy dependencies
 # from app.api import sessions
 
@@ -179,7 +179,6 @@ app.add_middleware(
 
 # Include API routers with proper ordering
 app.include_router(insights_v2.router, prefix=f"{settings.API_V1_STR}/insights", tags=["insights"])
-app.include_router(insights.router, prefix=f"{settings.API_V1_STR}/insights-legacy", tags=["insights-legacy"])
 app.include_router(entries.router, prefix=f"{settings.API_V1_STR}/entries", tags=["entries"])
 app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=["topics"])
 # Temporarily disabled sessions API due to missing legacy dependencies
