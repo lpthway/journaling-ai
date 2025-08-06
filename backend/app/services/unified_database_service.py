@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from app.core.database import database
 from app.core.exceptions import DatabaseException, NotFoundException
 from app.core.service_interfaces import service_registry
+from app.core.cache_patterns import CacheKeyBuilder, CacheDomain, CacheTTL, CachePatterns
 from app.services.redis_service import redis_service, redis_session_service, redis_analytics_service
 from app.repositories.base_cached_repository import RepositoryFactory
 from app.models.enhanced_models import Entry, ChatSession, ChatMessage, Topic, User
@@ -397,8 +398,9 @@ class UnifiedDatabaseService:
         use_cache: bool = True
     ) -> Dict[str, Any]:
         """Get writing statistics with caching"""
-        # Check cache first
-        cache_key = f"writing_stats:{user_id}:{days}d"
+        
+        # Check cache first using standardized pattern
+        cache_key = CachePatterns.analytics_writing_stats(user_id, days)
         if use_cache:
             cached_stats = await redis_service.get(cache_key)
             if cached_stats:
@@ -410,9 +412,9 @@ class UnifiedDatabaseService:
                 entry_repo = RepositoryFactory.create_entry_repository(session)
                 stats = await entry_repo.get_writing_statistics(user_id, days)
                 
-                # Cache results
+                # Cache results using standardized TTL
                 if use_cache:
-                    await redis_service.set(cache_key, stats, ttl=900)  # 15 minutes
+                    await redis_service.set(cache_key, stats, ttl=CacheTTL.MEDIUM_SHORT)  # 15 minutes
                 
                 return stats
                 
@@ -468,11 +470,12 @@ class UnifiedDatabaseService:
         use_cache: bool = True
     ) -> List[Topic]:
         """Get all topics for a user with caching"""
+        
         # Convert user_id to proper UUID
         user_uuid = self._ensure_uuid(user_id)
         
         if use_cache:
-            cache_key = f"topics:{user_uuid}:list"
+            cache_key = CacheKeyBuilder.build_key(CacheDomain.CONTENT, "topics", {"user": str(user_uuid)})
             cached_topics = await redis_service.get(cache_key)
             if cached_topics:
                 return cached_topics
@@ -496,9 +499,9 @@ class UnifiedDatabaseService:
                 result = await session.execute(query)
                 topics = list(result.scalars().all())
                 
-                # Cache the results
+                # Cache the results using standardized TTL
                 if use_cache:
-                    await redis_service.set(cache_key, topics, ttl=3600)
+                    await redis_service.set(cache_key, topics, ttl=CacheTTL.HOURLY)
                 
                 return topics
                 
@@ -509,7 +512,7 @@ class UnifiedDatabaseService:
     async def get_topic(self, topic_id: str, use_cache: bool = True) -> Optional[Topic]:
         """Get topic by ID with caching"""
         if use_cache:
-            cache_key = f"topic:{topic_id}"
+            cache_key = CacheKeyBuilder.build_key(CacheDomain.CONTENT, "topic", {"id": topic_id})
             cached_topic = await redis_service.get(cache_key)
             if cached_topic:
                 return cached_topic
@@ -523,9 +526,9 @@ class UnifiedDatabaseService:
                 result = await session.execute(query)
                 topic = result.scalar_one_or_none()
                 
-                # Cache the result
+                # Cache the result using standardized TTL
                 if topic and use_cache:
-                    await redis_service.set(cache_key, topic, ttl=3600)
+                    await redis_service.set(cache_key, topic, ttl=CacheTTL.HOURLY)
                 
                 return topic
                 

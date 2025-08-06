@@ -17,6 +17,8 @@ import socket
 import requests
 from contextlib import asynccontextmanager
 
+from app.core.cache_patterns import CachePatterns, CacheTTL, CacheKeyBuilder, CacheDomain
+
 # Celery monitoring imports
 from celery import Celery
 from celery.events.state import State
@@ -184,9 +186,10 @@ class CeleryMonitoringService:
                     'system_metrics': await self._get_system_metrics()
                 }
                 
-                # Store in Redis for dashboard access
+                # Store in Redis for dashboard access using standardized pattern
+                cache_key = CacheKeyBuilder.build_key(CacheDomain.CELERY, "monitoring_snapshot")
                 await redis_service.set(
-                    "celery_monitoring_snapshot",
+                    cache_key,
                     monitoring_data,
                     ttl=self._monitoring_interval * 2
                 )
