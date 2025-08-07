@@ -634,7 +634,7 @@ except:
 }
 
 find_next_task() {
-    echo -e "${YELLOW}🎯 Finding next task to work on...${NC}"
+    echo -e "${YELLOW}🎯 Finding next task to work on...${NC}" >&2
     
     # Look for IN_PROGRESS tasks first
     local in_progress_task=$(grep -n "Status.*🔄.*IN_PROGRESS" "$TODO_FILE" | head -1)
@@ -650,8 +650,8 @@ find_next_task() {
             fi
         done
         local task_name=$(sed -n "${task_header_line}p" "$TODO_FILE" | sed 's/^### //')
-        echo -e "${BLUE}Found interrupted task: $task_name${NC}"
-        echo -e "${WHITE}Resuming previous work...${NC}"
+        echo -e "${BLUE}Found interrupted task: $task_name${NC}" >&2
+        echo -e "${WHITE}Resuming previous work...${NC}" >&2
         echo "$task_name"
         return 0
     fi
@@ -686,14 +686,14 @@ find_next_task() {
                 done
                 
                 local task_name=$(sed -n "${task_header_line}p" "$TODO_FILE" | sed 's/^### //')
-                echo -e "${GREEN}Found next task in Priority $priority: $task_name${NC}"
+                echo -e "${GREEN}Found next task in Priority $priority: $task_name${NC}" >&2
                 echo "$task_name"
                 return 0
             fi
         fi
     done
     
-    echo -e "${GREEN}🎉 All tasks completed!${NC}"
+    echo -e "${GREEN}🎉 All tasks completed!${NC}" >&2
     return 1
 }
 
@@ -747,6 +747,9 @@ status_text = sys.argv[4]
 notes = sys.argv[5] if len(sys.argv) > 5 else ""
 timestamp = sys.argv[6] if len(sys.argv) > 6 else ""
 
+# Debug: Print what we received
+print(f"Debug: task_id='{task_id}', status_emoji='{status_emoji}', status_text='{status_text}'")
+
 # Escape special regex characters in task_id
 escaped_task_id = re.escape(task_id)
 
@@ -757,6 +760,19 @@ replacement = r'\1**Status**: ' + status_emoji + ' ' + status_text
 
 # Perform replacement
 updated_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+# Check if replacement was made
+if updated_content == content:
+    print(f"Warning: No status update made for task {task_id}")
+    print(f"Looking for pattern: ### {task_id}")
+    # Let's try to find the task another way
+    lines = content.split('\n')
+    for i, line in enumerate(lines):
+        if line.startswith(f'### {task_id}'):
+            print(f"Found task at line {i+1}: {line}")
+            break
+    else:
+        print(f"Could not find task {task_id} in file")
 
 # Update implementation notes if provided
 if notes and notes != 'None' and notes != '':
@@ -1132,12 +1148,15 @@ implement_task() {
     local task_info="$1"
     # Better task ID extraction - look for pattern like "1.1" at the start
     local task_id=$(echo "$task_info" | sed -n 's/^\([0-9]\+\.[0-9]\+\).*/\1/p')
-    local task_name=$(echo "$task_info" | sed 's/^[0-9]\+\.[0-9]\+ //')
+    # Clean up task name by removing task ID and extra characters
+    local task_name=$(echo "$task_info" | sed 's/^[0-9]\+\.[0-9]\+ *//' | sed 's/ ⏳$//' | sed 's/ ✅$//' | sed 's/ ❌$//' | sed 's/ 🔄$//' | sed 's/ ⏸️$//' | sed 's/ 🔍$//')
     
     # Validate we got a proper task ID
     if [[ -z "$task_id" ]] || [[ ! "$task_id" =~ ^[0-9]+\.[0-9]+$ ]]; then
         echo -e "${RED}❌ Error: Could not extract valid task ID from: $task_info${NC}"
         echo -e "${WHITE}Expected format: 'X.Y Task Name'${NC}"
+        echo -e "${WHITE}Received: '$task_info'${NC}"
+        echo -e "${WHITE}Extracted task_id: '$task_id'${NC}"
         log_error "Invalid task format: $task_info"
         return 1
     fi
