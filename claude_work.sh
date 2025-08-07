@@ -1493,23 +1493,23 @@ main_loop() {
             # Generate completion report
             echo -e "${CYAN}Generating completion report...${NC}"
             local completion_report="${IMPL_DIR}/completion_report_${TIMESTAMP}.md"
-            cat > "$completion_report" << EOF
+            cat > "$completion_report" << 'COMPLETION_EOF'
 # Implementation Completion Report
 
-**Session**: $TIMESTAMP
-**Completed**: $(date)
+**Session**: TIMESTAMP_PLACEHOLDER
+**Completed**: DATE_PLACEHOLDER
 **Project**: AI Journaling Assistant
 
 ## Summary
 All 21 implementation tasks have been completed successfully!
 
 ## Statistics
-$(show_status)
+STATUS_PLACEHOLDER
 
 ## Session Logs
-- Session Log: $(basename "$SESSION_LOG")
-- Implementation TODO: $(basename "$TODO_FILE")
-- Progress Tracking: $(basename "$PROGRESS_FILE")
+- Session Log: SESSION_LOG_PLACEHOLDER
+- Implementation TODO: TODO_FILE_PLACEHOLDER
+- Progress Tracking: PROGRESS_FILE_PLACEHOLDER
 
 ## Next Steps
 1. Perform final system testing
@@ -1518,7 +1518,15 @@ $(show_status)
 4. Prepare for production deployment
 
 **🎉 Implementation Phase Complete!**
-EOF
+COMPLETION_EOF
+            
+            # Replace placeholders in the completion report
+            sed -i "s/TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" "$completion_report"
+            sed -i "s/DATE_PLACEHOLDER/$(date)/g" "$completion_report"
+            sed -i "s/SESSION_LOG_PLACEHOLDER/$(basename "$SESSION_LOG")/g" "$completion_report"
+            sed -i "s/TODO_FILE_PLACEHOLDER/$(basename "$TODO_FILE")/g" "$completion_report"
+            sed -i "s/PROGRESS_FILE_PLACEHOLDER/$(basename "$PROGRESS_FILE")/g" "$completion_report"
+            
             echo -e "${GREEN}✅ Completion report generated: $(basename "$completion_report")${NC}"
             
             # Ask if user wants to merge back to original branch  
