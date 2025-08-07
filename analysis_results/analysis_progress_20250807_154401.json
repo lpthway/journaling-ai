@@ -2,14 +2,34 @@
   "session_id": "20250807_154401",
   "started_at": "2025-08-07T15:44:02+02:00",
   "project_root": "/home/abrasko/Projects/journaling-ai",
-  "steps_completed": [],
+  "steps_completed": [
+    "docs",
+    "backend_overview",
+    "backend_detailed",
+    "backend_deep_dive",
+    "frontend_overview",
+    "frontend_detailed",
+    "frontend_deep_dive",
+    "synthesis",
+    "todo_extraction",
+    "final_report"
+  ],
   "steps_failed": [],
-  "current_step": "docs",
+  "current_step": "final_report",
   "claude_quota_exhausted": true,
   "resume_point": "docs",
   "total_steps": 10,
-  "last_updated": "2025-08-07T15:44:03.642942",
+  "last_updated": "2025-08-07T17:35:07.636583",
   "step_details": {
-    "docs": "Quota exhausted, resume available"
+    "docs": "Analysis completed successfully",
+    "backend_overview": "Analysis completed successfully",
+    "backend_detailed": "Analysis completed successfully",
+    "backend_deep_dive": "Deep dive analysis completed",
+    "frontend_overview": "Analysis completed successfully",
+    "frontend_detailed": "Analysis completed successfully",
+    "frontend_deep_dive": "Frontend deep dive completed",
+    "synthesis": "Analysis completed successfully",
+    "todo_extraction": "Analysis completed successfully",
+    "final_report": "Final report generated successfully"
   }
 }
