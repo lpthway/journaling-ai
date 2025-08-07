@@ -37,10 +37,10 @@ class RedisSettings(BaseSettings):
     """Redis configuration for caching and sessions."""
     
     url: str = Field(
-        default="redis://:password@localhost:6379",
-        description="Redis connection URL with authentication"
+        default="redis://localhost:6379",
+        description="Redis connection URL"
     )
-    password: Optional[str] = Field(default="password")
+    password: Optional[str] = Field(default=None)
     db: int = Field(default=0, ge=0, le=15)
     
     # Connection pool settings
@@ -165,6 +165,13 @@ class Settings(BaseSettings):
     # === FILE STORAGE ===
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_FILE_TYPES: List[str] = [".txt", ".md", ".pdf"]
+    
+    # === VECTOR DATABASE (ChromaDB) ===
+    CHROMA_PERSIST_DIRECTORY: str = Field(
+        default="./data/chroma_db",
+        description="ChromaDB persistence directory for vector storage"
+    )
+    CHROMA_COLLECTION_NAME: str = "journal_entries"
     
     # Psychology Integration
     PSYCHOLOGY_DB_ENABLED: bool = True

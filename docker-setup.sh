@@ -259,19 +259,6 @@ if $DOCKER_COMPOSE_CMD ps flower | grep -q "Up" 2>/dev/null; then
     print_status "Flower monitoring is running on localhost:5555"
 fi
 
-# Check Celery services if running
-if $DOCKER_COMPOSE_CMD ps celery-worker | grep -q "Up" 2>/dev/null; then
-    print_status "Celery Worker is running"
-fi
-
-if $DOCKER_COMPOSE_CMD ps celery-beat | grep -q "Up" 2>/dev/null; then
-    print_status "Celery Beat scheduler is running"
-fi
-
-if $DOCKER_COMPOSE_CMD ps flower | grep -q "Up" 2>/dev/null; then
-    print_status "Flower monitoring is running on localhost:5555"
-fi
-
 # Show running services
 echo ""
 print_info "Running services:"
