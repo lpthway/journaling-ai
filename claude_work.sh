@@ -774,7 +774,9 @@ update_task_status() {
     esac
     
     # Use Python to safely update the task status
-    python3 << 'EOF'
+    # Create a temporary Python script to avoid heredoc issues
+    local python_script=$(mktemp)
+    cat > "$python_script" << 'PYTHON_EOF'
 import re
 import sys
 
@@ -844,9 +846,15 @@ try:
 except Exception as e:
     print(f"Error writing file: {e}")
     sys.exit(1)
-EOF "$TODO_FILE" "$task_id" "$status_emoji" "$status_text" "$notes" "$timestamp"
+PYTHON_EOF
 
+    # Run the Python script with arguments
+    python3 "$python_script" "$TODO_FILE" "$task_id" "$status_emoji" "$status_text" "$notes" "$timestamp"
     local python_exit_code=$?
+    
+    # Clean up the temporary script
+    rm -f "$python_script"
+
     if [[ $python_exit_code -eq 0 ]]; then
         log_action "Task $task_id status updated to $status"
         if [[ -n "$notes" ]]; then
