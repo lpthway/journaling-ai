@@ -21,6 +21,30 @@ CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
+# =============================================================================
+# Git Branch Management Functions
+# =============================================================================
+
+detect_original_branch() {
+    # Try to detect the original branch from git history
+    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" 2>/dev/null)
+    if [[ -n "$merge_commit" ]]; then
+        # Extract branch name from merge commit message
+        echo "$merge_commit" | sed -n 's/.*into \([^[:space:]]*\).*/\1/p'
+    else
+        # Look for common branch patterns or fall back to default
+        if git show-ref --verify --quiet refs/heads/feature/phase-1-foundation; then
+            echo "feature/phase-1-foundation"
+        elif git show-ref --verify --quiet refs/heads/main; then
+            echo "main"
+        elif git show-ref --verify --quiet refs/heads/master; then
+            echo "master"
+        else
+            echo "main"  # Default fallback
+        fi
+    fi
+}
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(pwd)"
@@ -31,13 +55,27 @@ INSTRUCTIONS_FILE="${IMPL_DIR}/claude_work_instructions.md"
 CURRENT_SESSION_FILE="${IMPL_DIR}/current_session.md"
 LOGS_DIR="${IMPL_DIR}/logs"
 
-# Store the original branch to merge back to
-ORIGINAL_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+# Detect if we're already on a session branch or original branch
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
 
-# Session configuration
-TIMESTAMP=${WORK_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}
+# Check if we're already on a session branch (starts with "phase-")
+if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
+    # We're already on a session branch - reuse it
+    SESSION_BRANCH="$CURRENT_BRANCH"
+    TIMESTAMP=$(echo "$SESSION_BRANCH" | sed 's/^phase-//')
+    # Find the original branch from git history
+    ORIGINAL_BRANCH=$(detect_original_branch)
+    echo "🔄 Resuming existing session branch: $SESSION_BRANCH"
+else
+    # We're on an original branch - this will be our merge target
+    ORIGINAL_BRANCH="$CURRENT_BRANCH"
+    # Use existing session ID or create new one
+    TIMESTAMP=${WORK_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}
+    SESSION_BRANCH="phase-${TIMESTAMP}"
+    echo "🆕 Will create new session branch: $SESSION_BRANCH from $ORIGINAL_BRANCH"
+fi
+
 SESSION_LOG="${LOGS_DIR}/session_${TIMESTAMP}.log"
-SESSION_BRANCH="phase-${TIMESTAMP}"
 ENABLE_AUTO_TEST=true
 ENABLE_AUTO_COMMIT=true
 REQUIRE_SUCCESS_CRITERIA=true
@@ -70,6 +108,13 @@ print_banner() {
     echo -e "${CYAN}Implementation Dir: ${WHITE}${IMPL_DIR}${NC}"
     echo -e "${CYAN}Session ID: ${WHITE}${TIMESTAMP}${NC}"
     echo -e "${CYAN}Session Log: ${WHITE}$(basename "$SESSION_LOG")${NC}"
+    echo -e "${CYAN}Session Branch: ${WHITE}${SESSION_BRANCH}${NC}"
+    echo -e "${CYAN}Original Branch: ${WHITE}${ORIGINAL_BRANCH}${NC}"
+    if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
+        echo -e "${YELLOW}🔄 Resuming existing session${NC}"
+    else
+        echo -e "${GREEN}🆕 Starting new session${NC}"
+    fi
     echo ""
 }
 
@@ -1350,15 +1395,27 @@ initialize_session() {
     source venv/bin/activate
     echo -e "${GREEN}Virtual environment activated.${NC}"
     
-    # Create a new branch for this session phase (from instructions)
-    echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
-    echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
-    if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
-        echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
-        log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
+    # Create a new branch for this session phase (from instructions) or continue on existing
+    if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
+        echo -e "${CYAN}🔄 Continuing on existing session branch: $SESSION_BRANCH${NC}"
+        echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
+        log_action "Continuing session on existing branch: $SESSION_BRANCH"
     else
-        echo -e "${YELLOW}Branch may already exist or git error - continuing on current branch${NC}"
-        log_action "Could not create new branch - continuing on current branch"
+        echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
+        echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
+        if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
+            echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
+            log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
+        else
+            echo -e "${YELLOW}Branch may already exist - attempting to switch to it${NC}"
+            if git checkout "$SESSION_BRANCH" 2>/dev/null; then
+                echo -e "${GREEN}Switched to existing session branch: $SESSION_BRANCH${NC}"
+                log_action "Switched to existing session branch: $SESSION_BRANCH"
+            else
+                echo -e "${YELLOW}Could not create or switch to session branch - continuing on current branch${NC}"
+                log_action "Could not create/switch to session branch - continuing on current branch"
+            fi
+        fi
     fi
     
     # Check prerequisites
