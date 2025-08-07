@@ -31,9 +31,13 @@ INSTRUCTIONS_FILE="${IMPL_DIR}/claude_work_instructions.md"
 CURRENT_SESSION_FILE="${IMPL_DIR}/current_session.md"
 LOGS_DIR="${IMPL_DIR}/logs"
 
+# Store the original branch to merge back to
+ORIGINAL_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+
 # Session configuration
 TIMESTAMP=${WORK_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}
 SESSION_LOG="${LOGS_DIR}/session_${TIMESTAMP}.log"
+SESSION_BRANCH="phase-${TIMESTAMP}"
 ENABLE_AUTO_TEST=true
 ENABLE_AUTO_COMMIT=true
 REQUIRE_SUCCESS_CRITERIA=true
@@ -88,7 +92,7 @@ log_success() {
 }
 
 # =============================================================================
-# Intelligent Quota Management Functions (from claude_analysis.sh)
+# Intelligent Quota Management Functions
 # =============================================================================
 
 parse_quota_reset_time() {
@@ -636,26 +640,56 @@ find_next_task() {
     local in_progress_task=$(grep -n "Status.*🔄.*IN_PROGRESS" "$TODO_FILE" | head -1)
     if [[ -n "$in_progress_task" ]]; then
         local task_line=$(echo "$in_progress_task" | cut -d: -f1)
-        local task_name=$(sed -n "${task_line}p" "$TODO_FILE" | grep -o "### [0-9]*\.[0-9]* [^⏳🔄✅❌⏸️🔍]*")
+        # Get the task header before the status line
+        local task_header_line=$((task_line - 1))
+        for ((i = task_line - 1; i >= 1; i--)); do
+            local line_content=$(sed -n "${i}p" "$TODO_FILE")
+            if [[ "$line_content" =~ ^###[[:space:]]+[0-9]+\.[0-9]+ ]]; then
+                task_header_line=$i
+                break
+            fi
+        done
+        local task_name=$(sed -n "${task_header_line}p" "$TODO_FILE" | sed 's/^### //')
         echo -e "${BLUE}Found interrupted task: $task_name${NC}"
         echo -e "${WHITE}Resuming previous work...${NC}"
-        echo "$task_name" | sed 's/### //'
+        echo "$task_name"
         return 0
     fi
     
     # Look for next PENDING task in priority order
     for priority in {1..5}; do
-        local pending_task=$(grep -n -A 20 "## PRIORITY $priority" "$TODO_FILE" | grep -n "Status.*⏳.*PENDING" | head -1)
-        if [[ -n "$pending_task" ]]; then
-            # Extract task name
-            local line_offset=$(echo "$pending_task" | cut -d: -f1)
-            local base_line=$(grep -n "## PRIORITY $priority" "$TODO_FILE" | cut -d: -f1)
-            local actual_line=$((base_line + line_offset - 1))
-            local task_section_start=$(grep -n -B 10 "Status.*⏳.*PENDING" "$TODO_FILE" | grep "###" | tail -1 | cut -d: -f1)
-            local task_name=$(sed -n "${task_section_start}p" "$TODO_FILE" | grep -o "### [0-9]*\.[0-9]* [^⏳🔄✅❌⏸️🔍]*")
-            echo -e "${GREEN}Found next task in Priority $priority: $task_name${NC}"
-            echo "$task_name" | sed 's/### //'
-            return 0
+        # Find the priority section
+        local priority_start=$(grep -n "## PRIORITY $priority" "$TODO_FILE" | cut -d: -f1)
+        if [[ -n "$priority_start" ]]; then
+            # Find the next priority section or end of file
+            local priority_end=$(grep -n "## PRIORITY $((priority + 1))" "$TODO_FILE" | cut -d: -f1)
+            if [[ -z "$priority_end" ]]; then
+                priority_end=$(wc -l < "$TODO_FILE")
+            else
+                priority_end=$((priority_end - 1))
+            fi
+            
+            # Look for PENDING tasks in this priority section
+            local pending_line=$(sed -n "${priority_start},${priority_end}p" "$TODO_FILE" | grep -n "Status.*⏳.*PENDING" | head -1 | cut -d: -f1)
+            if [[ -n "$pending_line" ]]; then
+                # Calculate actual line number
+                local actual_line=$((priority_start + pending_line - 1))
+                
+                # Find the task header before this status line
+                local task_header_line=$actual_line
+                for ((i = actual_line - 1; i >= priority_start; i--)); do
+                    local line_content=$(sed -n "${i}p" "$TODO_FILE")
+                    if [[ "$line_content" =~ ^###[[:space:]]+[0-9]+\.[0-9]+ ]]; then
+                        task_header_line=$i
+                        break
+                    fi
+                done
+                
+                local task_name=$(sed -n "${task_header_line}p" "$TODO_FILE" | sed 's/^### //')
+                echo -e "${GREEN}Found next task in Priority $priority: $task_name${NC}"
+                echo "$task_name"
+                return 0
+            fi
         fi
     done
     
@@ -670,6 +704,13 @@ update_task_status() {
     local timestamp=$(date "+%Y-%m-%d %H:%M")
     
     echo -e "${CYAN}📝 Updating task status: $task_id -> $status${NC}"
+    
+    # Validate task ID format
+    if [[ ! "$task_id" =~ ^[0-9]+\.[0-9]+$ ]]; then
+        echo -e "${RED}❌ Error: Invalid task ID format: $task_id${NC}"
+        log_error "Invalid task ID format: $task_id"
+        return 1
+    fi
     
     # Create backup
     cp "$TODO_FILE" "$TODO_FILE.backup"
@@ -687,41 +728,73 @@ update_task_status() {
         "TESTING") status_emoji="🔍"; status_text="TESTING" ;;
     esac
     
-    # Find the task section and update status
-    python3 << EOF
+    # Use Python to safely update the task status
+    python3 << 'EOF'
 import re
 import sys
 
 # Read the file
-with open('$TODO_FILE', 'r') as f:
-    content = f.read()
+try:
+    with open(sys.argv[1], 'r', encoding='utf-8') as f:
+        content = f.read()
+except Exception as e:
+    print(f"Error reading file: {e}")
+    sys.exit(1)
 
-# Pattern to find task section and update status
-task_pattern = r'(### $task_id [^\\n]*\\n.*?)(\*\*Status\*\*: )([^\\n]*)(.*?)(\*\*Implementation Notes\*\*: )([^\\n]*)'
-replacement = r'\\1\\2$status_emoji $status_text\\4\\5$notes'
+task_id = sys.argv[2]
+status_emoji = sys.argv[3]
+status_text = sys.argv[4]
+notes = sys.argv[5] if len(sys.argv) > 5 else ""
+timestamp = sys.argv[6] if len(sys.argv) > 6 else ""
+
+# Escape special regex characters in task_id
+escaped_task_id = re.escape(task_id)
+
+# Find the task section and update status
+# Look for the pattern: ### task_id ... **Status**: ...
+pattern = r'(### ' + escaped_task_id + r'[^\n]*\n.*?)\*\*Status\*\*: [^\n]*'
+replacement = r'\1**Status**: ' + status_emoji + ' ' + status_text
 
 # Perform replacement
-updated_content = re.sub(task_pattern, replacement, content, flags=re.DOTALL)
+updated_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
 
-# Add timestamp if status changed
-if '$status' in ['IN_PROGRESS', 'COMPLETED', 'FAILED']:
-    start_pattern = r'(\*\*Status\*\*: $status_emoji $status_text\\n.*?)(\*\*Started\*\*: )([^\\n]*)'
-    if '$status' == 'IN_PROGRESS':
-        updated_content = re.sub(start_pattern, r'\\1\\2$timestamp', updated_content)
-    elif '$status' == 'COMPLETED':
-        completed_pattern = r'(\*\*Status\*\*: $status_emoji $status_text\\n.*?)(\*\*Completed\*\*: )([^\\n]*)'
-        updated_content = re.sub(completed_pattern, r'\\1\\2$timestamp', updated_content)
+# Update implementation notes if provided
+if notes and notes != 'None' and notes != '':
+    notes_pattern = r'(### ' + escaped_task_id + r'[^\n]*\n.*?)\*\*Implementation Notes\*\*: [^\n]*'
+    notes_replacement = r'\1**Implementation Notes**: ' + notes
+    updated_content = re.sub(notes_pattern, notes_replacement, updated_content, flags=re.DOTALL)
+
+# Add timestamps
+if status_text in ['IN_PROGRESS', 'COMPLETED', 'FAILED']:
+    if status_text == 'IN_PROGRESS' and timestamp:
+        start_pattern = r'(### ' + escaped_task_id + r'[^\n]*\n.*?)\*\*Started\*\*: [^\n]*'
+        start_replacement = r'\1**Started**: ' + timestamp
+        updated_content = re.sub(start_pattern, start_replacement, updated_content, flags=re.DOTALL)
+    elif status_text == 'COMPLETED' and timestamp:
+        completed_pattern = r'(### ' + escaped_task_id + r'[^\n]*\n.*?)\*\*Completed\*\*: [^\n]*'
+        completed_replacement = r'\1**Completed**: ' + timestamp
+        updated_content = re.sub(completed_pattern, completed_replacement, updated_content, flags=re.DOTALL)
 
 # Write back
-with open('$TODO_FILE', 'w') as f:
-    f.write(updated_content)
-    
-print(f"Updated task {task_id} to {status}")
-EOF
+try:
+    with open(sys.argv[1], 'w', encoding='utf-8') as f:
+        f.write(updated_content)
+    print(f"Updated task {task_id} to {status_text}")
+except Exception as e:
+    print(f"Error writing file: {e}")
+    sys.exit(1)
+EOF "$TODO_FILE" "$task_id" "$status_emoji" "$status_text" "$notes" "$timestamp"
 
-    log_action "Task $task_id status updated to $status"
-    if [[ -n "$notes" ]]; then
-        log_action "Task notes: $notes"
+    local python_exit_code=$?
+    if [[ $python_exit_code -eq 0 ]]; then
+        log_action "Task $task_id status updated to $status"
+        if [[ -n "$notes" ]]; then
+            log_action "Task notes: $notes"
+        fi
+        return 0
+    else
+        log_error "Failed to update task status for $task_id"
+        return 1
     fi
 }
 
@@ -734,25 +807,6 @@ update_progress_summary() {
     local failed_count=$(grep -c "Status.*❌.*FAILED" "$TODO_FILE" || echo "0")
     local pending_count=$(grep -c "Status.*⏳.*PENDING" "$TODO_FILE" || echo "0")
     
-    # Update the progress section in the TODO file
-    python3 << EOF
-import re
-
-with open('$TODO_FILE', 'r') as f:
-    content = f.read()
-
-# Update overall progress
-progress_pattern = r'(\*\*Completed\*\*: )\d+( items \()\d+(\%\))'
-content = re.sub(progress_pattern, r'\\g<1>$completed_count\\g<2>' + str(round($completed_count * 100 / 21)) + '\\g<3>', content)
-
-content = re.sub(r'(\*\*In Progress\*\*: )\d+( items \()\d+(\%\))', r'\\g<1>$in_progress_count\\g<2>' + str(round($in_progress_count * 100 / 21)) + '\\g<3>', content)
-content = re.sub(r'(\*\*Pending\*\*: )\d+( items \()\d+(\%\))', r'\\g<1>$pending_count\\g<2>' + str(round($pending_count * 100 / 21)) + '\\g<3>', content)
-content = re.sub(r'(\*\*Failed\*\*: )\d+( items \()\d+(\%\))', r'\\g<1>$failed_count\\g<2>' + str(round($failed_count * 100 / 21)) + '\\g<3>', content)
-
-with open('$TODO_FILE', 'w') as f:
-    f.write(content)
-EOF
-
     # Update JSON progress file
     python3 << EOF
 import json
@@ -773,6 +827,7 @@ progress['implementation_status']['completed_tasks'] = $completed_count
 progress['implementation_status']['in_progress_tasks'] = $in_progress_count
 progress['implementation_status']['failed_tasks'] = $failed_count
 progress['implementation_status']['pending_tasks'] = $pending_count
+progress['implementation_status']['total_tasks'] = $completed_count + $in_progress_count + $failed_count + $pending_count
 
 # Update session
 progress['current_session']['last_updated'] = datetime.now().isoformat()
@@ -894,19 +949,92 @@ else:
 }
 
 # =============================================================================
+# Session Completion Functions
+# =============================================================================
+
+complete_session_with_merge() {
+    local session_branch="$1"
+    
+    echo -e "${CYAN}🔄 Completing session and merging to original branch...${NC}"
+    
+    # Get current branch name (should be the session branch)
+    local current_branch=$(git branch --show-current 2>/dev/null)
+    
+    if [[ "$current_branch" != "$session_branch" ]]; then
+        echo -e "${YELLOW}⚠️  Not on expected session branch. Current: $current_branch, Expected: $session_branch${NC}"
+        echo -e "${WHITE}Continuing with merge attempt...${NC}"
+    fi
+    
+    # Switch back to original branch
+    echo -e "${CYAN}Switching to original branch: $ORIGINAL_BRANCH${NC}"
+    if git checkout "$ORIGINAL_BRANCH" 2>/dev/null; then
+        echo -e "${GREEN}✅ Switched to $ORIGINAL_BRANCH${NC}"
+        
+        # Pull latest changes (if it's a remote-tracking branch)
+        if git rev-parse --verify "origin/$ORIGINAL_BRANCH" >/dev/null 2>&1; then
+            echo -e "${CYAN}Pulling latest changes from origin/$ORIGINAL_BRANCH...${NC}"
+            git pull origin "$ORIGINAL_BRANCH" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not pull from origin${NC}"
+        fi
+        
+        # Merge the session branch
+        echo -e "${CYAN}Merging session branch: $session_branch${NC}"
+        local merge_msg="Merging phase branch [$session_branch] into $ORIGINAL_BRANCH
+
+Session completed with automated workflow
+Generated: $(date)
+
+🤖 Generated with [Claude Code](https://claude.ai/code)"
+        
+        if git merge "$session_branch" --no-ff -m "$merge_msg" 2>&1 | tee -a "$SESSION_LOG"; then
+            echo -e "${GREEN}✅ Successfully merged $session_branch into $ORIGINAL_BRANCH${NC}"
+            log_success "Session branch merged successfully"
+            
+            # Push if it's a remote-tracking branch
+            if git rev-parse --verify "origin/$ORIGINAL_BRANCH" >/dev/null 2>&1; then
+                echo -e "${CYAN}Pushing merged changes to origin/$ORIGINAL_BRANCH...${NC}"
+                if git push origin "$ORIGINAL_BRANCH" 2>&1 | tee -a "$SESSION_LOG"; then
+                    echo -e "${GREEN}✅ Changes pushed to origin/$ORIGINAL_BRANCH${NC}"
+                    log_success "Changes pushed to remote"
+                else
+                    echo -e "${YELLOW}⚠️  Could not push to origin - you may need to push manually${NC}"
+                    log_action "Manual push required for $ORIGINAL_BRANCH"
+                fi
+            fi
+            
+            # Clean up session branch (optional)
+            echo -e "${WHITE}Session branch $session_branch can be deleted if no longer needed${NC}"
+            echo -e "${WHITE}To delete: git branch -d $session_branch${NC}"
+            
+            return 0
+        else
+            echo -e "${RED}❌ Failed to merge $session_branch into $ORIGINAL_BRANCH${NC}"
+            echo -e "${WHITE}You may need to resolve conflicts manually${NC}"
+            log_error "Failed to merge session branch"
+            return 1
+        fi
+    else
+        echo -e "${RED}❌ Could not switch to $ORIGINAL_BRANCH${NC}"
+        echo -e "${WHITE}You may need to handle the merge manually${NC}"
+        log_error "Could not switch to original branch"
+        return 1
+    fi
+}
+
+# =============================================================================
 # Git Integration Functions
 # =============================================================================
 
 commit_changes() {
     local task_id="$1"
     local task_description="$2"
+    local phase="${3:-5}"  # Default to phase 5 if not specified
     
     if [[ "$ENABLE_AUTO_COMMIT" != "true" ]]; then
         echo -e "${YELLOW}Auto-commit disabled - skipping git commit${NC}"
         return 0
     fi
     
-    echo -e "${CYAN}📝 Committing changes for task: $task_id${NC}"
+    echo -e "${CYAN}📝 Committing changes for task: $task_id (Phase $phase)${NC}"
     
     # Check if there are changes to commit
     if git diff --quiet && git diff --cached --quiet; then
@@ -917,19 +1045,53 @@ commit_changes() {
     # Add all changes
     git add .
     
-    # Create commit message
-    local commit_msg="implement: $task_description
+    # Create commit message based on phase
+    local commit_msg=""
+    case "$phase" in
+        "3")
+            commit_msg="Phase 3: Implemented $task_description
 
 Task ID: $task_id
 Session: $TIMESTAMP
 
+- Implementation phase complete
+- Code changes applied
+
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
+            ;;
+        "4")
+            commit_msg="Phase 4: Completed unit tests for $task_description
+
+Task ID: $task_id
+Session: $TIMESTAMP
+
+- Testing phase complete
+- All tests validated
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+            ;;
+        "5"|*)
+            commit_msg="Phase 5: Completed task $task_description
+
+Task ID: $task_id
+Session: $TIMESTAMP
+
+- Task implementation finalized
+- Documentation updated
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+            ;;
+    esac
     
     # Commit changes
     if git commit -m "$commit_msg" 2>&1 | tee -a "$SESSION_LOG"; then
-        log_success "Changes committed for task $task_id"
+        log_success "Changes committed for task $task_id (Phase $phase)"
         
         # Update progress file with commit info
         python3 -c "
@@ -945,6 +1107,7 @@ try:
     
     progress['git_commits'].append({
         'task_id': '$task_id',
+        'phase': '$phase',
         'timestamp': datetime.now().isoformat(),
         'message': '$task_description'
     })
@@ -967,8 +1130,17 @@ except Exception as e:
 
 implement_task() {
     local task_info="$1"
-    local task_id=$(echo "$task_info" | cut -d' ' -f1)
-    local task_name=$(echo "$task_info" | cut -d' ' -f2-)
+    # Better task ID extraction - look for pattern like "1.1" at the start
+    local task_id=$(echo "$task_info" | sed -n 's/^\([0-9]\+\.[0-9]\+\).*/\1/p')
+    local task_name=$(echo "$task_info" | sed 's/^[0-9]\+\.[0-9]\+ //')
+    
+    # Validate we got a proper task ID
+    if [[ -z "$task_id" ]] || [[ ! "$task_id" =~ ^[0-9]+\.[0-9]+$ ]]; then
+        echo -e "${RED}❌ Error: Could not extract valid task ID from: $task_info${NC}"
+        echo -e "${WHITE}Expected format: 'X.Y Task Name'${NC}"
+        log_error "Invalid task format: $task_info"
+        return 1
+    fi
     
     echo -e "${BLUE}"
     echo "============================================================================="
@@ -992,8 +1164,11 @@ import re
 with open('$TODO_FILE', 'r') as f:
     content = f.read()
 
+# Escape special regex characters in task_id
+task_id = re.escape('$task_id')
+
 # Find the task section
-task_pattern = r'### $task_id.*?(?=### |---|\Z)'
+task_pattern = r'### ' + task_id + r'.*?(?=### |---|\Z)'
 match = re.search(task_pattern, content, re.DOTALL)
 if match:
     section = match.group(0)
@@ -1039,6 +1214,13 @@ else:
     echo -e "${WHITE}When done, press Enter to continue with testing...${NC}"
     read -r
     
+    # Commit Phase 3 changes (implementation)
+    if commit_changes "$task_id" "$task_name" "3"; then
+        log_success "Phase 3 changes committed for task $task_id"
+    else
+        log_error "Failed to commit Phase 3 changes for task $task_id"
+    fi
+    
     # Phase 4: Testing and Validation
     echo -e "${CYAN}Phase 4: Testing and Validation${NC}"
     update_task_status "$task_id" "TESTING" "Implementation complete, running tests"
@@ -1054,6 +1236,12 @@ else:
         
         if run_tests "$test_scope"; then
             log_success "Tests passed for task $task_id"
+            # Commit Phase 4 changes (testing)
+            if commit_changes "$task_id" "$task_name" "4"; then
+                log_success "Phase 4 changes committed for task $task_id"
+            else
+                log_error "Failed to commit Phase 4 changes for task $task_id"
+            fi
         else
             log_error "Tests failed for task $task_id"
             update_task_status "$task_id" "FAILED" "Tests failed after implementation"
@@ -1083,11 +1271,11 @@ else:
     
     update_task_status "$task_id" "COMPLETED" "Implementation completed. Notes: $implementation_notes"
     
-    # Commit changes
-    if commit_changes "$task_id" "$task_name"; then
-        log_success "Changes committed for task $task_id"
+    # Commit final changes (Phase 5)
+    if commit_changes "$task_id" "$task_name" "5"; then
+        log_success "Phase 5 changes committed for task $task_id"
     else
-        log_error "Failed to commit changes for task $task_id"
+        log_error "Failed to commit Phase 5 changes for task $task_id"
     fi
     
     # Update progress
@@ -1095,6 +1283,17 @@ else:
     
     echo -e "${GREEN}✅ Task $task_id completed successfully!${NC}"
     log_success "Task $task_id implementation completed"
+    
+    # Ask if user wants to merge back to original branch
+    echo -e "${WHITE}Do you want to merge this session back to $ORIGINAL_BRANCH? (y/n):${NC}"
+    read -p "Merge to $ORIGINAL_BRANCH? (y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        complete_session_with_merge "$SESSION_BRANCH"
+    else
+        echo -e "${CYAN}Session branch $SESSION_BRANCH kept for manual merge later${NC}"
+        echo -e "${WHITE}To merge later: git checkout $ORIGINAL_BRANCH && git merge $SESSION_BRANCH${NC}"
+    fi
     
     return 0
 }
@@ -1115,6 +1314,33 @@ initialize_session() {
     echo "Session ID: $TIMESTAMP" >> "$SESSION_LOG"
     echo "Project: AI Journaling Assistant" >> "$SESSION_LOG"
     echo "" >> "$SESSION_LOG"
+    
+    # Update current session tracking (from instructions)
+    echo "Session started: $(date)" > "$CURRENT_SESSION_FILE"
+    echo "Session ID: $TIMESTAMP" >> "$CURRENT_SESSION_FILE"
+    
+    # Set up virtual environment (from instructions)
+    if [ ! -d "venv" ]; then
+        echo -e "${CYAN}Creating virtual environment...${NC}"
+        python3 -m venv venv
+        echo -e "${GREEN}Virtual environment created.${NC}"
+    fi
+    
+    # Activate virtual environment
+    echo -e "${CYAN}Activating virtual environment...${NC}"
+    source venv/bin/activate
+    echo -e "${GREEN}Virtual environment activated.${NC}"
+    
+    # Create a new branch for this session phase (from instructions)
+    echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
+    echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
+    if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
+        echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
+        log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
+    else
+        echo -e "${YELLOW}Branch may already exist or git error - continuing on current branch${NC}"
+        log_action "Could not create new branch - continuing on current branch"
+    fi
     
     # Check prerequisites
     if [[ ! -f "$TODO_FILE" ]]; then
@@ -1218,6 +1444,18 @@ $(show_status)
 **🎉 Implementation Phase Complete!**
 EOF
             echo -e "${GREEN}✅ Completion report generated: $(basename "$completion_report")${NC}"
+            
+            # Ask if user wants to merge back to original branch  
+            echo -e "${WHITE}All tasks completed! Do you want to merge this session back to $ORIGINAL_BRANCH? (y/n):${NC}"
+            read -p "Merge to $ORIGINAL_BRANCH? (y/n): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                complete_session_with_merge "$SESSION_BRANCH"
+            else
+                echo -e "${CYAN}Session branch $SESSION_BRANCH kept for manual merge later${NC}"
+                echo -e "${WHITE}To merge later: git checkout $ORIGINAL_BRANCH && git merge $SESSION_BRANCH${NC}"
+            fi
+            
             break
         fi
         
@@ -1254,9 +1492,10 @@ EOF
             [\?])
                 # Show task details
                 echo -e "${CYAN}Task Details:${NC}"
+                local task_id=$(echo "$next_task" | sed 's/^\([0-9]*\.[0-9]*\).*/\1/')
                 python3 -c "
 import re
-task_id = '$next_task'.split(' ')[0]
+task_id = re.escape('$task_id')
 with open('$TODO_FILE', 'r') as f:
     content = f.read()
     
@@ -1288,7 +1527,7 @@ main() {
     local command="${1:-work}"
     
     case "$command" in
-        "work")
+        "work"|"--resume")
             print_banner
             initialize_session
             read_self_instructions
@@ -1305,6 +1544,7 @@ Usage: $0 [COMMAND]
 
 Commands:
   work      Start interactive implementation session (default)
+  --resume  Resume previous session
   status    Show current implementation progress
   help      Show this help message
 
