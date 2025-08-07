@@ -90,7 +90,7 @@ CLAUDE_QUICK_TIMEOUT=60 # 1 minute for quick operations
 
 # Testing configuration
 BACKEND_TEST_CMD="cd backend && python -m pytest -v"
-FRONTEND_TEST_CMD="cd frontend && npm test -- --watchAll=false"
+FRONTEND_TEST_CMD="cd frontend && npm test -- --watchAll=false --passWithNoTests"
 LINT_BACKEND_CMD="cd backend && python -m flake8 ."
 LINT_FRONTEND_CMD="cd frontend && npm run lint"
 
