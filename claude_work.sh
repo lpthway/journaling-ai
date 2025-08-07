@@ -21,6 +21,30 @@ CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
+# =============================================================================
+# Git Branch Management Functions
+# =============================================================================
+
+detect_original_branch() {
+    # Try to detect the original branch from git history
+    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" 2>/dev/null)
+    if [[ -n "$merge_commit" ]]; then
+        # Extract branch name from merge commit message
+        echo "$merge_commit" | sed -n 's/.*into \([^[:space:]]*\).*/\1/p'
+    else
+        # Look for common branch patterns or fall back to default
+        if git show-ref --verify --quiet refs/heads/feature/phase-1-foundation; then
+            echo "feature/phase-1-foundation"
+        elif git show-ref --verify --quiet refs/heads/main; then
+            echo "main"
+        elif git show-ref --verify --quiet refs/heads/master; then
+            echo "master"
+        else
+            echo "main"  # Default fallback
+        fi
+    fi
+}
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(pwd)"
@@ -31,13 +55,27 @@ INSTRUCTIONS_FILE="${IMPL_DIR}/claude_work_instructions.md"
 CURRENT_SESSION_FILE="${IMPL_DIR}/current_session.md"
 LOGS_DIR="${IMPL_DIR}/logs"
 
-# Store the original branch to merge back to
-ORIGINAL_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+# Detect if we're already on a session branch or original branch
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
 
-# Session configuration
-TIMESTAMP=${WORK_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}
+# Check if we're already on a session branch (starts with "phase-")
+if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
+    # We're already on a session branch - reuse it
+    SESSION_BRANCH="$CURRENT_BRANCH"
+    TIMESTAMP=$(echo "$SESSION_BRANCH" | sed 's/^phase-//')
+    # Find the original branch from git history
+    ORIGINAL_BRANCH=$(detect_original_branch)
+    echo "🔄 Resuming existing session branch: $SESSION_BRANCH"
+else
+    # We're on an original branch - this will be our merge target
+    ORIGINAL_BRANCH="$CURRENT_BRANCH"
+    # Use existing session ID or create new one
+    TIMESTAMP=${WORK_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}
+    SESSION_BRANCH="phase-${TIMESTAMP}"
+    echo "🆕 Will create new session branch: $SESSION_BRANCH from $ORIGINAL_BRANCH"
+fi
+
 SESSION_LOG="${LOGS_DIR}/session_${TIMESTAMP}.log"
-SESSION_BRANCH="phase-${TIMESTAMP}"
 ENABLE_AUTO_TEST=true
 ENABLE_AUTO_COMMIT=true
 REQUIRE_SUCCESS_CRITERIA=true
@@ -70,6 +108,13 @@ print_banner() {
     echo -e "${CYAN}Implementation Dir: ${WHITE}${IMPL_DIR}${NC}"
     echo -e "${CYAN}Session ID: ${WHITE}${TIMESTAMP}${NC}"
     echo -e "${CYAN}Session Log: ${WHITE}$(basename "$SESSION_LOG")${NC}"
+    echo -e "${CYAN}Session Branch: ${WHITE}${SESSION_BRANCH}${NC}"
+    echo -e "${CYAN}Original Branch: ${WHITE}${ORIGINAL_BRANCH}${NC}"
+    if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
+        echo -e "${YELLOW}🔄 Resuming existing session${NC}"
+    else
+        echo -e "${GREEN}🆕 Starting new session${NC}"
+    fi
     echo ""
 }
 
@@ -634,7 +679,7 @@ except:
 }
 
 find_next_task() {
-    echo -e "${YELLOW}🎯 Finding next task to work on...${NC}"
+    echo -e "${YELLOW}🎯 Finding next task to work on...${NC}" >&2
     
     # Look for IN_PROGRESS tasks first
     local in_progress_task=$(grep -n "Status.*🔄.*IN_PROGRESS" "$TODO_FILE" | head -1)
@@ -650,8 +695,8 @@ find_next_task() {
             fi
         done
         local task_name=$(sed -n "${task_header_line}p" "$TODO_FILE" | sed 's/^### //')
-        echo -e "${BLUE}Found interrupted task: $task_name${NC}"
-        echo -e "${WHITE}Resuming previous work...${NC}"
+        echo -e "${BLUE}Found interrupted task: $task_name${NC}" >&2
+        echo -e "${WHITE}Resuming previous work...${NC}" >&2
         echo "$task_name"
         return 0
     fi
@@ -686,14 +731,14 @@ find_next_task() {
                 done
                 
                 local task_name=$(sed -n "${task_header_line}p" "$TODO_FILE" | sed 's/^### //')
-                echo -e "${GREEN}Found next task in Priority $priority: $task_name${NC}"
+                echo -e "${GREEN}Found next task in Priority $priority: $task_name${NC}" >&2
                 echo "$task_name"
                 return 0
             fi
         fi
     done
     
-    echo -e "${GREEN}🎉 All tasks completed!${NC}"
+    echo -e "${GREEN}🎉 All tasks completed!${NC}" >&2
     return 1
 }
 
@@ -747,6 +792,9 @@ status_text = sys.argv[4]
 notes = sys.argv[5] if len(sys.argv) > 5 else ""
 timestamp = sys.argv[6] if len(sys.argv) > 6 else ""
 
+# Debug: Print what we received
+print(f"Debug: task_id='{task_id}', status_emoji='{status_emoji}', status_text='{status_text}'")
+
 # Escape special regex characters in task_id
 escaped_task_id = re.escape(task_id)
 
@@ -757,6 +805,19 @@ replacement = r'\1**Status**: ' + status_emoji + ' ' + status_text
 
 # Perform replacement
 updated_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+# Check if replacement was made
+if updated_content == content:
+    print(f"Warning: No status update made for task {task_id}")
+    print(f"Looking for pattern: ### {task_id}")
+    # Let's try to find the task another way
+    lines = content.split('\n')
+    for i, line in enumerate(lines):
+        if line.startswith(f'### {task_id}'):
+            print(f"Found task at line {i+1}: {line}")
+            break
+    else:
+        print(f"Could not find task {task_id} in file")
 
 # Update implementation notes if provided
 if notes and notes != 'None' and notes != '':
@@ -1132,12 +1193,15 @@ implement_task() {
     local task_info="$1"
     # Better task ID extraction - look for pattern like "1.1" at the start
     local task_id=$(echo "$task_info" | sed -n 's/^\([0-9]\+\.[0-9]\+\).*/\1/p')
-    local task_name=$(echo "$task_info" | sed 's/^[0-9]\+\.[0-9]\+ //')
+    # Clean up task name by removing task ID and extra characters
+    local task_name=$(echo "$task_info" | sed 's/^[0-9]\+\.[0-9]\+ *//' | sed 's/ ⏳$//' | sed 's/ ✅$//' | sed 's/ ❌$//' | sed 's/ 🔄$//' | sed 's/ ⏸️$//' | sed 's/ 🔍$//')
     
     # Validate we got a proper task ID
     if [[ -z "$task_id" ]] || [[ ! "$task_id" =~ ^[0-9]+\.[0-9]+$ ]]; then
         echo -e "${RED}❌ Error: Could not extract valid task ID from: $task_info${NC}"
         echo -e "${WHITE}Expected format: 'X.Y Task Name'${NC}"
+        echo -e "${WHITE}Received: '$task_info'${NC}"
+        echo -e "${WHITE}Extracted task_id: '$task_id'${NC}"
         log_error "Invalid task format: $task_info"
         return 1
     fi
@@ -1331,15 +1395,27 @@ initialize_session() {
     source venv/bin/activate
     echo -e "${GREEN}Virtual environment activated.${NC}"
     
-    # Create a new branch for this session phase (from instructions)
-    echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
-    echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
-    if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
-        echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
-        log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
+    # Create a new branch for this session phase (from instructions) or continue on existing
+    if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
+        echo -e "${CYAN}🔄 Continuing on existing session branch: $SESSION_BRANCH${NC}"
+        echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
+        log_action "Continuing session on existing branch: $SESSION_BRANCH"
     else
-        echo -e "${YELLOW}Branch may already exist or git error - continuing on current branch${NC}"
-        log_action "Could not create new branch - continuing on current branch"
+        echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
+        echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
+        if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
+            echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
+            log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
+        else
+            echo -e "${YELLOW}Branch may already exist - attempting to switch to it${NC}"
+            if git checkout "$SESSION_BRANCH" 2>/dev/null; then
+                echo -e "${GREEN}Switched to existing session branch: $SESSION_BRANCH${NC}"
+                log_action "Switched to existing session branch: $SESSION_BRANCH"
+            else
+                echo -e "${YELLOW}Could not create or switch to session branch - continuing on current branch${NC}"
+                log_action "Could not create/switch to session branch - continuing on current branch"
+            fi
+        fi
     fi
     
     # Check prerequisites
