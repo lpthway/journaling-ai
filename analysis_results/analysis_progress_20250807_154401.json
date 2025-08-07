@@ -1,0 +1,15 @@
+{
+  "session_id": "20250807_154401",
+  "started_at": "2025-08-07T15:44:02+02:00",
+  "project_root": "/home/abrasko/Projects/journaling-ai",
+  "steps_completed": [],
+  "steps_failed": [],
+  "current_step": "docs",
+  "claude_quota_exhausted": true,
+  "resume_point": "docs",
+  "total_steps": 10,
+  "last_updated": "2025-08-07T15:44:03.642942",
+  "step_details": {
+    "docs": "Quota exhausted, resume available"
+  }
+}

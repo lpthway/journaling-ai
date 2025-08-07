@@ -1,6 +1,325 @@
 version: '3.8'
 
 services:
+  # ================================
+  # Database Services
+  # ================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: journaling_postgres_gpu
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: journaling_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - journaling_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d journaling_ai"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - db
+
+  # ================================
+  # Cache & Message Broker Services
+  # ================================
+  redis:
+    image: redis:7-alpine
+    container_name: journaling_redis_gpu
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - journaling_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles:
+      - cache
+
+  # ================================
+  # Monitoring Services
+  # ================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: journaling_redis_commander_gpu
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - journaling_network
+    depends_on:
+      - redis
+    profiles:
+      - monitoring
+
+  # ================================
+  # GPU-Optimized Backend Services
+  # ================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    container_name: journaling_backend_gpu
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/journaling_ai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      CUDA_VISIBLE_DEVICES: "0"
+      TRANSFORMERS_CACHE: /app/models/cache
+      HF_HOME: /app/models/huggingface
+      CHROMA_PERSIST_DIRECTORY: /app/data/chroma_db
+      CHROMA_COLLECTION_NAME: journal_entries
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - journaling_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - gpu
+
+  backend-cpu:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: journaling_backend_cpu
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/journaling_ai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      CUDA_VISIBLE_DEVICES: ""
+      CHROMA_PERSIST_DIRECTORY: /app/data/chroma_db
+      CHROMA_COLLECTION_NAME: journal_entries
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    networks:
+      - journaling_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - cpu
+
+  # ================================
+  # GPU-Optimized Celery Services
+  # ================================
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    container_name: journaling_celery_worker_gpu
+    restart: unless-stopped
+    command: >
+      celery -A app.services.celery_service:celery_app worker
+      --hostname=gpu-worker-%(process_num)02d
+      --loglevel=INFO
+      --concurrency=2
+      --queues=crisis,psychology,user_ops,analytics,maintenance,default
+      --events
+      --time-limit=1200
+      --soft-time-limit=600
+      --max-tasks-per-child=100
+      --prefetch-multiplier=2
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/journaling_ai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+      CUDA_VISIBLE_DEVICES: "0"
+      TRANSFORMERS_CACHE: /app/models/cache
+      HF_HOME: /app/models/huggingface
+      CHROMA_PERSIST_DIRECTORY: /app/data/chroma_db
+      CHROMA_COLLECTION_NAME: journal_entries
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - journaling_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - gpu
+      - celery
+
+  celery-worker-cpu:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: journaling_celery_worker_cpu
+    restart: unless-stopped
+    command: >
+      celery -A app.services.celery_service:celery_app worker
+      --hostname=cpu-worker-%(process_num)02d
+      --loglevel=INFO
+      --concurrency=4
+      --queues=crisis,psychology,user_ops,analytics,maintenance,default
+      --events
+      --time-limit=600
+      --soft-time-limit=300
+      --max-tasks-per-child=1000
+      --prefetch-multiplier=4
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/journaling_ai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+      CUDA_VISIBLE_DEVICES: ""
+      CHROMA_PERSIST_DIRECTORY: /app/data/chroma_db
+      CHROMA_COLLECTION_NAME: journal_entries
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    networks:
+      - journaling_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - cpu
+      - celery
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    container_name: journaling_celery_beat_gpu
+    restart: unless-stopped
+    command: >
+      celery -A app.services.celery_service:celery_app beat
+      --loglevel=INFO
+      --schedule=celerybeat-schedule
+      --pidfile=celerybeat.pid
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/journaling_ai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    networks:
+      - journaling_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - celery
+
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    container_name: journaling_flower_gpu
+    restart: unless-stopped
+    command: >
+      celery -A app.services.celery_service:celery_app flower
+      --port=5555
+      --address=0.0.0.0
+      --persistent=True
+      --db=flower.db
+      --max_tasks=10000
+      --url_prefix=flower
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    networks:
+      - journaling_network
+    depends_on:
+      - redis
+    volumes:
+      - flower_data:/app/flower-data
+    profiles:
+      - monitoring
+      - celery
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  flower_data:
+    driver: local
+
+networks:
+  journaling_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+version: '3.8'
+
+services:
   # === GPU-Enabled Backend Service ===
   backend:
     build:
