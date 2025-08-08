@@ -247,6 +247,9 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with database.get_session() as session:
         yield session
 
+# Alias for compatibility
+get_db = get_db_session
+
 # Health check endpoint dependency
 async def get_db_health() -> dict:
     """FastAPI dependency for database health checks."""

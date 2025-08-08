@@ -12,7 +12,9 @@ from alembic import context
 # Add the backend directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.models.postgresql import Base
+from app.models.enhanced_models import Base
+# Import auth models to ensure they're included in migrations
+from app.auth.models import AuthUser, RefreshToken, LoginAttempt
 from app.core.config import settings
 
 # this is the Alembic Config object, which provides

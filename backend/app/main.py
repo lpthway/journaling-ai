@@ -23,6 +23,9 @@ from app.api import entries, topics, insights_v2, psychology
 # Temporarily disabled sessions API due to missing legacy dependencies
 # from app.api import sessions
 
+# Authentication router
+from app.auth import auth_router
+
 # Configure enhanced logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
@@ -178,6 +181,7 @@ app.add_middleware(
 )
 
 # Include API routers with proper ordering
+app.include_router(auth_router, prefix=settings.API_V1_STR, tags=["authentication"])
 app.include_router(insights_v2.router, prefix=f"{settings.API_V1_STR}/insights", tags=["insights"])
 app.include_router(entries.router, prefix=f"{settings.API_V1_STR}/entries", tags=["entries"])
 app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=["topics"])
