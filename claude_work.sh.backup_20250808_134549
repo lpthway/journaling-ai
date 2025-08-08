@@ -891,7 +891,7 @@ find_next_task() {
     fi
     
     # Look for next PENDING task in priority order
-    for priority in {1..6}; do
+    for priority in {1..5}; do
         # Find the priority section
         local priority_start=$(grep -n "## PRIORITY $priority" "$TODO_FILE" | cut -d: -f1)
         if [[ -n "$priority_start" ]]; then
@@ -1340,35 +1340,8 @@ Session: $TIMESTAMP
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
             ;;
-        "5")
+        "5"|*)
             commit_msg="Phase 5: Completed task $task_description
-
-Task ID: $task_id
-Session: $TIMESTAMP
-
-- Task implementation finalized
-- Documentation updated
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-            ;;
-        "6")
-            commit_msg="Phase 6: Frontend-Backend Integration - $task_description
-
-Task ID: $task_id
-Session: $TIMESTAMP
-
-- Integration implementation complete
-- User experience enhanced
-- API connectivity restored
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-            ;;
-        *)
-            commit_msg="Completed task $task_description
 
 Task ID: $task_id
 Session: $TIMESTAMP
@@ -2341,7 +2314,7 @@ The script follows a 5-phase implementation workflow:
 
 Files:
   implementation_results/claude_work_core.md           - Core instructions
-  implementation_results/claude_work_phase[1-6].md    - Phase-specific instructions
+  implementation_results/claude_work_phase[1-5].md    - Phase-specific instructions
   implementation_results/claude_work_templates.md     - Documentation templates
   implementation_results/claude_work_troubleshooting.md - Troubleshooting guide
   implementation_results/implementation_todo.md       - Task tracking
