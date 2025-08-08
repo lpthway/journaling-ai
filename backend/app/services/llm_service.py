@@ -14,20 +14,53 @@ logger = logging.getLogger(__name__)
 
 class EnhancedLLMService:
     """
-    Enhanced LLM Service with integrated psychology knowledge database.
+    Enhanced LLM Service with integrated psychology knowledge database and proper resource management.
     
     Provides evidence-based, research-backed AI responses by combining:
     - User conversation context
     - Personal journal history 
     - Professional psychology knowledge
     - Source attribution and citations
+    - Automatic memory cleanup
     """
     
     def __init__(self):
         self.client = ollama.Client(host=settings.OLLAMA_BASE_URL)
         self.model = settings.OLLAMA_MODEL
         self.psychology_service = psychology_knowledge_service
+        self._active_requests = 0
+        self._max_concurrent_requests = 5
+        
+    def __del__(self):
+        """Destructor to ensure proper cleanup"""
+        try:
+            # Clean up any remaining resources
+            if hasattr(self, 'client'):
+                # Close any remaining connections
+                del self.client
+                
+            # Force garbage collection
+            import gc
+            gc.collect()
+        except Exception:
+            # Ignore errors in destructor
+            pass
     
+    async def _resource_managed_request(self, request_func, *args, **kwargs):
+        """Execute request with proper resource management"""
+        if self._active_requests >= self._max_concurrent_requests:
+            raise Exception("Too many concurrent requests - resource limit reached")
+            
+        self._active_requests += 1
+        try:
+            result = await request_func(*args, **kwargs)
+            return result
+        finally:
+            self._active_requests -= 1
+            # Force garbage collection after each request to prevent memory buildup
+            import gc
+            gc.collect()
+
     async def generate_evidence_based_response(
         self,
         user_message: str,
@@ -41,6 +74,19 @@ class EnhancedLLMService:
         Returns:
             Tuple of (response_text, source_citations)
         """
+        return await self._resource_managed_request(
+            self._generate_evidence_based_response_impl,
+            user_message, conversation_history, journal_context, session_type
+        )
+    
+    async def _generate_evidence_based_response_impl(
+        self,
+        user_message: str,
+        conversation_history: List[Dict[str, str]],
+        journal_context: Optional[str] = None,
+        session_type: str = "reflection_buddy"
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """Implementation of evidence-based response generation with resource management"""
         try:
             # Step 1: Get relevant psychology knowledge
             psychology_sources = await self._get_relevant_psychology_knowledge(
@@ -474,6 +520,33 @@ Focus on practical, specific recommendations that acknowledge both the reflectiv
                 themes.append(theme)
         
         return themes[:3] if themes else ['general wellbeing']
+    
+    async def cleanup_resources(self) -> None:
+        """Clean up LLM service resources to prevent memory leaks"""
+        try:
+            logger.debug("🧹 Cleaning up LLM service resources")
+            
+            # Reset active requests counter
+            self._active_requests = 0
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            gc.collect()  # Call twice for better cleanup
+            
+            logger.debug("✅ LLM service cleanup completed")
+            
+        except Exception as e:
+            logger.error(f"Error during LLM service cleanup: {e}")
+    
+    def get_resource_stats(self) -> Dict[str, Any]:
+        """Get current resource usage statistics"""
+        return {
+            "active_requests": self._active_requests,
+            "max_concurrent_requests": self._max_concurrent_requests,
+            "client_connected": hasattr(self, 'client') and self.client is not None,
+            "psychology_service_connected": hasattr(self, 'psychology_service') and self.psychology_service is not None
+        }
     
     async def generate_automatic_tags(self, content: str, content_type: str = "journal") -> List[str]:
         """Enhanced automatic tagging with psychology knowledge integration"""

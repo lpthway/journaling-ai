@@ -411,19 +411,59 @@ class AIModelManager:
                 logger.info(f"   Unloaded {model_key} ({info.memory_usage:.1f}GB)")
 
     async def _unload_model(self, model_key: str) -> None:
-        """Unload a specific model from memory"""
+        """Unload a specific model from memory with proper cleanup"""
         if model_key in self.loaded_models:
-            del self.loaded_models[model_key]
+            model = self.loaded_models[model_key]
             
-            # Clear GPU cache if available
-            if self.has_gpu:
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
+            try:
+                # Proper cleanup for different model types
+                if hasattr(model, 'model') and hasattr(model.model, 'cpu'):
+                    # Move model to CPU first to free GPU memory
+                    model.model.cpu()
+                elif hasattr(model, 'cpu'):
+                    model.cpu()
+                
+                # Clear model references
+                if hasattr(model, '__del__'):
+                    try:
+                        model.__del__()
+                    except:
+                        pass  # Ignore deletion errors
+                
+                # Remove from our tracking
+                del self.loaded_models[model_key]
+                
+                # Also remove from model_info to prevent memory leaks in metadata
+                if model_key in self.model_info:
+                    del self.model_info[model_key]
+                
+                # Clear from unified cache to prevent cache memory leaks
+                try:
+                    cache_key = CachePatterns.ai_model_instance(model_key, "latest")
+                    await unified_cache_service.delete_ai_model_instance(cache_key)
+                except Exception as e:
+                    logger.debug(f"Cache cleanup error for {model_key}: {e}")
+                
+            except Exception as e:
+                logger.warning(f"Error during model cleanup for {model_key}: {e}")
             
-            # Force garbage collection
-            gc.collect()
-            
-            logger.debug(f"🗑️ Unloaded model: {model_key}")
+            finally:
+                # Ensure GPU cache is cleared
+                if self.has_gpu and torch.cuda.is_available():
+                    try:
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                        # Force clear GPU memory for the specific device
+                        torch.cuda.ipc_collect()
+                    except Exception as e:
+                        logger.debug(f"GPU cleanup error: {e}")
+                
+                # Aggressive garbage collection
+                import gc
+                gc.collect()
+                gc.collect()  # Call twice for better cleanup
+                
+                logger.debug(f"🗑️ Fully unloaded model with cleanup: {model_key}")
 
     # ==================== MODEL LIFECYCLE MANAGEMENT ====================
 
@@ -578,11 +618,131 @@ class AIModelManager:
             logger.info(f"🧹 Cleaning up {len(models_to_remove)} old models")
             for model_key in models_to_remove:
                 await self._unload_model(model_key)
+                
+    async def cleanup_all_models(self) -> None:
+        """Clean up all loaded models (for shutdown or emergency cleanup)"""
+        logger.info(f"🧹 Emergency cleanup: unloading all {len(self.loaded_models)} models")
+        
+        # Get all model keys to avoid modifying dict during iteration
+        model_keys = list(self.loaded_models.keys())
+        
+        for model_key in model_keys:
+            try:
+                await self._unload_model(model_key)
+            except Exception as e:
+                logger.error(f"Error unloading model {model_key} during cleanup: {e}")
+        
+        # Final cleanup
+        self.loaded_models.clear()
+        self.model_info.clear()
+        
+        # Force final garbage collection
+        import gc
+        gc.collect()
+        gc.collect()
+        
+        if self.has_gpu and torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                torch.cuda.ipc_collect()
+            except Exception as e:
+                logger.debug(f"Final GPU cleanup error: {e}")
+        
+        logger.info("✅ All models cleaned up successfully")
+                
+    def __del__(self):
+        """Destructor to ensure cleanup on garbage collection"""
+        try:
+            # Attempt synchronous cleanup as destructor can't be async
+            if hasattr(self, 'loaded_models') and self.loaded_models:
+                logger.warning("🚨 AIModelManager destroyed with models still loaded - forcing cleanup")
+                
+                for model_key, model in list(self.loaded_models.items()):
+                    try:
+                        if hasattr(model, 'cpu'):
+                            model.cpu()
+                        del model
+                    except:
+                        pass
+                
+                self.loaded_models.clear()
+                
+                if hasattr(self, 'model_info'):
+                    self.model_info.clear()
+                
+                # Force garbage collection
+                import gc
+                gc.collect()
+                
+                if self.has_gpu and torch.cuda.is_available():
+                    try:
+                        torch.cuda.empty_cache()
+                    except:
+                        pass
+        except Exception as e:
+            # Ensure destructor doesn't raise exceptions
+            pass
 
 # ==================== SERVICE INSTANCE ====================
 
 # Global AI Model Manager instance for use across the application
 ai_model_manager = AIModelManager()
+
+# Automatic cleanup scheduler
+import asyncio
+from typing import Optional
+
+class ModelCleanupScheduler:
+    """Automatic model cleanup scheduler to prevent memory leaks"""
+    
+    def __init__(self, model_manager: AIModelManager, cleanup_interval_minutes: int = 30):
+        self.model_manager = model_manager
+        self.cleanup_interval = cleanup_interval_minutes * 60  # Convert to seconds
+        self._cleanup_task: Optional[asyncio.Task] = None
+        self._stop_cleanup = False
+        
+    async def start_scheduled_cleanup(self):
+        """Start the automatic cleanup scheduler"""
+        if self._cleanup_task and not self._cleanup_task.done():
+            logger.warning("Cleanup scheduler already running")
+            return
+            
+        self._stop_cleanup = False
+        self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+        logger.info(f"🔄 Started AI model cleanup scheduler (every {self.cleanup_interval//60} minutes)")
+    
+    async def stop_scheduled_cleanup(self):
+        """Stop the automatic cleanup scheduler"""
+        self._stop_cleanup = True
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+        logger.info("⏹️ Stopped AI model cleanup scheduler")
+    
+    async def _cleanup_loop(self):
+        """Main cleanup loop"""
+        try:
+            while not self._stop_cleanup:
+                await asyncio.sleep(self.cleanup_interval)
+                
+                if self._stop_cleanup:
+                    break
+                    
+                try:
+                    await self.model_manager.cleanup_old_models(max_age_hours=2)
+                    logger.debug("🧹 Scheduled AI model cleanup completed")
+                except Exception as e:
+                    logger.error(f"❌ Scheduled cleanup error: {e}")
+                    
+        except asyncio.CancelledError:
+            logger.debug("Cleanup scheduler cancelled")
+            
+# Global cleanup scheduler instance
+model_cleanup_scheduler = ModelCleanupScheduler(ai_model_manager)
 
 # Integration with Phase 2 Service Registry
 def register_ai_model_manager():

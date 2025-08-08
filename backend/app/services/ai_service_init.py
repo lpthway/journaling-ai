@@ -10,7 +10,7 @@ from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
-def initialize_ai_services() -> Dict[str, Any]:
+async def initialize_ai_services() -> Dict[str, Any]:
     """
     Initialize all AI services and register them in the service registry
     
@@ -30,9 +30,20 @@ def initialize_ai_services() -> Dict[str, Any]:
         
         # Import and initialize AI Model Manager
         try:
-            from app.services.ai_model_manager import ai_model_manager
+            from app.services.ai_model_manager import ai_model_manager, model_cleanup_scheduler
+            await ai_model_manager.initialize()
             initialization_results["services_initialized"].append("ai_model_manager")
             logger.info("✅ AI Model Manager initialized")
+            
+            # Start automatic cleanup scheduler
+            try:
+                await model_cleanup_scheduler.start_scheduled_cleanup()
+                initialization_results["services_initialized"].append("model_cleanup_scheduler")
+                logger.info("✅ AI Model cleanup scheduler started")
+            except Exception as e:
+                initialization_results["errors"].append(f"Model cleanup scheduler: {str(e)}")
+                logger.warning(f"⚠️ Model cleanup scheduler failed to start: {e}")
+                
         except Exception as e:
             initialization_results["services_failed"].append("ai_model_manager")
             initialization_results["errors"].append(f"AI Model Manager: {str(e)}")
@@ -362,9 +373,74 @@ async def run_ai_services_health_check() -> Dict[str, Any]:
             "recommendations": [f"Fix AI services initialization: {str(e)}"]
         }
 
+async def cleanup_ai_services() -> Dict[str, Any]:
+    """
+    Clean up all AI services and their resources
+    
+    Returns:
+        Cleanup status and results
+    """
+    cleanup_results = {
+        "status": "success",
+        "services_cleaned": [],
+        "cleanup_errors": []
+    }
+    
+    try:
+        logger.info("🧹 Cleaning up AI Service Infrastructure...")
+        
+        # Stop model cleanup scheduler
+        try:
+            from app.services.ai_model_manager import model_cleanup_scheduler
+            await model_cleanup_scheduler.stop_scheduled_cleanup()
+            cleanup_results["services_cleaned"].append("model_cleanup_scheduler")
+            logger.info("✅ Model cleanup scheduler stopped")
+        except Exception as e:
+            cleanup_results["cleanup_errors"].append(f"Model cleanup scheduler: {str(e)}")
+            logger.error(f"❌ Error stopping cleanup scheduler: {e}")
+        
+        # Clean up AI Model Manager
+        try:
+            from app.services.ai_model_manager import ai_model_manager
+            await ai_model_manager.cleanup_all_models()
+            cleanup_results["services_cleaned"].append("ai_model_manager")
+            logger.info("✅ AI Model Manager cleaned up")
+        except Exception as e:
+            cleanup_results["cleanup_errors"].append(f"AI Model Manager: {str(e)}")
+            logger.error(f"❌ Error cleaning up AI Model Manager: {e}")
+        
+        # Clean up LLM Service
+        try:
+            from app.services.llm_service import llm_service
+            await llm_service.cleanup_resources()
+            cleanup_results["services_cleaned"].append("llm_service")
+            logger.info("✅ LLM Service cleaned up")
+        except Exception as e:
+            cleanup_results["cleanup_errors"].append(f"LLM Service: {str(e)}")
+            logger.error(f"❌ Error cleaning up LLM Service: {e}")
+        
+        # Set overall status
+        if cleanup_results["cleanup_errors"]:
+            cleanup_results["status"] = "partial" if cleanup_results["services_cleaned"] else "failed"
+        
+        logger.info(f"🎉 AI Service Infrastructure cleanup completed: {cleanup_results['status']}")
+        return cleanup_results
+        
+    except Exception as e:
+        error_result = {
+            "status": "failed",
+            "services_cleaned": [],
+            "cleanup_errors": [f"Critical cleanup error: {str(e)}"],
+            "exception": str(e)
+        }
+        
+        logger.error(f"💥 Critical AI Service Infrastructure cleanup failure: {e}")
+        return error_result
+
 # Export key functions
 __all__ = [
     'initialize_ai_services',
     'get_ai_services_status', 
-    'run_ai_services_health_check'
+    'run_ai_services_health_check',
+    'cleanup_ai_services'
 ]
