@@ -8,6 +8,7 @@ import Journal from './pages/Journal';
 import Topics from './pages/Topics';
 import Insights from './pages/Insights';
 import Chat from './pages/Chat';  // New import
+import EntryDetail from './pages/EntryDetail';
 import { healthCheck } from './services/api';
 
 function App() {
@@ -70,6 +71,12 @@ function App() {
             <Route 
               path="chat/:sessionId" 
               element={<Chat />}
+              loader={clearSearch}
+            />
+            {/* Entry Detail Route */}
+            <Route 
+              path="entry/:id" 
+              element={<EntryDetail />}
               loader={clearSearch}
             />
             <Route path="*" element={<Navigate to="/" replace />} />
