@@ -85,8 +85,8 @@ QUOTA_RESUME_FILE="${IMPL_DIR}/work_resume_${TIMESTAMP}.sh"
 CLAUDE_CMD=""
 
 # Timeout configuration (in seconds)
-CLAUDE_TIMEOUT=300      # 5 minutes for implementation tasks
-CLAUDE_QUICK_TIMEOUT=60 # 1 minute for quick operations
+CLAUDE_TIMEOUT=600      # 10 minutes for implementation tasks
+CLAUDE_QUICK_TIMEOUT=180 # 3 minutes for quick operations
 
 # Testing configuration
 BACKEND_TEST_CMD="cd backend && python -m pytest -v"
@@ -550,40 +550,79 @@ run_claude_with_quota_monitoring() {
         echo -e "${CYAN}Context: Working from $(pwd)${NC}"
     fi
     
-    # Run Claude with quota monitoring
+    echo -e "${CYAN}Debug: Running command: $CLAUDE_CMD -p \"[PROMPT_LENGTH: ${#prompt} chars]\" --output-format text${NC}"
+    echo -e "${BLUE}📝 Claude is working... (streaming output in real-time)${NC}"
+    echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━ CLAUDE OUTPUT START ━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # Create temp files for capturing output (for error handling)
     local claude_output=$(mktemp)
     local claude_error=$(mktemp)
     
-    echo -e "${CYAN}Debug: Running command: $CLAUDE_CMD -p \"[PROMPT_LENGTH: ${#prompt} chars]\" --output-format text${NC}"
-    echo -e "${BLUE}📝 Claude is working... (this may take a few minutes)${NC}"
-    echo ""
+    # Use script command for true real-time output or stdbuf as fallback
+    local streaming_cmd=""
+    if command -v stdbuf &> /dev/null; then
+        # Method 1: Use stdbuf to disable buffering for immediate output
+        streaming_cmd="stdbuf -oL -eL"
+    elif command -v unbuffer &> /dev/null; then
+        # Method 2: Use unbuffer (from expect package) for real-time output  
+        streaming_cmd="unbuffer"
+    else
+        # Method 3: Use script command for pseudo-terminal (most compatible)
+        streaming_cmd="script -qefc"
+    fi
     
-    # Run Claude with real-time output display using tee
-    if timeout "$timeout_duration" $CLAUDE_CMD -p "$prompt" --output-format text 2> "$claude_error" | tee "$claude_output"; then
-        # Success
-        echo ""
+    # Function to add colored prefixes to output lines
+    stream_with_prefix() {
+        while IFS= read -r line; do
+            echo -e "${GREEN}│${NC} $line"
+            echo "$line" >> "$claude_output"
+        done
+    }
+    
+    # Run Claude with real-time streaming
+    if [[ "$streaming_cmd" == "script -qefc" ]]; then
+        # Special handling for script command
+        if timeout "$timeout_duration" script -qefc "$CLAUDE_CMD -p '$prompt' --output-format text" /dev/null 2> "$claude_error" | stream_with_prefix; then
+            echo ""
+            echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━ CLAUDE OUTPUT END ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            rm -f "$claude_output" "$claude_error"
+            cd "$original_dir"
+            echo -e "${GREEN}✅ Claude operation successful${NC}"
+            return 0
+        fi
+    else
+        # Use stdbuf or unbuffer for line buffering
+        if timeout "$timeout_duration" $streaming_cmd $CLAUDE_CMD -p "$prompt" --output-format text 2> "$claude_error" | stream_with_prefix; then
+            echo ""
+            echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━ CLAUDE OUTPUT END ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            rm -f "$claude_output" "$claude_error"
+            cd "$original_dir"
+            echo -e "${GREEN}✅ Claude operation successful${NC}"
+            return 0
+        fi
+    fi
+    
+    # Handle errors
+    echo ""
+    echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━ CLAUDE OUTPUT END ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    # Check if it's a quota issue
+    local error_content=$(cat "$claude_error" 2>/dev/null || echo "")
+    local output_content=$(cat "$claude_output" 2>/dev/null || echo "")
+    local combined_content="$error_content $output_content"
+    
+    if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
+        echo -e "${RED}❌ Claude quota/rate limit reached: $output_content${NC}"
         rm -f "$claude_output" "$claude_error"
         cd "$original_dir"
-        echo -e "${GREEN}✅ Claude operation successful${NC}"
-        return 0
+        handle_claude_quota_exhausted "$task_id" "$combined_content"
+        return 2  # Special return code for quota
     else
-        # Check if it's a quota issue
-        local error_content=$(cat "$claude_error" 2>/dev/null || echo "")
-        local output_content=$(cat "$claude_output" 2>/dev/null || echo "")
-        local combined_content="$error_content $output_content"
-        
-        if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
-            echo -e "${RED}❌ Claude quota/rate limit reached: $output_content${NC}"
-            rm -f "$claude_output" "$claude_error"
-            cd "$original_dir"
-            handle_claude_quota_exhausted "$task_id" "$combined_content"
-            return 2  # Special return code for quota
-        else
-            echo -e "${RED}❌ Claude operation failed: stdout='$output_content' stderr='$error_content'${NC}"
-            rm -f "$claude_output" "$claude_error"
-            cd "$original_dir"
-            return 1
-        fi
+        echo -e "${RED}❌ Claude operation failed: stdout='$output_content' stderr='$error_content'${NC}"
+        rm -f "$claude_output" "$claude_error"
+        cd "$original_dir"
+        return 1
     fi
 }
 
