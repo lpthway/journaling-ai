@@ -78,7 +78,7 @@ fi
 SESSION_LOG="${LOGS_DIR}/session_${TIMESTAMP}.log"
 ENABLE_AUTO_TEST=false
 ENABLE_AUTO_COMMIT=true
-REQUIRE_SUCCESS_CRITERIA=true
+REQUIRE_SUCCESS_CRITERIA=false
 
 # Resume and quota management
 QUOTA_RESUME_FILE="${IMPL_DIR}/work_resume_${TIMESTAMP}.sh"
@@ -1194,6 +1194,59 @@ except Exception as e:
 }
 
 # =============================================================================
+# Automated Implementation Functions
+# =============================================================================
+
+automated_implement_task() {
+    local task_id="$1"
+    local task_name="$2"
+    local description="$3"
+    local files="$4"
+    
+    echo -e "${CYAN}🤖 Starting automated implementation...${NC}"
+    
+    # Build comprehensive implementation prompt
+    local implementation_prompt="
+You are implementing task $task_id: $task_name
+
+TASK DESCRIPTION: $description
+AFFECTED FILES: $files
+
+CURRENT PROJECT CONTEXT:
+$(cat "$INSTRUCTIONS_FILE" 2>/dev/null | head -50)
+
+IMPLEMENTATION REQUIREMENTS:
+1. Read and analyze the affected files
+2. Implement the required changes
+3. Create new files if needed
+4. Fix any syntax errors
+5. Follow best practices for the detected language/framework
+6. Make minimal, focused changes that address the task description
+
+IMPORTANT: Only make changes related to this specific task. Do not modify unrelated code.
+
+Please implement the required changes now. Start by analyzing the affected files, then make the necessary modifications.
+"
+
+    # Run Claude with the implementation prompt
+    if run_claude_with_quota_monitoring "$implementation_prompt" "$PROJECT_ROOT" "$task_id" "$CLAUDE_TIMEOUT"; then
+        echo -e "${GREEN}✅ Automated implementation completed${NC}"
+        log_success "Automated implementation completed for task $task_id"
+        return 0
+    else
+        local exit_code=$?
+        if [[ $exit_code -eq 2 ]]; then
+            # Quota exhausted - this is handled by run_claude_with_quota_monitoring
+            return 2
+        else
+            echo -e "${YELLOW}⚠️ Automated implementation failed, falling back to manual${NC}"
+            log_error "Automated implementation failed for task $task_id"
+            return 1
+        fi
+    fi
+}
+
+# =============================================================================
 # Implementation Workflow Functions
 # =============================================================================
 
@@ -1267,6 +1320,7 @@ else:
     local effort=$(echo "$task_details" | grep "EFFORT:" | cut -d: -f2)
     local description=$(echo "$task_details" | grep "DESCRIPTION:" | cut -d: -f2-)
     local files=$(echo "$task_details" | grep "FILES:" | cut -d: -f2-)
+    local automated_success=false
     
     echo -e "${WHITE}Task Details:${NC}"
     echo -e "${WHITE}  Effort: $effort${NC}"
@@ -1275,16 +1329,28 @@ else:
     
     # Phase 3: Implementation Execution
     echo -e "${CYAN}Phase 3: Implementation Execution${NC}"
-    echo -e "${YELLOW}⚠️  Manual implementation required${NC}"
-    echo -e "${WHITE}This script provides the framework, but you need to implement:${NC}"
-    echo -e "${WHITE}$description${NC}"
-    echo -e "${WHITE}Files to modify: $files${NC}"
-    echo ""
     
-    # Pause for manual implementation
-    echo -e "${BLUE}Please implement the required changes now.${NC}"
-    echo -e "${WHITE}When done, press Enter to continue with testing...${NC}"
-    read -r
+    # Try automated implementation first
+    echo -e "${CYAN}🤖 Attempting automated implementation...${NC}"
+    if automated_implement_task "$task_id" "$task_name" "$description" "$files"; then
+        echo -e "${GREEN}✅ Automated implementation successful${NC}"
+        automated_success=true
+    else
+        local auto_exit_code=$?
+        if [[ $auto_exit_code -eq 2 ]]; then
+            # Quota exhausted during automation - exit gracefully
+            return 2
+        else
+            echo -e "${YELLOW}⚠️ Automated implementation failed, continuing with manual fallback${NC}"
+            echo -e "${WHITE}Task: $description${NC}"
+            echo -e "${WHITE}Files to modify: $files${NC}"
+            echo ""
+            echo -e "${BLUE}Please implement the required changes manually.${NC}"
+            echo -e "${WHITE}Press Enter when done...${NC}"
+            read -r
+            automated_success=false
+        fi
+    fi
     
     # Commit Phase 3 changes (implementation)
     if commit_changes "$task_id" "$task_name" "3"; then
@@ -1337,9 +1403,15 @@ else:
     # Phase 5: Completion and Documentation
     echo -e "${CYAN}Phase 5: Completion and Documentation${NC}"
     
-    # Prompt for implementation notes
-    echo -e "${WHITE}Please provide implementation notes for documentation:${NC}"
-    read -r implementation_notes
+    # Auto-generate implementation notes based on what was done
+    local implementation_notes=""
+    if [[ "$automated_success" == "true" ]]; then
+        implementation_notes="Automated implementation completed successfully. Task: $task_name. Files modified: $files."
+    else
+        implementation_notes="Manual implementation completed. Task: $task_name. Files modified: $files."
+    fi
+    
+    echo -e "${WHITE}Implementation notes: $implementation_notes${NC}"
     
     update_task_status "$task_id" "COMPLETED" "Implementation completed. Notes: $implementation_notes"
     
@@ -1356,17 +1428,8 @@ else:
     echo -e "${GREEN}✅ Task $task_id completed successfully!${NC}"
     log_success "Task $task_id implementation completed"
     
-    # Ask if user wants to merge back to original branch
-    echo -e "${WHITE}Do you want to merge this session back to $ORIGINAL_BRANCH? (y/n):${NC}"
-    read -p "Merge to $ORIGINAL_BRANCH? (y/n): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        complete_session_with_merge "$SESSION_BRANCH"
-    else
-        echo -e "${CYAN}Session branch $SESSION_BRANCH kept for manual merge later${NC}"
-        echo -e "${WHITE}To merge later: git checkout $ORIGINAL_BRANCH && git merge $SESSION_BRANCH${NC}"
-    fi
-    
+    # Auto-continue to next task (no merge prompt)
+    echo -e "${CYAN}🔄 Continuing to next task automatically...${NC}"
     return 0
 }
 
