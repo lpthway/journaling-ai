@@ -830,7 +830,7 @@ check_claude_availability() {
         if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
             echo -e "${RED}❌ Claude quota exhausted${NC}"
             echo -e "${YELLOW}⚠️  Claude quota has been reached. Please wait for reset or try resume scripts.${NC}"
-            echo -e "${WHITE}💡 You may have resume scripts available in: $IMPL_DIR/${NC}"
+            echo -e "${WHITE}💡 You may have resume scripts available in: ${IMPL_DIR}/${NC}"
             echo -e "${WHITE}💡 Look for files like: work_resume_*.sh${NC}"
             return 2  # Quota exhausted
         elif [[ $exit_code -eq 124 ]]; then
@@ -2322,8 +2322,10 @@ main() {
         "work"|"--resume")
             print_banner
             initialize_session
+            set +e  # Temporarily disable exit on error for claude availability check
             check_claude_availability
             claude_status=$?
+            set -e  # Re-enable exit on error
             if [[ $claude_status -ne 0 ]]; then
                 if [[ $claude_status -eq 2 ]]; then
                     echo -e "${YELLOW}🚫 Cannot proceed: Claude quota exhausted${NC}"
