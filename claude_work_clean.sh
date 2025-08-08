@@ -27,7 +27,7 @@ NC='\033[0m' # No Color
 
 detect_original_branch() {
     # Try to detect the original branch from git history
-    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" "$line" 2>/dev/null)
+    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" 2>/dev/null)
     if [[ -n "$merge_commit" ]]; then
         # Extract branch name from merge commit message
         echo "$merge_commit" | sed -n 's/.*into \([^[:space:]]*\).*/\1/p'
@@ -204,7 +204,7 @@ try:
 except Exception as e:
     print(f'ERROR: {e}')
     sys.exit(1)
-" "$line" 2>/dev/null
+" 2>/dev/null
         return $?
     fi
     
@@ -283,7 +283,7 @@ try:
 except Exception as e:
     print(f'ERROR: {e}')
     sys.exit(1)
-" "$line" 2>/dev/null
+" 2>/dev/null
 }
 
 create_auto_resume_script() {
@@ -564,90 +564,130 @@ run_claude_with_quota_monitoring() {
     parse_claude_json() {
         local line="$1"
         if [[ -n "$line" ]]; then
+            # Parse Claude CLI stream-json format (system/user/assistant/result messages)
             python3 -c "
 import json
 import sys
 from datetime import datetime
 
 try:
-    line = sys.argv[1] if len(sys.argv) > 1 else ''; data = json.loads(line) if line else {}
+    data = json.loads('$line')
     event_type = data.get('type', '')
     timestamp = datetime.now().strftime('%H:%M:%S')
     
-    # Claude CLI uses different message types: system, user, assistant, result
-    if event_type == 'system':
-        print(f'🧠 [{timestamp}] System message')
-    elif event_type == 'user':
-        print(f'� [{timestamp}] User message processed')
-    elif event_type == 'assistant':
-        content = data.get('content', '')
-        if content and isinstance(content, str) and len(content.strip()) > 0:
-            # Real assistant text content
-            print(f'🤖 [{timestamp}] Claude: {content[:100]}...' if len(content) > 100 else f'🤖 [{timestamp}] Claude: {content}')
-        else:
-            print(f'🤖 [{timestamp}] Assistant is processing...')
-    elif event_type == 'result':
-        # CRITICAL: This is where Claude CLI shows tool usage!
-        content = data.get('content', [])
-        if isinstance(content, list):
-            for item in content:
-                if isinstance(item, dict):
-                    item_type = item.get('type', '')
-                    if item_type == 'tool_use':
-                        tool_name = item.get('name', 'unknown')
-                        tool_id = item.get('id', 'unknown')
-                        tool_input = item.get('input', {})
-                        
-                        print(f'🔧 [{timestamp}] Using tool: {tool_name} (ID: {tool_id})')
-                        
-                        # Show specific tool details
-                        if tool_name == 'create_file':
-                            file_path = tool_input.get('filePath', tool_input.get('file_path', 'unknown'))
-                            content_preview = str(tool_input.get('content', ''))[:50]
-                            print(f'📄 Creating: {file_path}')
-                            print(f'� Content preview: {content_preview}...')
-                        elif tool_name == 'replace_string_in_file':
-                            file_path = tool_input.get('filePath', 'unknown')
-                            old_str_preview = str(tool_input.get('oldString', ''))[:50]
-                            print(f'📝 Editing: {file_path}')
-                            print(f'🔄 Replacing: {old_str_preview}...')
-                        elif tool_name == 'read_file':
-                            file_path = tool_input.get('filePath', 'unknown')
-                            start_line = tool_input.get('startLine', 'N/A')
-                            end_line = tool_input.get('endLine', 'N/A')
-                            print(f'� Reading: {file_path} (lines {start_line}-{end_line})')
-                        elif tool_name == 'run_in_terminal':
-                            command = tool_input.get('command', 'unknown')
-                            print(f'⚡ Running: {command[:50]}...' if len(command) > 50 else f'⚡ Running: {command}')
-                        elif tool_name == 'list_dir':
-                            path = tool_input.get('path', 'unknown')
-                            print(f'📁 Listing directory: {path}')
-                        else:
-                            # Generic tool display
-                            print(f'⚙️  Tool parameters: {str(tool_input)[:100]}...' if len(str(tool_input)) > 100 else f'⚙️  Tool parameters: {tool_input}')
-                    elif item_type == 'text':
-                        text_content = item.get('text', '')
-                        if text_content and len(text_content.strip()) > 0:
-                            print(f'💬 [{timestamp}] {text_content[:200]}...' if len(text_content) > 200 else f'💬 [{timestamp}] {text_content}')
+    # Handle different types of Claude events
+    if event_type == 'message_start':
+        print(f'🚀 [{timestamp}] Claude started processing...')
+        if 'message' in data and 'usage' in data['message']:
+            usage = data['message']['usage']
+            print(f'📊 Input tokens: {usage.get(\"input_tokens\", \"N/A\")}')
+    
+    elif event_type == 'content_block_start':
+        block = data.get('content_block', {})
+        block_type = block.get('type', 'unknown')
+        if block_type == 'text':
+            print(f'💭 [{timestamp}] Claude is thinking/writing...')
+        elif block_type == 'tool_use':
+            tool_name = block.get('name', 'unknown')
+            tool_input = block.get('input', {})
+            print(f'🔧 [{timestamp}] Claude is using tool: {tool_name}')
+            # Show tool parameters if available
+            if tool_input:
+                print(f'   Parameters: {str(tool_input)[:100]}...' if len(str(tool_input)) > 100 else f'   Parameters: {tool_input}')
+    
+    elif event_type == 'content_block_delta':
+        delta = data.get('delta', {})
+        if delta.get('type') == 'text_delta':
+            text = delta.get('text', '')
+            if text:
+                # This is the actual content - display it inline
+                print(f'{text}', end='', flush=True)
+        elif delta.get('type') == 'input_json_delta':
+            partial_json = delta.get('partial_json', '')
+            if partial_json:
+                print(f'🔧 [{timestamp}] Tool input: {partial_json}')
+    
+    elif event_type == 'content_block_stop':
+        print(f'')  # New line after content block
+        print(f'✅ [{timestamp}] Content block completed')
+    
+    elif event_type == 'message_delta':
+        delta = data.get('delta', {})
+        if 'usage' in delta:
+            usage = delta['usage']
+            print(f'📊 [{timestamp}] Output tokens: {usage.get(\"output_tokens\", \"N/A\")}')
+    
+    elif event_type == 'message_stop':
+        print(f'🏁 [{timestamp}] Claude finished processing')
+        if 'message' in data and 'usage' in data['message']:
+            usage = data['message']['usage']
+            total_tokens = usage.get('input_tokens', 0) + usage.get('output_tokens', 0)
+            print(f'📊 Final token usage: {usage.get(\"input_tokens\", 0)} in + {usage.get(\"output_tokens\", 0)} out = {total_tokens} total')
+    
     elif event_type == 'error':
         error_msg = data.get('error', {}).get('message', 'Unknown error')
         print(f'❌ [{timestamp}] Error: {error_msg}')
+    
     elif event_type == 'ping':
-        print(f'� [{timestamp}] Connection alive')
+        print(f'💓 [{timestamp}] Connection alive')
+    
+    # Enhanced handling for general conversation events
+    elif event_type == 'system':
+        print(f'🧠 [{timestamp}] System message')
+    elif event_type == 'assistant':
+        # Check if this contains actual content
+        content = data.get('content', '')
+        if content and isinstance(content, str) and len(content.strip()) > 0:
+            print(f'🤖 [{timestamp}] Assistant response:')
+            print(f'{content}')
+        elif isinstance(content, list) and len(content) > 0:
+            # Handle content blocks
+            print(f'🤖 [{timestamp}] Assistant responding...')
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get('type') == 'text':
+                        text_content = block.get('text', '')
+                        if text_content:
+                            print(f'💬 {text_content}')
+                    elif block.get('type') == 'tool_use':
+                        tool_name = block.get('name', 'unknown')
+                        tool_input = block.get('input', {})
+                        print(f'🔧 Using tool: {tool_name}')
+                        if tool_input:
+                            print(f'   Input: {str(tool_input)[:200]}...' if len(str(tool_input)) > 200 else f'   Input: {tool_input}')
+        else:
+            # Sometimes assistant events just indicate processing
+            print(f'🤖 [{timestamp}] Assistant is processing...')
+    elif event_type == 'user':
+        print(f'👤 [{timestamp}] User message processed')
     else:
-        # For debugging other event types
+        # For any other events, show more detailed info
         if event_type:
-            print(f'📡 [{timestamp}] Event: {event_type}')
+            # Try to extract any text content for display
+            content = data.get('content', data.get('text', data.get('message', data.get('delta', {}))))
+            
+            # Handle different content types
+            if isinstance(content, dict):
+                # Check for text in nested structures
+                text_content = content.get('text', content.get('content', ''))
+                if text_content and isinstance(text_content, str) and len(text_content.strip()) > 0:
+                    print(f'� [{timestamp}] {event_type}: {text_content[:200]}...' if len(text_content) > 200 else f'💬 [{timestamp}] {event_type}: {text_content}')
+                else:
+                    print(f'�📡 [{timestamp}] Event: {event_type}')
+            elif isinstance(content, str) and len(content.strip()) > 0:
+                print(f'💬 [{timestamp}] {event_type}: {content[:200]}...' if len(content) > 200 else f'� [{timestamp}] {event_type}: {content}')
+            else:
+                print(f'📡 [{timestamp}] Event: {event_type}')
 
 except json.JSONDecodeError:
-    # Not valid JSON, might be direct text output
-    if line and len(line.strip()) > 0:
-        print(f'📄 [{timestamp}] Direct output: {line}')
+    # If it's not JSON, it might be plain text output - show it
+    if '$line' and len('$line'.strip()) > 0:
+        print(f'📄 Direct output: $line')
 except Exception as e:
-    # For debugging
-    if '$line' and len('$line'.strip()) > 0 and len('$line') < 200:
-        print(f'🔍 [{timestamp}] Raw: {line}')
-" "$line" 2>/dev/null
+    # For debugging, show what we couldn't parse (but limit to avoid spam)
+    if '$line' and len('$line'.strip()) > 0 and len('$line') < 500:
+        print(f'🔍 Raw: $line')
+" 2>/dev/null
         fi
     }
     
@@ -657,7 +697,10 @@ except Exception as e:
         
         while IFS= read -r line; do
             if [[ -n "$line" ]]; then
-                # Parse and display Claude's real-time activity
+                # Show the raw JSON stream for debugging (optional)
+                echo -e "${PURPLE}│ Raw:${NC} $line" >> "$claude_output"
+                
+                # Parse and display Claude's comprehensive activity
                 local claude_activity=$(parse_claude_json "$line")
                 if [[ -n "$claude_activity" ]]; then
                     echo -e "${CYAN}│${NC} $claude_activity"
@@ -703,8 +746,8 @@ except Exception as e:
     echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━ CLAUDE OUTPUT END ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
     # Check if it's a quota issue
-    local error_content=$(cat "$claude_error" "$line" 2>/dev/null || echo "")
-    local output_content=$(cat "$claude_output" "$line" 2>/dev/null || echo "")
+    local error_content=$(cat "$claude_error" 2>/dev/null || echo "")
+    local output_content=$(cat "$claude_output" 2>/dev/null || echo "")
     local combined_content="$error_content $output_content"
     
     if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
@@ -1173,13 +1216,13 @@ complete_session_with_merge() {
     
     # Switch back to original branch
     echo -e "${CYAN}Switching to original branch: $ORIGINAL_BRANCH${NC}"
-    if git checkout "$ORIGINAL_BRANCH" "$line" 2>/dev/null; then
+    if git checkout "$ORIGINAL_BRANCH" 2>/dev/null; then
         echo -e "${GREEN}✅ Switched to $ORIGINAL_BRANCH${NC}"
         
         # Pull latest changes (if it's a remote-tracking branch)
         if git rev-parse --verify "origin/$ORIGINAL_BRANCH" >/dev/null 2>&1; then
             echo -e "${CYAN}Pulling latest changes from origin/$ORIGINAL_BRANCH...${NC}"
-            git pull origin "$ORIGINAL_BRANCH" "$line" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not pull from origin${NC}"
+            git pull origin "$ORIGINAL_BRANCH" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not pull from origin${NC}"
         fi
         
         # Merge the session branch
@@ -1351,7 +1394,7 @@ TASK DESCRIPTION: $description
 AFFECTED FILES: $files
 
 CURRENT PROJECT CONTEXT:
-$(cat "$INSTRUCTIONS_FILE" "$line" 2>/dev/null | head -50)
+$(cat "$INSTRUCTIONS_FILE" 2>/dev/null | head -50)
 
 IMPLEMENTATION REQUIREMENTS:
 1. Read and analyze the affected files
@@ -1624,12 +1667,12 @@ initialize_session() {
     else
         echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
         echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
-        if git checkout -b "$SESSION_BRANCH" "$line" 2>/dev/null; then
+        if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
             echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
             log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
         else
             echo -e "${YELLOW}Branch may already exist - attempting to switch to it${NC}"
-            if git checkout "$SESSION_BRANCH" "$line" 2>/dev/null; then
+            if git checkout "$SESSION_BRANCH" 2>/dev/null; then
                 echo -e "${GREEN}Switched to existing session branch: $SESSION_BRANCH${NC}"
                 log_action "Switched to existing session branch: $SESSION_BRANCH"
             else

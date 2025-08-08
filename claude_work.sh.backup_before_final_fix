@@ -27,7 +27,7 @@ NC='\033[0m' # No Color
 
 detect_original_branch() {
     # Try to detect the original branch from git history
-    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" "$line" 2>/dev/null)
+    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" 2>/dev/null)
     if [[ -n "$merge_commit" ]]; then
         # Extract branch name from merge commit message
         echo "$merge_commit" | sed -n 's/.*into \([^[:space:]]*\).*/\1/p'
@@ -204,7 +204,7 @@ try:
 except Exception as e:
     print(f'ERROR: {e}')
     sys.exit(1)
-" "$line" 2>/dev/null
+" 2>/dev/null
         return $?
     fi
     
@@ -283,7 +283,7 @@ try:
 except Exception as e:
     print(f'ERROR: {e}')
     sys.exit(1)
-" "$line" 2>/dev/null
+" 2>/dev/null
 }
 
 create_auto_resume_script() {
@@ -570,7 +570,7 @@ import sys
 from datetime import datetime
 
 try:
-    line = sys.argv[1] if len(sys.argv) > 1 else ''; data = json.loads(line) if line else {}
+    data = json.loads('$line')
     event_type = data.get('type', '')
     timestamp = datetime.now().strftime('%H:%M:%S')
     
@@ -641,13 +641,13 @@ try:
 
 except json.JSONDecodeError:
     # Not valid JSON, might be direct text output
-    if line and len(line.strip()) > 0:
-        print(f'📄 [{timestamp}] Direct output: {line}')
+    if '$line' and len('$line'.strip()) > 0:
+        print(f'📄 [{timestamp}] Direct output: $line')
 except Exception as e:
     # For debugging
     if '$line' and len('$line'.strip()) > 0 and len('$line') < 200:
-        print(f'🔍 [{timestamp}] Raw: {line}')
-" "$line" 2>/dev/null
+        print(f'🔍 [{timestamp}] Raw: $line')
+" 2>/dev/null
         fi
     }
     
@@ -703,8 +703,8 @@ except Exception as e:
     echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━ CLAUDE OUTPUT END ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
     # Check if it's a quota issue
-    local error_content=$(cat "$claude_error" "$line" 2>/dev/null || echo "")
-    local output_content=$(cat "$claude_output" "$line" 2>/dev/null || echo "")
+    local error_content=$(cat "$claude_error" 2>/dev/null || echo "")
+    local output_content=$(cat "$claude_output" 2>/dev/null || echo "")
     local combined_content="$error_content $output_content"
     
     if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
@@ -1173,13 +1173,13 @@ complete_session_with_merge() {
     
     # Switch back to original branch
     echo -e "${CYAN}Switching to original branch: $ORIGINAL_BRANCH${NC}"
-    if git checkout "$ORIGINAL_BRANCH" "$line" 2>/dev/null; then
+    if git checkout "$ORIGINAL_BRANCH" 2>/dev/null; then
         echo -e "${GREEN}✅ Switched to $ORIGINAL_BRANCH${NC}"
         
         # Pull latest changes (if it's a remote-tracking branch)
         if git rev-parse --verify "origin/$ORIGINAL_BRANCH" >/dev/null 2>&1; then
             echo -e "${CYAN}Pulling latest changes from origin/$ORIGINAL_BRANCH...${NC}"
-            git pull origin "$ORIGINAL_BRANCH" "$line" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not pull from origin${NC}"
+            git pull origin "$ORIGINAL_BRANCH" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not pull from origin${NC}"
         fi
         
         # Merge the session branch
@@ -1351,7 +1351,7 @@ TASK DESCRIPTION: $description
 AFFECTED FILES: $files
 
 CURRENT PROJECT CONTEXT:
-$(cat "$INSTRUCTIONS_FILE" "$line" 2>/dev/null | head -50)
+$(cat "$INSTRUCTIONS_FILE" 2>/dev/null | head -50)
 
 IMPLEMENTATION REQUIREMENTS:
 1. Read and analyze the affected files
@@ -1624,12 +1624,12 @@ initialize_session() {
     else
         echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
         echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
-        if git checkout -b "$SESSION_BRANCH" "$line" 2>/dev/null; then
+        if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
             echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
             log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
         else
             echo -e "${YELLOW}Branch may already exist - attempting to switch to it${NC}"
-            if git checkout "$SESSION_BRANCH" "$line" 2>/dev/null; then
+            if git checkout "$SESSION_BRANCH" 2>/dev/null; then
                 echo -e "${GREEN}Switched to existing session branch: $SESSION_BRANCH${NC}"
                 log_action "Switched to existing session branch: $SESSION_BRANCH"
             else
