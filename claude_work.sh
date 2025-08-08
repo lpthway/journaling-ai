@@ -778,8 +778,8 @@ check_claude_availability() {
     
     # Check if claude is installed
     if command -v claude &> /dev/null; then
-        CLAUDE_CMD="claude"
-        echo -e "${GREEN}✅ Found Claude CLI as 'claude'${NC}"
+        CLAUDE_CMD="claude --dangerously-skip-permissions"
+        echo -e "${GREEN}✅ Found Claude CLI as 'claude' (with permissions bypass)${NC}"
     else
         echo -e "${RED}❌ ERROR: Claude CLI not found${NC}"
         echo -e "${WHITE}Please install it with: curl -fsSL claude.ai/install.sh | bash${NC}"
@@ -1414,36 +1414,38 @@ PROJECT CONTEXT:
 This is a journaling application with React frontend and Python backend.
 
 AVAILABLE TOOLS (use these exact names):
-- create_file: Create new files with specified content
-- replace_string_in_file: Modify existing files by replacing specific text
-- read_file: Read files with line range specification
-- list_dir: List directory contents
-- run_in_terminal: Execute shell commands
-- get_errors: Check for syntax/compilation errors
+- Write: Create new files or completely overwrite existing files
+- Edit: Make exact string replacements in existing files
+- MultiEdit: Make multiple edits to a single file in one operation
+- Read: Read file contents with optional line range
+- LS: List directory contents
+- Bash: Execute shell commands
+- Glob: Find files using patterns
+- Grep: Search file contents
 
 CRITICAL: You must use these exact tool names. Do NOT use:
-- Edit, Write, MultiEdit, Task, TodoWrite (these don't exist)
-- Use ONLY the tools listed above
+- create_file, replace_string_in_file, read_file, list_dir, run_in_terminal (these don't exist)
+- Use ONLY the Claude CLI tools listed above
 
 SELF-DEBUGGING WORKFLOW:
-1. ANALYZE: Use read_file to understand current state of affected files
+1. ANALYZE: Use Read tool to understand current state of affected files
 2. PLAN: Identify exactly what needs to be changed
-3. IMPLEMENT: Use replace_string_in_file to make changes step by step
-4. VALIDATE: Use get_errors to check for problems after each change
-5. FIX: If errors found, use replace_string_in_file to fix them immediately
-6. VERIFY: Use read_file to confirm changes are correct
+3. IMPLEMENT: Use Edit tool to make changes step by step
+4. VALIDATE: Use Bash tool to check for problems after each change (e.g., python -m py_compile)
+5. FIX: If errors found, use Edit tool to fix them immediately
+6. VERIFY: Use Read tool to confirm changes are correct
 
 IMPLEMENTATION REQUIREMENTS:
-1. Start by using read_file on all affected files to understand current state
-2. Use get_errors on existing files to identify any pre-existing issues
-3. Make changes using ONLY replace_string_in_file tool
-4. After EACH file modification, use get_errors to check for syntax errors
-5. If errors detected, immediately fix with replace_string_in_file
-6. Create new files only if needed using create_file tool
+1. Start by using Read tool on all affected files to understand current state
+2. Use Bash tool to check for syntax errors in existing files (e.g., python -m py_compile file.py)
+3. Make changes using ONLY Edit tool for modifications or Write tool for new files
+4. After EACH file modification, use Bash tool to check for syntax errors
+5. If errors detected, immediately fix with Edit tool
+6. Create new files only if needed using Write tool
 7. Follow React/JavaScript best practices for frontend files
 8. Follow Python/FastAPI best practices for backend files
 9. Make focused changes that directly address the task description
-10. Always verify changes by using read_file to read the modified sections back
+10. Always verify changes by using Read tool to read the modified sections back
 
 ERROR PREVENTION AND FIXING:
 - Before making any change, use read_file to understand existing code structure
@@ -1455,29 +1457,29 @@ ERROR PREVENTION AND FIXING:
 - Test that routing paths match between components
 
 DEBUGGING CHECKLIST:
-□ Use read_file on all affected files first
-□ Use get_errors to check for existing errors before starting
-□ Make one change at a time using replace_string_in_file
-□ Use get_errors after each change to validate
-□ Fix any syntax errors immediately with replace_string_in_file
-□ Use read_file to verify final result
+□ Use Read tool on all affected files first
+□ Use Bash tool to check for existing errors before starting
+□ Make one change at a time using Edit tool
+□ Use Bash tool after each change to validate (python -m py_compile, node --check, etc.)
+□ Fix any syntax errors immediately with Edit tool
+□ Use Read tool to verify final result
 □ Ensure all imports and dependencies are correct
 
 TOOL USAGE EXAMPLES:
-- Reading: read_file with filePath, startLine, endLine
-- Editing: replace_string_in_file with filePath, oldString, newString  
-- Creating: create_file with filePath, content
-- Checking: get_errors with filePaths array
-- Listing: list_dir with path
+- Reading: Read with file path and optional line range
+- Editing: Edit with file path, old string, and new string  
+- Creating: Write with file path and content
+- Checking: Bash with validation commands (python -m py_compile, etc.)
+- Listing: LS with directory path
 
 CRITICAL REMINDERS:
-- You CAN create and modify files - use the correct tools listed above
-- NEVER use Edit, Write, MultiEdit, Task, or TodoWrite tools
-- ALWAYS use get_errors after making changes
+- You CAN create and modify files - use the correct Claude CLI tools listed above
+- NEVER use create_file, replace_string_in_file, read_file, list_dir, run_in_terminal, get_errors (these don't exist)
+- ALWAYS use Bash tool for validation after making changes
 - Fix any errors immediately when detected
 - Focus only on changes related to this specific task
-- Use replace_string_in_file for ALL file modifications
-- Include sufficient context in oldString for unique matching
+- Use Edit tool for ALL file modifications
+- Include sufficient context in old string for unique matching
 
 Please implement the required changes now using ONLY the tools listed above.
 "
