@@ -620,6 +620,93 @@ class EnhancedEntryRepository(EnhancedBaseRepository[Entry]):
             logger.error(f"Error batch updating search vectors: {e}")
             raise RepositoryException(f"Batch search vector update failed", context={"error": str(e)})
     
+    @cached(ttl=180, key_prefix="bulk_entries", monitor_performance=True)
+    async def get_entries_bulk_by_ids(
+        self,
+        entry_ids: List[str],
+        include_topic: bool = True,
+        include_user: bool = False
+    ) -> Dict[str, Entry]:
+        """
+        Bulk load entries by IDs using optimized query
+        Fixes N+1 query pattern in search results enrichment
+        """
+        try:
+            if not entry_ids:
+                return {}
+            
+            # Build query options
+            query_options = []
+            if include_topic:
+                query_options.append(selectinload(Entry.topic))
+            if include_user:
+                query_options.append(selectinload(Entry.user))
+            
+            # Single query to load all entries
+            query = select(Entry)
+            if query_options:
+                query = query.options(*query_options)
+            
+            query = query.where(
+                and_(
+                    Entry.id.in_(entry_ids),
+                    Entry.deleted_at.is_(None)
+                )
+            )
+            
+            result = await self.session.execute(query)
+            entries = list(result.scalars().all())
+            
+            # Return as dictionary keyed by ID for easy lookup
+            entries_dict = {str(entry.id): entry for entry in entries}
+            
+            logger.info(f"Bulk loaded {len(entries)} entries for {len(entry_ids)} requested IDs")
+            return entries_dict
+            
+        except Exception as e:
+            logger.error(f"Error bulk loading entries: {e}")
+            raise RepositoryException(f"Bulk entry loading failed", context={"entry_count": len(entry_ids), "error": str(e)})
+    
+    @cached(ttl=900, key_prefix="recent_entries_optimized", monitor_performance=True)
+    async def get_recent_entries_optimized(
+        self,
+        user_id: str,
+        limit: int = 20,
+        include_topics: bool = True,
+        days_back: int = 30
+    ) -> List[Entry]:
+        """
+        Get recent entries with optimized loading to prevent N+1 queries
+        """
+        try:
+            cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+            
+            query_options = []
+            if include_topics:
+                query_options.append(selectinload(Entry.topic))
+            
+            query = select(Entry)
+            if query_options:
+                query = query.options(*query_options)
+            
+            query = query.where(
+                and_(
+                    Entry.user_id == user_id,
+                    Entry.created_at >= cutoff_date,
+                    Entry.deleted_at.is_(None)
+                )
+            ).order_by(Entry.created_at.desc()).limit(limit)
+            
+            result = await self.session.execute(query)
+            entries = list(result.scalars().all())
+            
+            logger.info(f"Loaded {len(entries)} recent entries with optimized query")
+            return entries
+            
+        except Exception as e:
+            logger.error(f"Error loading recent entries optimized: {e}")
+            raise RepositoryException(f"Recent entries loading failed", context={"user_id": user_id, "error": str(e)})
+    
     @cached(ttl=300, key_prefix="entry_count", monitor_performance=True)
     async def get_entry_count(self, user_id: str, **filters) -> int:
         """Get entry count with caching for pagination"""

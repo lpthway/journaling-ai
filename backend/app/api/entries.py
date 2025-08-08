@@ -157,15 +157,38 @@ async def search_entries(
         async with performance_monitor.timed_operation("semantic_search", {"query_length": len(query)}):
             results = await vector_service.search_entries(query, limit, filters)
         
-        # Enrich results with full entry data from unified service
-        enriched_results = []
-        for result in results:
-            entry = await unified_db_service.get_entry(result['id'], use_cache=True)
-            if entry:
-                enriched_results.append({
-                    'entry': EntryResponse(**entry.__dict__),
-                    'similarity': result['similarity']
-                })
+        # Optimized: Bulk load entries to prevent N+1 queries
+        entry_ids = [result['id'] for result in results]
+        
+        # Use bulk loading method from enhanced repository
+        try:
+            from app.repositories.enhanced_entry_repository import EnhancedEntryRepository
+            from app.core.database import get_session
+            
+            async with get_session() as db_session:
+                entry_repo = EnhancedEntryRepository(db_session)
+                entries_dict = await entry_repo.get_entries_bulk_by_ids(entry_ids, include_topic=True)
+            
+            # Build enriched results with bulk-loaded data
+            enriched_results = []
+            for result in results:
+                entry = entries_dict.get(result['id'])
+                if entry:
+                    enriched_results.append({
+                        'entry': EntryResponse(**entry.__dict__),
+                        'similarity': result['similarity']
+                    })
+        except Exception as e:
+            logger.warning(f"Bulk loading failed, falling back to individual loads: {e}")
+            # Fallback to original method if bulk loading fails
+            enriched_results = []
+            for result in results:
+                entry = await unified_db_service.get_entry(result['id'], use_cache=True)
+                if entry:
+                    enriched_results.append({
+                        'entry': EntryResponse(**entry.__dict__),
+                        'similarity': result['similarity']
+                    })
         
         return {
             'results': enriched_results,

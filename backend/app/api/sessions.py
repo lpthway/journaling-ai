@@ -97,17 +97,44 @@ async def get_sessions(
     limit: int = Query(20, ge=1, le=100),
     status: Optional[SessionStatus] = Query(None)
 ):
-    """Get conversation sessions"""
+    """Get conversation sessions with optimized bulk loading"""
     try:
-        sessions = await session_service.get_sessions(limit=limit, status=status)
+        # Use optimized bulk loading to prevent N+1 queries
+        session_data_list = await session_service.get_sessions_with_recent_messages(
+            user_id="default",  # This would come from auth context
+            limit=limit,
+            status=status.value if status else None,
+            message_limit=3
+        )
         
-        # Add recent messages to each session
         session_responses = []
-        for session in sessions:
-            recent_messages = await session_service.get_recent_messages(session.id, 3)
+        for session_data in session_data_list:
+            session_info = session_data['session']
+            recent_messages = session_data['recent_messages']
+            
             session_responses.append(SessionResponse(
-                **session.model_dump(),
-                recent_messages=[MessageResponse(**msg.model_dump()) for msg in recent_messages]
+                id=session_info['id'],
+                session_type=session_info['session_type'],
+                title=session_info['title'],
+                description=session_info.get('description'),
+                status=session_info['status'],
+                created_at=session_info['created_at'],
+                updated_at=session_info['updated_at'],
+                last_activity=session_info.get('last_activity'),
+                message_count=session_info.get('message_count', 0),
+                tags=session_info.get('tags', []),
+                metadata=session_info.get('session_metadata', {}),
+                recent_messages=[
+                    MessageResponse(
+                        id=msg['id'],
+                        session_id=session_info['id'],
+                        content=msg['content'],
+                        role=msg['role'],
+                        timestamp=msg['timestamp'],
+                        metadata=msg.get('metadata', {})
+                    )
+                    for msg in recent_messages
+                ]
             ))
         
         return session_responses
@@ -190,14 +217,15 @@ async def send_message(session_id: str, message_data: MessageCreate):
             MessageCreate(content=message_data.content, role=MessageRole.USER, metadata=message_data.metadata)
         )
         
-        # Get conversation history for context
-        conversation_history = await session_service.get_session_messages(session_id)
+        # Get conversation history for context - Optimized to get only recent messages needed for AI context
+        # This prevents loading full conversation history for each response
+        conversation_history = await session_service.get_recent_messages(session_id, 10)
         
         # Generate AI response - FIXED: Only expect string response
         ai_response_text = await conversation_service.generate_response(
             session.session_type,
             message_data.content,
-            conversation_history,
+            conversation_history,  # Now uses recent messages instead of full history
             session.metadata
         )
         

@@ -624,6 +624,118 @@ class EnhancedSessionRepository(EnhancedBaseRepository[ChatSession]):
         except Exception as e:
             logger.warning(f"Failed to archive session in Redis: {e}")
     
+    @cached(ttl=300, key_prefix="sessions_with_messages", monitor_performance=True)
+    async def get_sessions_with_recent_messages(
+        self,
+        user_id: str,
+        limit: int = 20,
+        status: Optional[str] = None,
+        session_type: Optional[str] = None,
+        message_limit: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Get sessions with recent messages using optimized bulk loading
+        Fixes N+1 query pattern in sessions API
+        """
+        try:
+            # Build conditions
+            conditions = [
+                ChatSession.user_id == user_id,
+                ChatSession.deleted_at.is_(None)
+            ]
+            
+            if status:
+                conditions.append(ChatSession.status == status)
+            if session_type:
+                conditions.append(ChatSession.session_type == session_type)
+            
+            # Get sessions with eager loading
+            sessions_query = select(ChatSession).options(
+                selectinload(ChatSession.user)
+            ).where(and_(*conditions)).order_by(
+                ChatSession.last_activity.desc()
+            ).limit(limit)
+            
+            result = await self.session.execute(sessions_query)
+            sessions = list(result.scalars().all())
+            
+            if not sessions:
+                return []
+            
+            # Get all session IDs for bulk message loading
+            session_ids = [str(session.id) for session in sessions]
+            
+            # Bulk load recent messages for all sessions
+            # This uses a single query instead of N queries
+            messages_query = select(
+                ChatMessage.session_id,
+                ChatMessage.id,
+                ChatMessage.content,
+                ChatMessage.role,
+                ChatMessage.timestamp,
+                ChatMessage.message_metadata,
+                func.row_number().over(
+                    partition_by=ChatMessage.session_id,
+                    order_by=ChatMessage.timestamp.desc()
+                ).label('rn')
+            ).where(
+                ChatMessage.session_id.in_(session_ids)
+            )
+            
+            # Create subquery to get only the most recent messages
+            messages_subquery = messages_query.subquery()
+            recent_messages_query = select(messages_subquery).where(
+                messages_subquery.c.rn <= message_limit
+            ).order_by(
+                messages_subquery.c.session_id,
+                messages_subquery.c.timestamp.asc()
+            )
+            
+            messages_result = await self.session.execute(recent_messages_query)
+            messages_by_session = {}
+            
+            for row in messages_result.all():
+                session_id = str(row.session_id)
+                if session_id not in messages_by_session:
+                    messages_by_session[session_id] = []
+                
+                messages_by_session[session_id].append({
+                    'id': str(row.id),
+                    'content': row.content,
+                    'role': row.role,
+                    'timestamp': row.timestamp,
+                    'metadata': row.message_metadata or {}
+                })
+            
+            # Combine sessions with their messages
+            result_list = []
+            for session in sessions:
+                session_id = str(session.id)
+                session_data = {
+                    'session': {
+                        'id': session_id,
+                        'session_type': session.session_type,
+                        'title': session.title,
+                        'description': session.description,
+                        'status': session.status,
+                        'created_at': session.created_at,
+                        'updated_at': session.updated_at,
+                        'last_activity': session.last_activity,
+                        'message_count': session.message_count or 0,
+                        'tags': session.tags or [],
+                        'session_metadata': session.session_metadata or {}
+                    },
+                    'recent_messages': messages_by_session.get(session_id, [])
+                }
+                result_list.append(session_data)
+            
+            logger.info(f"Bulk loaded {len(sessions)} sessions with messages using optimized query")
+            return result_list
+            
+        except Exception as e:
+            logger.error(f"Error bulk loading sessions with messages: {e}")
+            raise RepositoryException(f"Bulk session loading failed", context={"user_id": user_id, "error": str(e)})
+    
     @cached(ttl=600, key_prefix="session_count")
     async def get_session_count(self, user_id: str, **filters) -> int:
         """Get session count with caching for pagination"""
