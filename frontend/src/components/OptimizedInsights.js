@@ -1,28 +1,7 @@
 // frontend/src/components/OptimizedInsights.js - High-Performance Insights Component
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const OptimizedInsights = () => {
   const [insights, setInsights] = useState(null);
@@ -106,33 +85,61 @@ const OptimizedInsights = () => {
     if (!moodData?.daily_mood_scores) return null;
 
     const dates = Object.keys(moodData.daily_mood_scores).sort();
-    const scores = dates.map(date => moodData.daily_mood_scores[date]);
+    const chartData = dates.map(date => ({
+      date: new Date(date).toLocaleDateString(),
+      moodScore: moodData.daily_mood_scores[date]
+    }));
 
-    const chartData = {
-      labels: dates.map(date => new Date(date).toLocaleDateString()),
-      datasets: [
-        {
-          label: 'Mood Score',
-          data: scores,
-          borderColor: 'rgb(59, 130, 246)',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          tension: 0.4,
-        },
-      ],
+    const CustomTooltip = ({ active, payload, label }) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+            <p className="text-sm font-medium">{label}</p>
+            <p className="text-sm text-blue-600">
+              Mood Score: {payload[0].value?.toFixed(2)}
+            </p>
+          </div>
+        );
+      }
+      return null;
     };
 
-    const options = {
-      responsive: true,
-      plugins: {
-        legend: { position: 'top' },
-        title: { display: true, text: 'Mood Trends Over Time' },
-      },
-      scales: {
-        y: { beginAtZero: false, min: -1, max: 1 },
-      },
-    };
-
-    return <Line data={chartData} options={options} />;
+    return (
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis 
+              dataKey="date" 
+              tick={{ fontSize: 12 }}
+              stroke="#6b7280"
+            />
+            <YAxis 
+              domain={[-1, 1]}
+              tick={{ fontSize: 12 }}
+              stroke="#6b7280"
+              tickFormatter={(value) => {
+                if (value === 1) return 'Positive';
+                if (value === 0) return 'Neutral';
+                if (value === -1) return 'Negative';
+                return value.toFixed(1);
+              }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend />
+            <Line 
+              type="monotone" 
+              dataKey="moodScore"
+              name="Mood Score"
+              stroke="rgb(59, 130, 246)"
+              strokeWidth={2}
+              dot={{ fill: "rgb(59, 130, 246)", strokeWidth: 2, r: 3 }}
+              activeDot={{ r: 5, fill: "rgb(59, 130, 246)" }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
   };
 
   // Render cache status indicator
