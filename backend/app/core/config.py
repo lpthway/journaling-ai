@@ -11,7 +11,10 @@ class DatabaseSettings(BaseSettings):
     
     # Connection settings
     url: str = Field(
-        default="postgresql+asyncpg://postgres:password@localhost:5432/journaling_ai",
+        default_factory=lambda: os.getenv(
+            "DB_URL", 
+            "postgresql+asyncpg://postgres:secure_password@localhost:5432/journaling_ai"
+        ),
         description="PostgreSQL connection URL"
     )
     
@@ -56,7 +59,10 @@ class SecuritySettings(BaseSettings):
     
     # JWT settings
     secret_key: str = Field(
-        default="your-secret-key-change-in-production",
+        default_factory=lambda: os.getenv(
+            "SECURITY_SECRET_KEY", 
+            "change-this-secret-key-in-production-environment"
+        ),
         description="Secret key for JWT tokens"
     )
     algorithm: str = Field(default="HS256")
@@ -91,7 +97,12 @@ class Settings(BaseSettings):
     security: SecuritySettings = SecuritySettings()
     
     # Legacy database settings (for backward compatibility)
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/journaling_ai"
+    DATABASE_URL: str = Field(
+        default_factory=lambda: os.getenv(
+            "DATABASE_URL", 
+            "postgresql+asyncpg://postgres:secure_password@localhost:5432/journaling_ai"
+        )
+    )
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 0
     DB_POOL_RECYCLE: int = 3600
@@ -137,7 +148,10 @@ class Settings(BaseSettings):
     
     # === CACHING & PERFORMANCE ===
     REDIS_URL: str = Field(
-        default="redis://:password@localhost:6379/0",
+        default_factory=lambda: os.getenv(
+            "REDIS_URL", 
+            "redis://:secure_redis_password@localhost:6379/0"
+        ),
         description="Redis connection URL with authentication for Docker Redis"
     )
     ANALYTICS_CACHE_ENABLED: bool = True
@@ -146,11 +160,17 @@ class Settings(BaseSettings):
     # Background Tasks
     BACKGROUND_TASKS_ENABLED: bool = True
     CELERY_BROKER_URL: str = Field(
-        default="redis://:password@localhost:6379/0",
+        default_factory=lambda: os.getenv(
+            "CELERY_BROKER_URL", 
+            "redis://:secure_redis_password@localhost:6379/0"
+        ),
         description="Celery broker URL with authentication for Docker Redis"
     )
     CELERY_RESULT_BACKEND: str = Field(
-        default="redis://:password@localhost:6379/0", 
+        default_factory=lambda: os.getenv(
+            "CELERY_RESULT_BACKEND", 
+            "redis://:secure_redis_password@localhost:6379/0"
+        ),
         description="Celery result backend with authentication for Docker Redis"
     )
     
@@ -182,7 +202,7 @@ class Settings(BaseSettings):
     def validate_security_settings(cls, v, values):
         """Validate security settings for production."""
         if values.get('ENVIRONMENT') == 'production':
-            if v.secret_key == "your-secret-key-change-in-production":
+            if v.secret_key == "change-this-secret-key-in-production-environment":
                 raise ValueError("Secret key must be changed for production")
         return v
     
