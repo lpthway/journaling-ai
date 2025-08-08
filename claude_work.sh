@@ -1059,11 +1059,11 @@ PYTHON_EOF
 update_progress_summary() {
     echo -e "${CYAN}📊 Updating progress summary...${NC}"
     
-    # Count current status
-    local completed_count=$(grep -c "Status.*✅.*COMPLETED" "$TODO_FILE" || echo "0")
-    local in_progress_count=$(grep -c "Status.*🔄.*IN_PROGRESS" "$TODO_FILE" || echo "0")
-    local failed_count=$(grep -c "Status.*❌.*FAILED" "$TODO_FILE" || echo "0")
-    local pending_count=$(grep -c "Status.*⏳.*PENDING" "$TODO_FILE" || echo "0")
+    # Count current status (trim whitespace to avoid arithmetic errors)
+    local completed_count=$(grep -c "Status.*✅.*COMPLETED" "$TODO_FILE" 2>/dev/null | tr -d '\n' || echo "0")
+    local in_progress_count=$(grep -c "Status.*🔄.*IN_PROGRESS" "$TODO_FILE" 2>/dev/null | tr -d '\n' || echo "0")
+    local failed_count=$(grep -c "Status.*❌.*FAILED" "$TODO_FILE" 2>/dev/null | tr -d '\n' || echo "0")
+    local pending_count=$(grep -c "Status.*⏳.*PENDING" "$TODO_FILE" 2>/dev/null | tr -d '\n' || echo "0")
     
     # Update JSON progress file
     python3 << EOF
@@ -1080,12 +1080,17 @@ except:
         "current_session": {}
     }
 
-# Update status
-progress['implementation_status']['completed_tasks'] = $completed_count
-progress['implementation_status']['in_progress_tasks'] = $in_progress_count
-progress['implementation_status']['failed_tasks'] = $failed_count
-progress['implementation_status']['pending_tasks'] = $pending_count
-progress['implementation_status']['total_tasks'] = $completed_count + $in_progress_count + $failed_count + $pending_count
+# Update status (ensure numeric values)
+completed = int('$completed_count' or 0)
+in_progress = int('$in_progress_count' or 0)
+failed = int('$failed_count' or 0)
+pending = int('$pending_count' or 0)
+
+progress['implementation_status']['completed_tasks'] = completed
+progress['implementation_status']['in_progress_tasks'] = in_progress
+progress['implementation_status']['failed_tasks'] = failed
+progress['implementation_status']['pending_tasks'] = pending
+progress['implementation_status']['total_tasks'] = completed + in_progress + failed + pending
 
 # Update session
 progress['current_session']['last_updated'] = datetime.now().isoformat()
@@ -1096,7 +1101,10 @@ with open('$PROGRESS_FILE', 'w') as f:
 EOF
 
     echo -e "${WHITE}Progress updated: $completed_count completed, $in_progress_count in progress, $pending_count pending${NC}"
-    log_action "Progress summary updated: $completed_count/$((completed_count + in_progress_count + failed_count + pending_count)) tasks completed"
+    
+    # Calculate total tasks safely (ensure all variables are numeric)
+    local total_tasks=$(( ${completed_count:-0} + ${in_progress_count:-0} + ${failed_count:-0} + ${pending_count:-0} ))
+    log_action "Progress summary updated: $completed_count/$total_tasks tasks completed"
 }
 
 # =============================================================================
@@ -1395,7 +1403,7 @@ automated_implement_task() {
     echo -e "${CYAN}🤖 Starting automated implementation...${NC}"
     echo -e "${WHITE}  → Building implementation prompt for Claude${NC}"
     
-    # Build comprehensive implementation prompt
+    # Build comprehensive implementation prompt with self-debugging capabilities
     local implementation_prompt="
 You are implementing task $task_id: $task_name
 
@@ -1411,23 +1419,54 @@ YOUR TOOLS AND CAPABILITIES:
 - Use read_file tool to read and analyze files
 - Use list_dir tool to explore directory structure
 - Use run_in_terminal tool for build/test commands
+- Use get_errors tool to check for syntax/compilation errors after changes
+
+SELF-DEBUGGING WORKFLOW:
+1. ANALYZE: Read and understand the current state of affected files
+2. PLAN: Identify exactly what needs to be changed
+3. IMPLEMENT: Make the required changes step by step
+4. VALIDATE: After each change, use get_errors tool to check for problems
+5. FIX: If errors are found, immediately fix them before proceeding
+6. VERIFY: Read the modified files back to confirm changes are correct
 
 IMPLEMENTATION REQUIREMENTS:
-1. Read and analyze the affected files using read_file tool
-2. Implement the required changes using replace_string_in_file tool
-3. Create new files if needed using create_file tool
-4. Fix any syntax errors you find
-5. Follow React/JavaScript best practices for frontend files
-6. Follow Python/FastAPI best practices for backend files
-7. Make focused changes that directly address the task description
+1. Start by reading all affected files to understand current state
+2. Use get_errors tool on existing files to identify any pre-existing issues
+3. Implement the required changes using replace_string_in_file tool
+4. After EACH file modification, use get_errors tool to check for syntax errors
+5. If errors are detected, immediately fix them before moving to next change
+6. Create new files if needed using create_file tool
+7. Follow React/JavaScript best practices for frontend files
+8. Follow Python/FastAPI best practices for backend files
+9. Make focused changes that directly address the task description
+10. Always verify your changes by reading the files back
+
+ERROR PREVENTION AND FIXING:
+- Before making any change, understand the existing code structure
+- Use proper indentation and syntax for the target language
+- Check for missing imports, brackets, parentheses, or semicolons
+- Validate that all variables and functions are properly defined
+- Ensure proper React component structure (JSX, hooks, props)
+- Verify Python syntax, imports, and function definitions
+- Test that routing paths match between components
+
+DEBUGGING CHECKLIST:
+□ Read all affected files first
+□ Check for existing errors before starting
+□ Make one change at a time
+□ Validate each change with get_errors tool
+□ Fix any syntax errors immediately
+□ Verify final result by reading files back
+□ Ensure all imports and dependencies are correct
 
 IMPORTANT NOTES:
 - You CAN create and modify files - use the appropriate tools
+- ALWAYS use get_errors tool after making changes
+- Fix any errors immediately when detected
 - Focus only on changes related to this specific task
-- Test your changes by reading the files back after modification
-- Ensure all changes are syntactically correct
+- Ensure all changes are syntactically correct and follow best practices
 
-Please implement the required changes now. Start by analyzing the affected files, then make the necessary modifications using your available tools.
+Please implement the required changes now using the self-debugging workflow above.
 "
 
     echo -e "${WHITE}  → Sending task to Claude for automated implementation${NC}"
@@ -1444,8 +1483,25 @@ Please implement the required changes now. Start by analyzing the affected files
         
         if [[ $changes_made -gt 0 ]]; then
             echo -e "${GREEN}✅ Automated implementation completed with $changes_made file changes${NC}"
-            log_success "Automated implementation completed for task $task_id with $changes_made changes"
-            return 0
+            
+            # Run post-implementation validation
+            echo -e "${CYAN}🔍 Running post-implementation validation...${NC}"
+            if validate_implementation_changes "$files"; then
+                echo -e "${GREEN}✅ Implementation validation passed${NC}"
+                log_success "Automated implementation completed for task $task_id with $changes_made changes"
+                return 0
+            else
+                echo -e "${YELLOW}⚠️ Implementation validation found issues - attempting auto-fix${NC}"
+                if auto_fix_implementation_issues "$task_id" "$files"; then
+                    echo -e "${GREEN}✅ Auto-fix successful${NC}"
+                    log_success "Automated implementation completed for task $task_id with auto-fixes applied"
+                    return 0
+                else
+                    echo -e "${RED}❌ Auto-fix failed - manual intervention required${NC}"
+                    log_error "Implementation validation failed for task $task_id"
+                    return 1
+                fi
+            fi
         else
             echo -e "${YELLOW}⚠️ Claude completed but made no file changes - implementation may have failed${NC}"
             echo -e "${WHITE}This could indicate permission issues or tool availability problems${NC}"
@@ -1462,6 +1518,115 @@ Please implement the required changes now. Start by analyzing the affected files
             log_error "Automated implementation failed for task $task_id"
             return 1
         fi
+    fi
+}
+
+# =============================================================================
+# Post-Implementation Validation Functions  
+# =============================================================================
+
+validate_implementation_changes() {
+    local files="$1"
+    echo -e "${CYAN}Validating implementation changes for files: $files${NC}"
+    
+    local validation_passed=true
+    
+    # Get list of modified files from git
+    local modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only --cached 2>/dev/null || echo "")
+    
+    if [[ -z "$modified_files" ]]; then
+        echo -e "${YELLOW}No modified files detected in git${NC}"
+        return 1
+    fi
+    
+    echo -e "${WHITE}Checking modified files: $modified_files${NC}"
+    
+    # Check each modified file for syntax errors
+    while IFS= read -r file; do
+        if [[ -f "$file" ]]; then
+            echo -e "${CYAN}Validating: $file${NC}"
+            
+            # Get file extension to determine validation method
+            local ext="${file##*.}"
+            case "$ext" in
+                "js"|"jsx"|"ts"|"tsx")
+                    # Check JavaScript/TypeScript syntax
+                    if command -v node &> /dev/null; then
+                        if ! node -c "$file" 2>/dev/null; then
+                            echo -e "${RED}❌ JavaScript syntax error in: $file${NC}"
+                            validation_passed=false
+                        else
+                            echo -e "${GREEN}✅ JavaScript syntax OK: $file${NC}"
+                        fi
+                    fi
+                    ;;
+                "py")
+                    # Check Python syntax
+                    if ! python3 -m py_compile "$file" 2>/dev/null; then
+                        echo -e "${RED}❌ Python syntax error in: $file${NC}"
+                        validation_passed=false
+                    else
+                        echo -e "${GREEN}✅ Python syntax OK: $file${NC}"
+                    fi
+                    ;;
+                *)
+                    echo -e "${BLUE}ℹ️ No syntax check available for: $file${NC}"
+                    ;;
+            esac
+        fi
+    done <<< "$modified_files"
+    
+    if [[ "$validation_passed" == "true" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+auto_fix_implementation_issues() {
+    local task_id="$1"
+    local files="$2"
+    
+    echo -e "${CYAN}🔧 Attempting to auto-fix implementation issues...${NC}"
+    
+    # Build auto-fix prompt for Claude
+    local fix_prompt="
+You are debugging and fixing issues found in the implementation of task $task_id.
+
+PROBLEM: The implementation validation detected syntax errors or other issues in the modified files.
+
+YOUR TASK:
+1. Use get_errors tool to identify specific errors in the affected files
+2. Use read_file tool to examine the problematic code
+3. Use replace_string_in_file tool to fix the identified issues
+4. Focus on syntax errors, missing imports, and structural problems
+5. Verify fixes by reading the files back after modification
+
+DEBUGGING APPROACH:
+- Check for common issues: missing semicolons, brackets, quotes
+- Verify proper React component structure and JSX syntax
+- Check Python indentation, imports, and function definitions
+- Ensure all variables and functions are properly defined
+- Fix any typos or incorrect function/variable names
+
+AFFECTED FILES: $files
+
+Please identify and fix all issues in the implementation.
+"
+    
+    echo -e "${WHITE}Sending auto-fix request to Claude...${NC}"
+    if run_claude_with_quota_monitoring "$fix_prompt" "$PROJECT_ROOT" "$task_id-fix" "$CLAUDE_TIMEOUT"; then
+        # Validate again after fix attempt
+        if validate_implementation_changes "$files"; then
+            echo -e "${GREEN}✅ Auto-fix successful${NC}"
+            return 0
+        else
+            echo -e "${RED}❌ Auto-fix validation still failed${NC}"
+            return 1
+        fi
+    else
+        echo -e "${RED}❌ Auto-fix attempt failed${NC}"
+        return 1
     fi
 }
 
