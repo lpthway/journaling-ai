@@ -371,9 +371,19 @@ echo ""
 cd "${PROJECT_ROOT}"
 ./$(basename "$0") --resume
 
-echo ""
-echo "✅ Intelligent auto-resume completed successfully!"
-echo "📊 Check the implementation results in: ${IMPL_DIR}/"
+if [[ \$? -eq 0 ]]; then
+    echo ""
+    echo "✅ Intelligent auto-resume completed successfully!"
+    echo "📊 Check the implementation results in: ${IMPL_DIR}/"
+    echo ""
+    echo "🧹 Cleaning up resume script..."
+    rm -f "\$0"
+    echo "✅ Resume script removed"
+else
+    echo ""
+    echo "❌ Resume failed - keeping script for retry"
+    echo "💡 You can run this script again: \$0"
+fi
 EOF
     chmod +x "$QUOTA_RESUME_FILE"
     echo -e "${GREEN}🤖 Intelligent auto-resume script created: $QUOTA_RESUME_FILE${NC}"
@@ -529,7 +539,15 @@ sleep 5
 cd "${PROJECT_ROOT}"
 ./$(basename "$0") --resume
 
-echo "✅ Resume script completed"
+if [[ \$? -eq 0 ]]; then
+    echo "✅ Resume script completed successfully"
+    echo "🧹 Cleaning up resume script..."
+    rm -f "\$0"
+    echo "✅ Resume script removed"
+else
+    echo "❌ Resume failed - keeping script for retry"
+    echo "💡 You can run this script again: \$0"
+fi
 EOF
     chmod +x "$QUOTA_RESUME_FILE"
     echo -e "${YELLOW}📝 Resume script created: $QUOTA_RESUME_FILE${NC}"
@@ -786,20 +804,42 @@ check_claude_availability() {
         exit 1
     fi
     
-    # Verify Claude is working with quota monitoring
-    echo -e "${CYAN}Testing Claude CLI with quota monitoring...${NC}"
-    if run_claude_with_quota_monitoring "Respond with 'Claude Work Ready' to confirm availability" "." "test" "$CLAUDE_QUICK_TIMEOUT" >/dev/null 2>&1; then
+    # Quick availability test with timeout and quota handling
+    echo -e "${CYAN}Testing Claude CLI availability...${NC}"
+    
+    # Create a simple test that won't get stuck
+    local test_output=$(mktemp)
+    local test_error=$(mktemp)
+    
+    # Run a very simple test with short timeout
+    if timeout 30 $CLAUDE_CMD -p "test" --output-format text >"$test_output" 2>"$test_error"; then
         local version=$($CLAUDE_CMD --version 2>/dev/null)
         echo -e "${GREEN}✅ Claude CLI is working - Version: ${version}${NC}"
         log_action "Claude CLI verified and ready for work"
+        rm -f "$test_output" "$test_error"
         return 0
     else
         local exit_code=$?
-        if [[ $exit_code -eq 2 ]]; then
-            echo -e "${RED}❌ Claude quota exhausted during availability check${NC}"
+        local error_content=$(cat "$test_error" 2>/dev/null || echo "")
+        local output_content=$(cat "$test_output" 2>/dev/null || echo "")
+        local combined_content="$error_content $output_content"
+        
+        rm -f "$test_output" "$test_error"
+        
+        # Check if it's a quota issue
+        if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
+            echo -e "${RED}❌ Claude quota exhausted${NC}"
+            echo -e "${YELLOW}⚠️  Claude quota has been reached. Please wait for reset or try resume scripts.${NC}"
+            echo -e "${WHITE}💡 You may have resume scripts available in: $IMPL_DIR/${NC}"
+            echo -e "${WHITE}💡 Look for files like: work_resume_*.sh${NC}"
             return 2  # Quota exhausted
+        elif [[ $exit_code -eq 124 ]]; then
+            echo -e "${YELLOW}⚠️  Claude CLI test timed out - may need authentication${NC}"
+            echo -e "${WHITE}Try running: $CLAUDE_CMD${NC}"
+            return 1
         else
             echo -e "${YELLOW}⚠️  Claude CLI found but may need authentication${NC}"
+            echo -e "${WHITE}Error: $combined_content${NC}"
             echo -e "${WHITE}Try running: $CLAUDE_CMD${NC}"
             return 1
         fi
@@ -2283,6 +2323,54 @@ main() {
             print_banner
             initialize_session
             check_claude_availability
+            local claude_status=$?
+            if [[ $claude_status -ne 0 ]]; then
+                if [[ $claude_status -eq 2 ]]; then
+                    echo -e "${YELLOW}🚫 Cannot proceed: Claude quota exhausted${NC}"
+                    echo ""
+                    
+                    # Check for existing resume scripts
+                    if ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
+                        echo -e "${CYAN}📋 Found existing resume scripts:${NC}"
+                        for resume_script in "$IMPL_DIR"/work_resume_*.sh; do
+                            if [[ -f "$resume_script" ]]; then
+                                local script_name=$(basename "$resume_script")
+                                echo -e "${GREEN}   📄 $script_name${NC}"
+                            fi
+                        done
+                        echo ""
+                        echo -e "${WHITE}Would you like to run the most recent resume script now?${NC}"
+                        echo -e "${YELLOW}It will wait for quota reset and automatically continue.${NC}"
+                        echo ""
+                        read -p "Run resume script now? (y/n): " -n 1 -r
+                        echo ""
+                        if [[ $REPLY =~ ^[Yy]$ ]]; then
+                            # Find the most recent resume script
+                            local latest_script=$(ls -t "$IMPL_DIR"/work_resume_*.sh | head -1)
+                            echo -e "${GREEN}🚀 Starting resume script: $(basename "$latest_script")${NC}"
+                            echo -e "${CYAN}💡 Press Ctrl+C anytime to cancel and resume manually later${NC}"
+                            echo ""
+                            exec bash "$latest_script"
+                        else
+                            echo -e "${WHITE}💡 You can run resume scripts manually later:${NC}"
+                            for resume_script in "$IMPL_DIR"/work_resume_*.sh; do
+                                if [[ -f "$resume_script" ]]; then
+                                    echo -e "${WHITE}   ./$resume_script${NC}"
+                                fi
+                            done
+                        fi
+                    else
+                        echo -e "${WHITE}No existing resume scripts found.${NC}"
+                        echo -e "${WHITE}Please wait for quota reset or try again later.${NC}"
+                    fi
+                    echo ""
+                    echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status anytime${NC}"
+                    exit 2
+                else
+                    echo -e "${RED}❌ Cannot proceed: Claude CLI not available${NC}"
+                    exit 1
+                fi
+            fi
             read_self_instructions
             main_loop
             ;;
@@ -2297,7 +2385,66 @@ main() {
             print_banner
             initialize_session
             check_claude_availability
+            local claude_status=$?
+            if [[ $claude_status -ne 0 ]]; then
+                if [[ $claude_status -eq 2 ]]; then
+                    echo -e "${YELLOW}🚫 Cannot proceed: Claude quota exhausted${NC}"
+                    echo -e "${WHITE}Please wait for quota reset or use available resume scripts${NC}"
+                    echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status and find resume scripts${NC}"
+                    exit 2
+                else
+                    echo -e "${RED}❌ Cannot proceed: Claude CLI not available${NC}"
+                    exit 1
+                fi
+            fi
             run_claude_with_phase "$phase_num" "$task_context"
+            ;;
+        "quota")
+            echo -e "${CYAN}🔍 Checking Claude quota status and resume options...${NC}"
+            echo ""
+            
+            # Quick quota test
+            echo -e "${WHITE}Testing Claude availability...${NC}"
+            local test_output=$(mktemp)
+            local test_error=$(mktemp)
+            
+            if timeout 10 claude --dangerously-skip-permissions -p "test" --output-format text >"$test_output" 2>"$test_error"; then
+                echo -e "${GREEN}✅ Claude is available - quota appears to be active${NC}"
+            else
+                local error_content=$(cat "$test_error" 2>/dev/null || echo "")
+                local output_content=$(cat "$test_output" 2>/dev/null || echo "")
+                local combined_content="$error_content $output_content"
+                
+                if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit"* ]]; then
+                    echo -e "${RED}❌ Claude quota exhausted${NC}"
+                    echo -e "${YELLOW}Quota message: $combined_content${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  Claude CLI issue: $combined_content${NC}"
+                fi
+            fi
+            
+            rm -f "$test_output" "$test_error"
+            echo ""
+            
+            # Check for resume scripts
+            echo -e "${WHITE}Available resume scripts:${NC}"
+            if ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
+                for resume_script in "$IMPL_DIR"/work_resume_*.sh; do
+                    if [[ -f "$resume_script" ]]; then
+                        local script_name=$(basename "$resume_script")
+                        echo -e "${GREEN}  📄 $script_name${NC}"
+                        echo -e "${WHITE}     Run with: ./$script_name${NC}"
+                    fi
+                done
+            else
+                echo -e "${YELLOW}  No resume scripts found${NC}"
+            fi
+            
+            echo ""
+            echo -e "${WHITE}💡 Usage tips:${NC}"
+            echo -e "${WHITE}   • Run resume scripts when quota resets${NC}"
+            echo -e "${WHITE}   • Use './claude_work.sh quota' to check status anytime${NC}"
+            echo -e "${WHITE}   • Resume scripts handle timing automatically${NC}"
             ;;
         "status")
             show_status
@@ -2312,6 +2459,7 @@ Commands:
   work           Start interactive implementation session (default)
   --resume       Resume previous session
   phase <1-5>    Run specific phase with Claude
+  quota          Check Claude quota status and available resume scripts
   status         Show current implementation progress
   help           Show this help message
 

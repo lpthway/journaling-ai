@@ -1,11 +1,11 @@
 #!/bin/bash
 # Intelligent Auto-Resume Work Script - Generated with intelligent scheduling
-# Resume from task: phase-5
+# Resume from task: test
 # Scheduled resume time: 2025-08-08 15:00:00
-# Generated: Fr 8. Aug 13:41:40 CEST 2025
+# Generated: Fr 8. Aug 14:11:04 CEST 2025
 
 export WORK_SESSION_ID="20250808_132334"
-export RESUME_FROM_TASK="phase-5"
+export RESUME_FROM_TASK="test"
 
 echo "🤖 Intelligent Auto-Resume Work Script Activated"
 echo "📅 Original session: 20250808_132334"
@@ -70,7 +70,7 @@ else
     fi
 fi
 
-echo "🔄 Resuming intelligent work from task: phase-5"
+echo "🔄 Resuming intelligent work from task: test"
 echo ""
 
 # Resume the work
