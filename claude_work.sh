@@ -1413,36 +1413,40 @@ AFFECTED FILES: $files
 PROJECT CONTEXT:
 This is a journaling application with React frontend and Python backend.
 
-YOUR TOOLS AND CAPABILITIES:
-- Use create_file tool to create new files
-- Use replace_string_in_file tool to modify existing files
-- Use read_file tool to read and analyze files
-- Use list_dir tool to explore directory structure
-- Use run_in_terminal tool for build/test commands
-- Use get_errors tool to check for syntax/compilation errors after changes
+AVAILABLE TOOLS (use these exact names):
+- create_file: Create new files with specified content
+- replace_string_in_file: Modify existing files by replacing specific text
+- read_file: Read files with line range specification
+- list_dir: List directory contents
+- run_in_terminal: Execute shell commands
+- get_errors: Check for syntax/compilation errors
+
+CRITICAL: You must use these exact tool names. Do NOT use:
+- Edit, Write, MultiEdit, Task, TodoWrite (these don't exist)
+- Use ONLY the tools listed above
 
 SELF-DEBUGGING WORKFLOW:
-1. ANALYZE: Read and understand the current state of affected files
+1. ANALYZE: Use read_file to understand current state of affected files
 2. PLAN: Identify exactly what needs to be changed
-3. IMPLEMENT: Make the required changes step by step
-4. VALIDATE: After each change, use get_errors tool to check for problems
-5. FIX: If errors are found, immediately fix them before proceeding
-6. VERIFY: Read the modified files back to confirm changes are correct
+3. IMPLEMENT: Use replace_string_in_file to make changes step by step
+4. VALIDATE: Use get_errors to check for problems after each change
+5. FIX: If errors found, use replace_string_in_file to fix them immediately
+6. VERIFY: Use read_file to confirm changes are correct
 
 IMPLEMENTATION REQUIREMENTS:
-1. Start by reading all affected files to understand current state
-2. Use get_errors tool on existing files to identify any pre-existing issues
-3. Implement the required changes using replace_string_in_file tool
-4. After EACH file modification, use get_errors tool to check for syntax errors
-5. If errors are detected, immediately fix them before moving to next change
-6. Create new files if needed using create_file tool
+1. Start by using read_file on all affected files to understand current state
+2. Use get_errors on existing files to identify any pre-existing issues
+3. Make changes using ONLY replace_string_in_file tool
+4. After EACH file modification, use get_errors to check for syntax errors
+5. If errors detected, immediately fix with replace_string_in_file
+6. Create new files only if needed using create_file tool
 7. Follow React/JavaScript best practices for frontend files
 8. Follow Python/FastAPI best practices for backend files
 9. Make focused changes that directly address the task description
-10. Always verify your changes by reading the files back
+10. Always verify changes by using read_file to read the modified sections back
 
 ERROR PREVENTION AND FIXING:
-- Before making any change, understand the existing code structure
+- Before making any change, use read_file to understand existing code structure
 - Use proper indentation and syntax for the target language
 - Check for missing imports, brackets, parentheses, or semicolons
 - Validate that all variables and functions are properly defined
@@ -1451,22 +1455,31 @@ ERROR PREVENTION AND FIXING:
 - Test that routing paths match between components
 
 DEBUGGING CHECKLIST:
-□ Read all affected files first
-□ Check for existing errors before starting
-□ Make one change at a time
-□ Validate each change with get_errors tool
-□ Fix any syntax errors immediately
-□ Verify final result by reading files back
+□ Use read_file on all affected files first
+□ Use get_errors to check for existing errors before starting
+□ Make one change at a time using replace_string_in_file
+□ Use get_errors after each change to validate
+□ Fix any syntax errors immediately with replace_string_in_file
+□ Use read_file to verify final result
 □ Ensure all imports and dependencies are correct
 
-IMPORTANT NOTES:
-- You CAN create and modify files - use the appropriate tools
-- ALWAYS use get_errors tool after making changes
+TOOL USAGE EXAMPLES:
+- Reading: read_file with filePath, startLine, endLine
+- Editing: replace_string_in_file with filePath, oldString, newString  
+- Creating: create_file with filePath, content
+- Checking: get_errors with filePaths array
+- Listing: list_dir with path
+
+CRITICAL REMINDERS:
+- You CAN create and modify files - use the correct tools listed above
+- NEVER use Edit, Write, MultiEdit, Task, or TodoWrite tools
+- ALWAYS use get_errors after making changes
 - Fix any errors immediately when detected
 - Focus only on changes related to this specific task
-- Ensure all changes are syntactically correct and follow best practices
+- Use replace_string_in_file for ALL file modifications
+- Include sufficient context in oldString for unique matching
 
-Please implement the required changes now using the self-debugging workflow above.
+Please implement the required changes now using ONLY the tools listed above.
 "
 
     echo -e "${WHITE}  → Sending task to Claude for automated implementation${NC}"
