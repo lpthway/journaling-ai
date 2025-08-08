@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   PencilIcon, 
   TrashIcon, 
@@ -15,6 +15,7 @@ import { entryAPI } from '../../services/api';
 import { toast } from 'react-hot-toast';
 
 const EntryCard = ({ entry, onEdit, onDelete, onToggleFavorite, showTopic = true }) => {
+  const navigate = useNavigate();
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
 
   const handleDelete = (e) => {
@@ -157,12 +158,16 @@ const EntryCard = ({ entry, onEdit, onDelete, onToggleFavorite, showTopic = true
             )}
           </div>
 
-          <Link
-            to={`/entry/${entry.id}`}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              navigate(`/entry/${entry.id}`);
+            }}
             className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
           >
             Read more →
-          </Link>
+          </button>
         </div>
       </div>
     </div>
