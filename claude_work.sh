@@ -555,10 +555,13 @@ run_claude_with_quota_monitoring() {
     local claude_error=$(mktemp)
     
     echo -e "${CYAN}Debug: Running command: $CLAUDE_CMD -p \"[PROMPT_LENGTH: ${#prompt} chars]\" --output-format text${NC}"
+    echo -e "${BLUE}📝 Claude is working... (this may take a few minutes)${NC}"
+    echo ""
     
-    if timeout "$timeout_duration" $CLAUDE_CMD -p "$prompt" --output-format text > "$claude_output" 2> "$claude_error"; then
+    # Run Claude with real-time output display using tee
+    if timeout "$timeout_duration" $CLAUDE_CMD -p "$prompt" --output-format text 2> "$claude_error" | tee "$claude_output"; then
         # Success
-        cat "$claude_output"
+        echo ""
         rm -f "$claude_output" "$claude_error"
         cd "$original_dir"
         echo -e "${GREEN}✅ Claude operation successful${NC}"
@@ -1204,6 +1207,7 @@ automated_implement_task() {
     local files="$4"
     
     echo -e "${CYAN}🤖 Starting automated implementation...${NC}"
+    echo -e "${WHITE}  → Building implementation prompt for Claude${NC}"
     
     # Build comprehensive implementation prompt
     local implementation_prompt="
@@ -1228,6 +1232,9 @@ IMPORTANT: Only make changes related to this specific task. Do not modify unrela
 Please implement the required changes now. Start by analyzing the affected files, then make the necessary modifications.
 "
 
+    echo -e "${WHITE}  → Sending task to Claude for automated implementation${NC}"
+    echo -e "${BLUE}  → Prompt length: ${#implementation_prompt} characters${NC}"
+    
     # Run Claude with the implementation prompt
     if run_claude_with_quota_monitoring "$implementation_prompt" "$PROJECT_ROOT" "$task_id" "$CLAUDE_TIMEOUT"; then
         echo -e "${GREEN}✅ Automated implementation completed${NC}"
@@ -1275,12 +1282,16 @@ implement_task() {
     
     # Phase 1: Session Initialization
     echo -e "${CYAN}Phase 1: Session Initialization${NC}"
+    echo -e "${WHITE}  → Initializing session tracking${NC}"
     echo "Session started: $(date)" > "$CURRENT_SESSION_FILE"
     echo "Working on: [$task_id] $task_name" >> "$CURRENT_SESSION_FILE"
     log_action "Starting implementation of task $task_id: $task_name"
+    echo -e "${GREEN}  ✅ Session initialized${NC}"
+    echo ""
     
     # Phase 2: Task Preparation
     echo -e "${CYAN}Phase 2: Task Preparation${NC}"
+    echo -e "${WHITE}  → Updating task status to IN_PROGRESS${NC}"
     update_task_status "$task_id" "IN_PROGRESS" "Implementation started"
     
     # Extract task details from TODO file
@@ -1326,9 +1337,12 @@ else:
     echo -e "${WHITE}  Effort: $effort${NC}"
     echo -e "${WHITE}  Description: $description${NC}"
     echo -e "${WHITE}  Affected Files: $files${NC}"
+    echo -e "${GREEN}  ✅ Task preparation complete${NC}"
+    echo ""
     
     # Phase 3: Implementation Execution
     echo -e "${CYAN}Phase 3: Implementation Execution${NC}"
+    echo -e "${WHITE}  → Attempting automated implementation with Claude${NC}"
     
     # Try automated implementation first
     echo -e "${CYAN}🤖 Attempting automated implementation...${NC}"
@@ -1351,6 +1365,8 @@ else:
             automated_success=false
         fi
     fi
+    echo -e "${GREEN}  ✅ Phase 3 execution complete${NC}"
+    echo ""
     
     # Commit Phase 3 changes (implementation)
     if commit_changes "$task_id" "$task_name" "3"; then
