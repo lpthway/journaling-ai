@@ -7,14 +7,36 @@
 #### Virtual Environment Problems
 **Problem:** Virtual environment not activating
 ```bash
-# Solution 1: Recreate virtual environment
+# Solution 1: Verify venv exists and activate properly
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv venv
+fi
+source venv/bin/activate
+echo "Virtual env: $VIRTUAL_ENV"
+
+# Solution 2: Check Python version and path
+python3 --version
+which python3
+which python  # Should point to venv/bin/python when active
+
+# Solution 3: Recreate if corrupted
 rm -rf venv
 python3 -m venv venv
 source venv/bin/activate
+pip install -r requirements.txt
+```
 
-# Solution 2: Check Python version
-python3 --version
-which python3
+**Problem:** Python commands not using virtual environment
+```bash
+# Solution: Always check and activate venv before Python commands
+if [[ "$VIRTUAL_ENV" == "" ]]; then
+    echo "Virtual environment not active - activating..."
+    source venv/bin/activate
+fi
+# Verify correct Python is being used
+which python
+python --version
 ```
 
 #### Dependency Issues
@@ -28,7 +50,45 @@ pip install -r requirements.txt
 pip install [package_name]
 ```
 
-### Git Workflow Issues
+### Documentation Issues
+
+#### Duplicate Documentation Generation
+**Problem:** System rebuilding docs for already completed tasks
+```bash
+# Solution: Check task status before documentation
+if grep -q "Status: COMPLETED" implementation_results/tasks/$TASK_ID.md 2>/dev/null; then
+    echo "Task already completed - skipping doc rebuild"
+    exit 0
+fi
+
+# Force rebuild if needed
+FORCE_REDOC=true ./claude_work.sh phase 5 "Force documentation rebuild"
+```
+
+#### Doc Folder Structure Missing
+**Problem:** Documentation scattered across different locations
+```bash
+# Solution: Create proper docs structure
+mkdir -p docs/tasks/
+mkdir -p docs/implementations/$(date +%Y)/$(date +%m)/
+mkdir -p docs/testing/$(date +%Y%m%d)/
+
+# Verify structure
+find docs/ -type d | sort
+```
+
+#### Missing Task Index
+**Problem:** No central index of completed tasks
+```bash
+# Solution: Ensure task_index.md exists and is updated
+if [ ! -f "docs/task_index.md" ]; then
+    echo "Creating task index..."
+    # Create from template (see claude_work_templates.md)
+fi
+
+# Add task to index
+echo "- [$TASK_ID] $TASK_NAME - $(date) - [View Report](tasks/$TASK_ID/completion_report.md)" >> docs/task_index.md
+```
 
 #### Branch Creation Problems
 **Problem:** Cannot create new branch

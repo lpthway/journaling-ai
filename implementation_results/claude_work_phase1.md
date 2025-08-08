@@ -24,11 +24,18 @@ if [ ! -d "venv" ]; then
     echo "Virtual environment created."
 fi
 
-# 4. Activate virtual environment  
+# 4. Activate virtual environment and verify
 source venv/bin/activate
-echo "Virtual environment activated."
+echo "Virtual environment activated: $VIRTUAL_ENV"
 
-# 5. Create new branch for this session
+# 5. Ensure essential packages are installed
+if [ -f "requirements.txt" ]; then
+    pip install -q -r requirements.txt
+elif [ -f "backend/requirements.txt" ]; then
+    pip install -q -r backend/requirements.txt
+fi
+
+# 6. Create new branch for this session
 BRANCH_NAME="phase-$(date +%Y%m%d_%H%M%S)"
 git checkout -b $BRANCH_NAME
 echo "New branch created: $BRANCH_NAME"

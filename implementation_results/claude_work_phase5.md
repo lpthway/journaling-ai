@@ -8,12 +8,19 @@
 
 ## Testing Protocol:
 ```bash
-# 1. Run comprehensive tests
+# 1. Ensure virtual environment is activated
+if [[ "$VIRTUAL_ENV" == "" ]]; then
+    echo "Activating virtual environment..."
+    source venv/bin/activate
+fi
+
+# 2. Run comprehensive tests
 echo "=== Final Testing Phase ===" >> $SESSION_LOG
 
 # Backend tests (if applicable)
 if [ -d "backend" ]; then
     cd backend
+    source ../venv/bin/activate  # Ensure venv is active
     python -m pytest tests/ -v >> ../implementation_results/active/$TASK_ID/test_results.txt 2>&1
     cd ..
 fi
@@ -25,18 +32,37 @@ if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
     cd ..
 fi
 
-# Integration tests
-[Add task-specific integration tests]
+# Integration tests (if applicable)
+if [ -f "test_integration.py" ]; then
+    source venv/bin/activate  # Ensure venv is active
+    python test_integration.py >> implementation_results/active/$TASK_ID/test_results.txt 2>&1
+fi
 
-# 2. Document test results
+# 3. Document test results
 echo "Test results logged to: implementation_results/active/$TASK_ID/test_results.txt" >> $SESSION_LOG
 ```
 
 ## Documentation Creation:
 ```bash
-# 1. Create completion documentation
-cat > implementation_results/active/$TASK_ID/completion_report.md << 'EOF'
+# 1. Check if task is already completed (skip doc rebuilding)
+if grep -q "Status: COMPLETED" implementation_results/tasks/$TASK_ID.md 2>/dev/null; then
+    echo "Task $TASK_ID already completed - skipping documentation rebuild" >> $SESSION_LOG
+    echo "Use 'force-redoc' flag to override this behavior" >> $SESSION_LOG
+    return 0
+fi
+
+# 2. Create proper docs folder structure
+mkdir -p docs/tasks/$TASK_ID
+mkdir -p docs/implementations/$(date +%Y)/$(date +%m)
+mkdir -p docs/testing/$(date +%Y%m%d)
+
+# 3. Create completion documentation in proper docs structure
+cat > docs/tasks/$TASK_ID/completion_report.md << 'EOF'
 # Task Completion Report: [TASK_NAME]
+
+**Task ID:** $TASK_ID  
+**Completion Date:** $(date)  
+**Session:** $BRANCH_NAME  
 
 ## Task Summary:
 [Brief description of what was accomplished]
@@ -51,7 +77,7 @@ cat > implementation_results/active/$TASK_ID/completion_report.md << 'EOF'
 2. [Change 2]: [Description and impact]
 
 ## Testing Results:
-[Summary of test results]
+[Summary of test results - see docs/testing/$(date +%Y%m%d)/$TASK_ID/ for detailed results]
 
 ## Known Issues:
 [Any remaining issues or limitations]
@@ -61,7 +87,25 @@ cat > implementation_results/active/$TASK_ID/completion_report.md << 'EOF'
 
 ## Future Improvements:
 [Suggestions for future enhancements]
+
+## References:
+- Implementation details: docs/implementations/$(date +%Y)/$(date +%m)/$TASK_ID/
+- Test results: docs/testing/$(date +%Y%m%d)/$TASK_ID/
+- Code changes: See git commit history for session $BRANCH_NAME
 EOF
+
+# 4. Copy implementation details to docs structure
+cp -r implementation_results/active/$TASK_ID/* docs/implementations/$(date +%Y)/$(date +%m)/$TASK_ID/ 2>/dev/null || true
+
+# 5. Copy test results to docs structure  
+mkdir -p docs/testing/$(date +%Y%m%d)/$TASK_ID/
+cp implementation_results/active/$TASK_ID/test_results.txt docs/testing/$(date +%Y%m%d)/$TASK_ID/ 2>/dev/null || true
+
+# 6. Create cross-references in main docs
+echo "- [$TASK_ID] [TASK_NAME] - $(date) - [View Report](tasks/$TASK_ID/completion_report.md)" >> docs/task_index.md
+
+# 7. Legacy compatibility - keep copy in implementation_results
+cp docs/tasks/$TASK_ID/completion_report.md implementation_results/active/$TASK_ID/completion_report.md
 
 # 2. Update task status
 echo "Status: COMPLETED" >> implementation_results/tasks/$TASK_ID.md

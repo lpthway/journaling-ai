@@ -8,7 +8,13 @@
 
 ## Implementation Protocol:
 ```bash
-# 1. Start implementation log
+# 1. Ensure virtual environment is activated
+if [[ "$VIRTUAL_ENV" == "" ]]; then
+    echo "Activating virtual environment..."
+    source venv/bin/activate
+fi
+
+# 2. Start implementation log
 cat > implementation_results/active/$TASK_ID/implementation_log.md << 'EOF'
 # Implementation Log: [TASK_NAME]
 
@@ -21,7 +27,7 @@ cat > implementation_results/active/$TASK_ID/implementation_log.md << 'EOF'
 
 EOF
 
-# 2. Create backup before changes
+# 3. Create backup before changes
 git add .
 git commit -m "Backup before implementing $TASK_ID"
 echo "Backup commit created" >> $SESSION_LOG
@@ -42,9 +48,28 @@ echo "Backup commit created" >> $SESSION_LOG
 
 ## Testing After Changes:
 ```bash
-# Test the implementation
-cd [relevant_directory]
-[run appropriate tests based on task]
+# Ensure virtual environment is activated before any Python commands
+source venv/bin/activate
+
+# Backend testing (if applicable)
+if [ -d "backend" ]; then
+    cd backend
+    # Test Python syntax
+    python -m py_compile [modified_file].py
+    # Run specific tests
+    python -m pytest tests/test_[relevant].py -v
+    cd ..
+fi
+
+# Frontend testing (if applicable) 
+if [ -d "frontend" ]; then
+    cd frontend
+    # Check for syntax errors
+    npm run lint
+    # Run tests
+    npm test -- --testNamePattern="[relevant_test]"
+    cd ..
+fi
 
 # Log test results
 echo "Test results for [change]:" >> implementation_results/active/$TASK_ID/implementation_log.md

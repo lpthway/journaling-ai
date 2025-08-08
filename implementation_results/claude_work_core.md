@@ -12,11 +12,13 @@
 - **All done**: Generate completion report
 
 ## Critical Rules:
-- ✅ ALWAYS create `docs/implementations/task-[ID]/` folder
-- ✅ ALWAYS test before marking complete  
-- ✅ ALWAYS commit with descriptive messages
-- ✅ NEVER skip documentation requirements
-- ✅ Follow exact 5-phase workflow
+1. **ALWAYS activate venv before Python commands**: `source venv/bin/activate`
+2. **Check task completion status**: Skip completed tasks unless forced
+3. **Use proper docs structure**: Store docs in `/docs/` with organized folders
+4. **Test after each change**: Validate syntax and functionality
+5. **Document systematically**: Update task index and create completion reports
+6. **Follow git workflow**: Branch → Implement → Test → Merge
+7. **Use exact tool names**: Write, Edit, Read, LS, Bash, Grep, Glob only
 
 ## 5-Phase Workflow:
 1. **Session Init** → Set up environment, branch, tracking
