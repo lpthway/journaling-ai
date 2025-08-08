@@ -94,19 +94,348 @@ echo "Committed testing results"
 ```bash
 # 1. Update task status to COMPLETED (✅) in implementation_todo.md
 # 2. Add implementation notes and actual time spent
-# 3. Commit changes to git with descriptive message
+# 3. Create proper documentation in docs/ folder (see Documentation Requirements below)
+# 4. Commit changes to git with descriptive message
 git add .
 git commit -m "Phase 5: Completed task [TASK_NAME] - Finalized feature and updated documentation"
 echo "Committed final changes"
-# 4. Merge the feature branch back to the main branch
+# 5. Merge the feature branch back to the main branch
 git checkout main
 git pull origin main
 git merge $BRANCH_NAME --no-ff -m "Merging phase branch [$BRANCH_NAME] into main"
 git push origin main
 echo "Merged $BRANCH_NAME into main and pushed changes"
-# 5. Update progress summary in implementation_todo.md
-# 6. Log completion in session log
+# 6. Update progress summary in implementation_todo.md
+# 7. Log completion in session log
 ```
+
+## Documentation Requirements (Critical - Do Not Skip)
+
+### For Every Completed Task, Create:
+
+> **Note**: If you have already completed tasks without documentation, see "Retroactive Documentation" section below.
+
+#### 1. Task Implementation Documentation
+Create folder: `docs/implementations/task-[TASK_ID]-[SHORT_NAME]/`
+
+**Required Files:**
+```bash
+# Implementation Summary
+docs/implementations/task-[TASK_ID]-[SHORT_NAME]/implementation-summary.md
+```
+**Content:**
+- Task objective and success criteria
+- Approach taken and why
+- Challenges encountered and solutions
+- Time invested vs. estimated
+- Dependencies used or created
+
+**Code Changes Documentation**
+```bash
+docs/implementations/task-[TASK_ID]-[SHORT_NAME]/code-changes.md
+```
+**Content:**
+- List of all files modified/created
+- Before/after code snippets for key changes
+- Rationale for significant design decisions
+- Performance or security implications
+
+**Testing Documentation**
+```bash
+docs/implementations/task-[TASK_ID]-[SHORT_NAME]/testing-results.md
+```
+**Content:**
+- Test cases created or modified
+- Test execution results
+- Edge cases covered
+- Performance test results (if applicable)
+
+#### 2. API Documentation (If Backend Changes)
+Update or create: `docs/api/[FEATURE_NAME].md`
+
+**Required Content:**
+- New endpoint documentation with examples
+- Request/response schemas
+- Authentication requirements
+- Error responses and codes
+- Rate limiting information
+- Usage examples with curl commands
+
+#### 3. User Documentation (If Frontend Changes)
+Update or create: `docs/user-guides/[FEATURE_NAME].md`
+
+**Required Content:**
+- How to use the new feature
+- Screenshots or mockups
+- Step-by-step instructions
+- Common use cases
+- Troubleshooting for user issues
+
+#### 4. Architecture Documentation (If Structural Changes)
+Update: `docs/architecture/[COMPONENT_NAME].md`
+
+**Required Content:**
+- Component diagram updates
+- Data flow changes
+- Database schema modifications
+- Integration points with other components
+- Security considerations
+
+#### 5. Configuration Documentation (If Config Changes)
+Update: `docs/setup/configuration.md`
+
+**Required Content:**
+- New environment variables
+- Configuration file changes
+- Default values and recommendations
+- Migration steps for existing installations
+
+### Documentation Templates
+
+#### Implementation Summary Template:
+```markdown
+# Task [TASK_ID]: [TASK_NAME]
+
+## Objective
+[What was supposed to be accomplished]
+
+## Approach
+[How it was implemented and why this approach was chosen]
+
+## Changes Made
+### Files Modified:
+- `path/to/file1.ext` - [Brief description of changes]
+- `path/to/file2.ext` - [Brief description of changes]
+
+### New Files Created:
+- `path/to/newfile.ext` - [Purpose and functionality]
+
+## Challenges & Solutions
+[Any issues encountered and how they were resolved]
+
+## Testing
+[What was tested and results]
+
+## Impact Analysis
+### Performance Impact:
+[Any performance considerations]
+
+### Security Impact:
+[Any security implications]
+
+### Backward Compatibility:
+[Impact on existing functionality]
+
+## Time Investment
+- Estimated: [X hours]
+- Actual: [Y hours]
+- Variance: [Analysis of difference]
+
+## Future Considerations
+[Any follow-up work or improvements needed]
+```
+
+#### API Documentation Template:
+```markdown
+# [FEATURE_NAME] API Documentation
+
+## Endpoints
+
+### [HTTP_METHOD] /api/[endpoint]
+[Brief description of what this endpoint does]
+
+#### Request
+**Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer [token]
+```
+
+**Body:**
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+
+#### Response
+**Success (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": 123,
+    "result": "value"
+  }
+}
+```
+
+**Error (400):**
+```json
+{
+  "status": "error",
+  "message": "Validation failed",
+  "errors": ["field1 is required"]
+}
+```
+
+#### Usage Example
+```bash
+curl -X POST https://api.example.com/api/endpoint \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token" \
+  -d '{"field1": "value1"}'
+```
+```
+
+### Documentation Checklist for Each Task:
+
+#### Before Marking Task Complete:
+- [ ] Implementation summary created with all required sections
+- [ ] Code changes documented with rationale
+- [ ] Testing results documented
+- [ ] API documentation updated (if backend changes)
+- [ ] User guide updated (if frontend changes)
+- [ ] Architecture docs updated (if structural changes)
+- [ ] Configuration docs updated (if config changes)
+- [ ] All documentation links work and formatting is correct
+- [ ] Documentation reviewed for clarity and completeness
+
+#### Quality Standards for Documentation:
+- [ ] **Clear and Concise**: Easy to understand for other developers
+- [ ] **Complete**: Covers all aspects of the implementation
+- [ ] **Accurate**: Reflects actual implementation, not intended
+- [ ] **Examples Included**: Real, working examples where applicable
+- [ ] **Future-Focused**: Helps future maintenance and extension
+- [ ] **Professional**: Properly formatted and proofread
+
+## Retroactive Documentation (For Already Completed Tasks)
+
+### When to Create Retroactive Documentation:
+- At the start of any new session, check for completed tasks (✅) without documentation
+- Before starting new development work
+- When encountering undocumented code during maintenance
+- As a dedicated documentation sprint
+
+### Process for Retroactive Documentation:
+
+#### 1. Identify Undocumented Completed Tasks
+```bash
+# Check implementation_todo.md for completed tasks (✅) without documentation
+# Look for tasks marked COMPLETED but missing docs/implementations/task-[ID]/ folders
+```
+
+#### 2. Gather Information for Each Task
+**From Git History:**
+```bash
+# Find commits related to the task
+git log --oneline --grep="[TASK_ID]"
+git log --oneline --since="[START_DATE]" --until="[END_DATE]"
+
+# Check what files were changed
+git show [COMMIT_HASH] --name-only
+git diff [COMMIT_HASH]~1 [COMMIT_HASH]
+```
+
+**From Code Analysis:**
+- Review the current state of affected files
+- Identify the functionality that was implemented
+- Understand the design decisions made
+
+#### 3. Create Retroactive Documentation
+
+**Simplified Template for Retroactive Documentation:**
+```markdown
+# Task [TASK_ID]: [TASK_NAME] (Retroactive Documentation)
+
+## Objective
+[What was accomplished - derived from task description and implementation]
+
+## Implementation Analysis
+[Analysis of what was actually implemented based on code review]
+
+## Files Modified/Created
+[List based on git history and current state]
+
+## Functionality Added
+[Description of the features/functionality that was implemented]
+
+## Testing Status
+[Current test coverage for this functionality]
+
+## Architecture Impact
+[How this change fits into the overall system]
+
+## Usage
+[How to use the implemented functionality]
+
+## Notes
+- This documentation was created retroactively
+- Implementation completed on: [DATE]
+- Documentation created on: [TODAY'S DATE]
+```
+
+#### 4. Prioritize Retroactive Documentation
+
+**High Priority (Do First):**
+- Tasks that affect public APIs
+- Complex business logic implementations
+- Security-related changes
+- Database schema modifications
+
+**Medium Priority:**
+- UI/UX improvements
+- Performance optimizations
+- Refactoring tasks
+
+**Low Priority:**
+- Bug fixes with obvious solutions
+- Simple configuration changes
+- Cosmetic updates
+
+#### 5. Retroactive Documentation Workflow
+```bash
+# For each undocumented completed task:
+
+# 1. Create documentation folder
+mkdir -p docs/implementations/task-[TASK_ID]-[SHORT_NAME]
+
+# 2. Analyze git history
+git log --oneline --grep="[TASK_ID]" > analysis.txt
+git diff --name-only [RELEVANT_COMMITS] >> analysis.txt
+
+# 3. Create implementation summary (use retroactive template)
+# 4. Document key code changes with explanations
+# 5. Note current testing status
+# 6. Update relevant API/user/architecture docs
+
+# 7. Commit retroactive documentation
+git add docs/
+git commit -m "Retroactive documentation for task [TASK_ID]: [TASK_NAME]
+
+- Created implementation summary based on code analysis
+- Documented functionality and usage
+- Added to documentation system for future reference"
+```
+
+### Retroactive Documentation Checklist:
+
+#### For Each Completed Task Without Documentation:
+- [ ] Task implementation analyzed and understood
+- [ ] Git history reviewed for changes
+- [ ] Implementation summary created (retroactive template)
+- [ ] Key functionality documented
+- [ ] API changes documented (if applicable)
+- [ ] User impact documented (if applicable)
+- [ ] Testing status noted
+- [ ] Documentation committed to git
+
+#### Quality Standards for Retroactive Documentation:
+- [ ] **Accurate**: Reflects actual implementation, not original intention
+- [ ] **Honest**: Notes that documentation is retroactive
+- [ ] **Useful**: Provides value for future maintenance
+- [ ] **Complete**: Covers all significant aspects of the implementation
 
 ## Self-Reflection Questions (Ask Yourself)
 
@@ -187,6 +516,10 @@ At end of each work session, create summary:
 - [ ] Code changes are well-commented
 - [ ] API changes are documented
 - [ ] Configuration changes are noted
+- [ ] Task-specific documentation created in docs/ folder
+- [ ] User guides updated for new features
+- [ ] Architecture diagrams updated if structure changed
+- [ ] Troubleshooting guides created for complex features
 
 ## Emergency Procedures
 
