@@ -6,7 +6,6 @@ Provides high-performance caching with connection pooling and monitoring
 
 import redis.asyncio as redis
 import json
-import pickle
 import logging
 import asyncio
 from typing import Any, Optional, Union, List, Dict, Pattern
@@ -25,7 +24,6 @@ logger = logging.getLogger(__name__)
 class SerializationStrategy(Enum):
     """Serialization strategies for different data types"""
     JSON = "json"
-    PICKLE = "pickle"
     RAW = "raw"
 
 @dataclass
@@ -143,8 +141,6 @@ class RedisService(CacheStrategy):
         try:
             if strategy == SerializationStrategy.JSON:
                 return json.dumps(value, default=str).encode('utf-8')
-            elif strategy == SerializationStrategy.PICKLE:
-                return pickle.dumps(value)
             elif strategy == SerializationStrategy.RAW:
                 if isinstance(value, str):
                     return value.encode('utf-8')
@@ -167,8 +163,6 @@ class RedisService(CacheStrategy):
         try:
             if strategy == SerializationStrategy.JSON:
                 return json.loads(data.decode('utf-8'))
-            elif strategy == SerializationStrategy.PICKLE:
-                return pickle.loads(data)
             elif strategy == SerializationStrategy.RAW:
                 return data.decode('utf-8')
             else:
