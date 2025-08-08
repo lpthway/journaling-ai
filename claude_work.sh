@@ -2331,6 +2331,18 @@ main() {
                     echo -e "${YELLOW}🚫 Cannot proceed: Claude quota exhausted${NC}"
                     echo ""
                     
+                    # Check if we're being called from a resume script
+                    if [[ -n "$RESUME_FROM_TASK" ]]; then
+                        echo -e "${CYAN}🤖 Resume script detected quota exhaustion${NC}"
+                        echo -e "${WHITE}💡 The quota is still not ready - you may need to wait longer${NC}"
+                        echo -e "${YELLOW}⏰ Try running this resume script again in a few minutes${NC}"
+                        echo ""
+                        echo -e "${WHITE}Current quota status from Claude:${NC}"
+                        timeout 10 $CLAUDE_CMD -p "test" --output-format text 2>&1 | head -1 || echo "Claude still not responding"
+                        echo ""
+                        exit 2
+                    fi
+                    
                     # Check for existing resume scripts
                     if ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
                         echo -e "${CYAN}📋 Found existing resume scripts:${NC}"
@@ -2341,33 +2353,19 @@ main() {
                             fi
                         done
                         echo ""
-                        echo -e "${WHITE}Would you like to run the most recent resume script now?${NC}"
-                        echo -e "${YELLOW}It will wait for quota reset and automatically continue.${NC}"
+                        echo -e "${WHITE}💡 To run the most recent resume script automatically:${NC}"
+                        echo -e "${GREEN}   ./claude_work.sh --auto-resume${NC}"
                         echo ""
-                        read -p "Run resume script now? (y/n): " -n 1 -r
+                        echo -e "${WHITE}💡 Or run resume scripts manually:${NC}"
+                        for resume_script in "$IMPL_DIR"/work_resume_*.sh; do
+                            if [[ -f "$resume_script" ]]; then
+                                script_name=$(basename "$resume_script")
+                                echo -e "${WHITE}   ./implementation_results/$script_name${NC}"
+                            fi
+                        done
                         echo ""
-                        if [[ $REPLY =~ ^[Yy]$ ]]; then
-                            # Find the most recent resume script
-                            latest_script=$(ls -t "$IMPL_DIR"/work_resume_*.sh | head -1)
-                            script_name=$(basename "$latest_script")
-                            echo -e "${GREEN}🚀 Starting resume script: $script_name${NC}"
-                            echo -e "${CYAN}💡 Press Ctrl+C anytime to cancel and resume manually later${NC}"
-                            echo ""
-                            # Change to project root and run the script
-                            cd "$PROJECT_ROOT"
-                            exec bash "./implementation_results/$script_name"
-                        else
-                            echo -e "${WHITE}💡 You can run resume scripts manually later:${NC}"
-                            for resume_script in "$IMPL_DIR"/work_resume_*.sh; do
-                                if [[ -f "$resume_script" ]]; then
-                                    script_name=$(basename "$resume_script")
-                                    echo -e "${WHITE}   ./implementation_results/$script_name${NC}"
-                                fi
-                            done
-                            echo ""
-                            echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status anytime${NC}"
-                            exit 2
-                        fi
+                        echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status anytime${NC}"
+                        exit 2
                     else
                         echo -e "${WHITE}No existing resume scripts found.${NC}"
                         echo -e "${WHITE}Please wait for quota reset or try again later.${NC}"
@@ -2382,6 +2380,28 @@ main() {
             fi
             read_self_instructions
             main_loop
+            ;;
+        "--auto-resume")
+            echo -e "${GREEN}🚀 Auto-Resume Mode: Finding most recent resume script...${NC}"
+            
+            # Check for existing resume scripts
+            if ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
+                # Find the most recent resume script
+                latest_script=$(ls -t "$IMPL_DIR"/work_resume_*.sh | head -1)
+                script_name=$(basename "$latest_script")
+                echo -e "${GREEN}📄 Found most recent resume script: $script_name${NC}"
+                echo -e "${CYAN}💡 Press Ctrl+C anytime to cancel and resume manually later${NC}"
+                echo ""
+                
+                # Change to project root and run the script
+                cd "$PROJECT_ROOT"
+                exec bash "./implementation_results/$script_name"
+            else
+                echo -e "${RED}❌ No resume scripts found${NC}"
+                echo -e "${WHITE}💡 Resume scripts are created when Claude quota is exhausted during active work${NC}"
+                echo -e "${WHITE}💡 Try running: ./claude_work.sh work${NC}"
+                exit 1
+            fi
             ;;
         "phase")
             local phase_num="$2"
