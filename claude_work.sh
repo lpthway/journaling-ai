@@ -1685,6 +1685,7 @@ main() {
         "work"|"--resume")
             print_banner
             initialize_session
+            check_claude_availability
             read_self_instructions
             main_loop
             ;;
