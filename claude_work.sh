@@ -1402,30 +1402,56 @@ You are implementing task $task_id: $task_name
 TASK DESCRIPTION: $description
 AFFECTED FILES: $files
 
-CURRENT PROJECT CONTEXT:
-$(cat "$INSTRUCTIONS_FILE" 2>/dev/null | head -50)
+PROJECT CONTEXT:
+This is a journaling application with React frontend and Python backend.
+
+YOUR TOOLS AND CAPABILITIES:
+- Use create_file tool to create new files
+- Use replace_string_in_file tool to modify existing files
+- Use read_file tool to read and analyze files
+- Use list_dir tool to explore directory structure
+- Use run_in_terminal tool for build/test commands
 
 IMPLEMENTATION REQUIREMENTS:
-1. Read and analyze the affected files
-2. Implement the required changes
-3. Create new files if needed
-4. Fix any syntax errors
-5. Follow best practices for the detected language/framework
-6. Make minimal, focused changes that address the task description
+1. Read and analyze the affected files using read_file tool
+2. Implement the required changes using replace_string_in_file tool
+3. Create new files if needed using create_file tool
+4. Fix any syntax errors you find
+5. Follow React/JavaScript best practices for frontend files
+6. Follow Python/FastAPI best practices for backend files
+7. Make focused changes that directly address the task description
 
-IMPORTANT: Only make changes related to this specific task. Do not modify unrelated code.
+IMPORTANT NOTES:
+- You CAN create and modify files - use the appropriate tools
+- Focus only on changes related to this specific task
+- Test your changes by reading the files back after modification
+- Ensure all changes are syntactically correct
 
-Please implement the required changes now. Start by analyzing the affected files, then make the necessary modifications.
+Please implement the required changes now. Start by analyzing the affected files, then make the necessary modifications using your available tools.
 "
 
     echo -e "${WHITE}  → Sending task to Claude for automated implementation${NC}"
     echo -e "${BLUE}  → Prompt length: ${#implementation_prompt} characters${NC}"
     
+    # Check git status before Claude runs
+    local changes_before=$(git status --porcelain | wc -l)
+    
     # Run Claude with the implementation prompt
     if run_claude_with_quota_monitoring "$implementation_prompt" "$PROJECT_ROOT" "$task_id" "$CLAUDE_TIMEOUT"; then
-        echo -e "${GREEN}✅ Automated implementation completed${NC}"
-        log_success "Automated implementation completed for task $task_id"
-        return 0
+        # Check if Claude actually made any changes
+        local changes_after=$(git status --porcelain | wc -l)
+        local changes_made=$((changes_after - changes_before))
+        
+        if [[ $changes_made -gt 0 ]]; then
+            echo -e "${GREEN}✅ Automated implementation completed with $changes_made file changes${NC}"
+            log_success "Automated implementation completed for task $task_id with $changes_made changes"
+            return 0
+        else
+            echo -e "${YELLOW}⚠️ Claude completed but made no file changes - implementation may have failed${NC}"
+            echo -e "${WHITE}This could indicate permission issues or tool availability problems${NC}"
+            log_error "Claude completed task $task_id but no files were actually changed"
+            return 1
+        fi
     else
         local exit_code=$?
         if [[ $exit_code -eq 2 ]]; then
