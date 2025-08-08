@@ -58,8 +58,8 @@
     "current_task": null,
     "last_updated": "2025-08-08T13:31:13.344630",
     "claude_quota_exhausted": true,
-    "resume_point": "test",
-    "quota_exhausted_at": "2025-08-08T14:11:04.312517"
+    "resume_point": "3.1",
+    "quota_exhausted_at": "2025-08-08T15:26:43.687999"
   },
   "completed_tasks": [],
   "failed_tasks": [],
@@ -198,6 +198,18 @@
       "type": "claude_quota",
       "task": "test",
       "timestamp": "2025-08-08T14:11:04.312522",
+      "resume_script": "work_resume_20250808_132334.sh"
+    },
+    {
+      "type": "claude_quota",
+      "task": "3.1",
+      "timestamp": "2025-08-08T15:15:59.728507",
+      "resume_script": "work_resume_20250808_132334.sh"
+    },
+    {
+      "type": "claude_quota",
+      "task": "3.1",
+      "timestamp": "2025-08-08T15:26:43.688004",
       "resume_script": "work_resume_20250808_132334.sh"
     }
   ],
