@@ -2382,22 +2382,63 @@ main() {
             main_loop
             ;;
         "--auto-resume")
-            echo -e "${GREEN}🚀 Auto-Resume Mode: Finding most recent resume script...${NC}"
+            echo -e "${GREEN}🚀 Auto-Resume Mode: Checking current session status...${NC}"
             
-            # Check for existing resume scripts
-            if ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
-                # Find the most recent resume script
-                latest_script=$(ls -t "$IMPL_DIR"/work_resume_*.sh | head -1)
-                script_name=$(basename "$latest_script")
-                echo -e "${GREEN}📄 Found most recent resume script: $script_name${NC}"
+            # Check if Claude is currently available
+            echo -e "${CYAN}🔍 Testing Claude availability for current session...${NC}"
+            
+            # Quick Claude test with timeout
+            local test_output=$(mktemp)
+            local test_error=$(mktemp)
+            
+            if timeout 30 $CLAUDE_CMD -p "test" --output-format text >"$test_output" 2>"$test_error"; then
+                echo -e "${GREEN}✅ Claude is available - continuing current session work${NC}"
+                echo -e "${WHITE}💡 No resume needed - Claude quota is working${NC}"
+                echo ""
+                rm -f "$test_output" "$test_error"
+                
+                # Continue with current session
+                read_self_instructions
+                main_loop
+                return $?
+            else
+                # Check if it's a quota issue
+                local error_content=$(cat "$test_error" 2>/dev/null || echo "")
+                local output_content=$(cat "$test_output" 2>/dev/null || echo "")
+                local combined_content="$error_content $output_content"
+                rm -f "$test_output" "$test_error"
+                
+                if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
+                    echo -e "${YELLOW}⚠️  Claude quota appears exhausted - looking for resume options...${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  Claude connection issue (not quota) - attempting to continue...${NC}"
+                    read_self_instructions
+                    main_loop
+                    return $?
+                fi
+            fi
+            
+            # First check for resume script matching current session
+            if [[ -f "$QUOTA_RESUME_FILE" ]]; then
+                script_name=$(basename "$QUOTA_RESUME_FILE")
+                echo -e "${GREEN}📄 Found current session resume script: $script_name${NC}"
                 echo -e "${CYAN}💡 Press Ctrl+C anytime to cancel and resume manually later${NC}"
                 echo ""
                 
-                # Change to project root and run the script
-                cd "$PROJECT_ROOT"
-                exec bash "./implementation_results/$script_name"
+                # Run the current session resume script
+                exec bash "$QUOTA_RESUME_FILE"
+            elif ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
+                # Check if we should create a resume script for the current session
+                echo -e "${YELLOW}⚠️  No resume script for current session (${TIMESTAMP})${NC}"
+                echo -e "${WHITE}💡 Current session was not interrupted by quota - checking if we should continue...${NC}"
+                
+                # Try to continue current session anyway (might be a temporary issue)
+                echo -e "${CYAN}🔄 Attempting to continue current session despite quota issues...${NC}"
+                read_self_instructions
+                main_loop
+                return $?
             else
-                echo -e "${RED}❌ No resume scripts found${NC}"
+                echo -e "${RED}❌ No resume scripts found and Claude quota exhausted${NC}"
                 echo -e "${WHITE}💡 Resume scripts are created when Claude quota is exhausted during active work${NC}"
                 echo -e "${WHITE}💡 Try running: ./claude_work.sh work${NC}"
                 exit 1
