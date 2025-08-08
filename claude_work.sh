@@ -27,7 +27,7 @@ NC='\033[0m' # No Color
 
 detect_original_branch() {
     # Try to detect the original branch from git history
-    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" "$line" 2>/dev/null)
+    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" 2>/dev/null)
     if [[ -n "$merge_commit" ]]; then
         # Extract branch name from merge commit message
         echo "$merge_commit" | sed -n 's/.*into \([^[:space:]]*\).*/\1/p'
@@ -204,7 +204,7 @@ try:
 except Exception as e:
     print(f'ERROR: {e}')
     sys.exit(1)
-" "$line" 2>/dev/null
+" 2>/dev/null
         return $?
     fi
     
@@ -283,7 +283,7 @@ try:
 except Exception as e:
     print(f'ERROR: {e}')
     sys.exit(1)
-" "$line" 2>/dev/null
+" 2>/dev/null
 }
 
 create_auto_resume_script() {
@@ -560,11 +560,14 @@ run_claude_with_quota_monitoring() {
     local claude_error=$(mktemp)
     local final_content=""
     
-    # Function to parse Claude CLI JSON format and extract real-time implementation activity
-    parse_claude_json() {
-        local line="$1"
-        if [[ -n "$line" ]]; then
-            echo "$line" | python3 -c "
+    # Function to add colored prefixes to output lines with comprehensive Claude activity parsing
+    stream_with_prefix() {
+        local content_buffer=""
+        
+        while IFS= read -r line; do
+            if [[ -n "$line" ]]; then
+                # Parse and display Claude's real-time activity directly
+                echo "$line" | python3 -c "
 import json
 import sys
 from datetime import datetime
@@ -582,13 +585,13 @@ try:
     if event_type == 'system':
         subtype = data.get('subtype', '')
         if subtype == 'init':
-            print(f'🧠 [{timestamp}] Claude session initialized')
+            print(f'│ 🧠 [{timestamp}] Claude session initialized')
         else:
-            print(f'🧠 [{timestamp}] System: {subtype}')
+            print(f'│ 🧠 [{timestamp}] System: {subtype}')
     elif event_type == 'user':
-        print(f'👤 [{timestamp}] User message processed')
+        print(f'│ 👤 [{timestamp}] User message processed')
     elif event_type == 'assistant':
-        # Claude CLI format: {"type":"assistant","message":{"content":[...]}}
+        # Claude CLI format: {\"type\":\"assistant\",\"message\":{\"content\":[...]}}
         message = data.get('message', {})
         content = message.get('content', [])
         if isinstance(content, list):
@@ -601,44 +604,44 @@ try:
                         tool_id = item.get('id', 'unknown')
                         tool_input = item.get('input', {})
                         
-                        print(f'🔧 [{timestamp}] Using tool: {tool_name} (ID: {tool_id})')
+                        print(f'│ 🔧 [{timestamp}] Using tool: {tool_name} (ID: {tool_id})')
                         
                         # Show specific tool details
                         if tool_name == 'create_file':
                             file_path = tool_input.get('filePath', tool_input.get('file_path', 'unknown'))
                             content_preview = str(tool_input.get('content', ''))[:50]
-                            print(f'📄 Creating: {file_path}')
-                            print(f'💾 Content preview: {content_preview}...')
+                            print(f'│ 📄 Creating: {file_path}')
+                            print(f'│ 💾 Content preview: {content_preview}...')
                         elif tool_name == 'Write':
                             file_path = tool_input.get('file_path', 'unknown')
                             content_preview = str(tool_input.get('content', ''))[:100]
-                            print(f'📄 Writing to: {file_path}')
-                            print(f'💾 Content preview: {content_preview}...')
+                            print(f'│ 📄 Writing to: {file_path}')
+                            print(f'│ 💾 Content preview: {content_preview}...')
                         elif tool_name == 'replace_string_in_file':
                             file_path = tool_input.get('filePath', 'unknown')
                             old_str_preview = str(tool_input.get('oldString', ''))[:50]
-                            print(f'📝 Editing: {file_path}')
-                            print(f'🔄 Replacing: {old_str_preview}...')
+                            print(f'│ 📝 Editing: {file_path}')
+                            print(f'│ 🔄 Replacing: {old_str_preview}...')
                         elif tool_name == 'read_file':
                             file_path = tool_input.get('filePath', 'unknown')
                             start_line = tool_input.get('startLine', 'N/A')
                             end_line = tool_input.get('endLine', 'N/A')
-                            print(f'📖 Reading: {file_path} (lines {start_line}-{end_line})')
+                            print(f'│ 📖 Reading: {file_path} (lines {start_line}-{end_line})')
                         elif tool_name == 'run_in_terminal':
                             command = tool_input.get('command', 'unknown')
-                            print(f'⚡ Running: {command[:50]}...' if len(command) > 50 else f'⚡ Running: {command}')
+                            print(f'│ ⚡ Running: {command[:50]}...' if len(command) > 50 else f'│ ⚡ Running: {command}')
                         elif tool_name == 'list_dir':
                             path = tool_input.get('path', 'unknown')
-                            print(f'📁 Listing directory: {path}')
+                            print(f'│ 📁 Listing directory: {path}')
                         else:
                             # Generic tool display
-                            print(f'⚙️  Tool: {tool_name} with {len(str(tool_input))} chars of input')
+                            print(f'│ ⚙️  Tool: {tool_name} with {len(str(tool_input))} chars of input')
                     elif item_type == 'text':
                         text_content = item.get('text', '')
                         if text_content and len(text_content.strip()) > 0:
-                            print(f'🤖 [{timestamp}] Claude: {text_content[:200]}...' if len(text_content) > 200 else f'🤖 [{timestamp}] Claude: {text_content}')
+                            print(f'│ 🤖 [{timestamp}] Claude: {text_content[:200]}...' if len(text_content) > 200 else f'│ 🤖 [{timestamp}] Claude: {text_content}')
         else:
-            print(f'🤖 [{timestamp}] Assistant response (non-array content)')
+            print(f'│ 🤖 [{timestamp}] Assistant response (non-array content)')
     elif event_type == 'result':
         # CRITICAL: This is where Claude CLI shows tool usage!
         content = data.get('content', [])
@@ -651,82 +654,63 @@ try:
                         tool_id = item.get('id', 'unknown')
                         tool_input = item.get('input', {})
                         
-                        print(f'🔧 [{timestamp}] Using tool: {tool_name} (ID: {tool_id})')
+                        print(f'│ 🔧 [{timestamp}] Using tool: {tool_name} (ID: {tool_id})')
                         
                         # Show specific tool details
                         if tool_name == 'create_file':
                             file_path = tool_input.get('filePath', tool_input.get('file_path', 'unknown'))
                             content_preview = str(tool_input.get('content', ''))[:50]
-                            print(f'📄 Creating: {file_path}')
-                            print(f'💾 Content preview: {content_preview}...')
+                            print(f'│ 📄 Creating: {file_path}')
+                            print(f'│ 💾 Content preview: {content_preview}...')
                         elif tool_name == 'replace_string_in_file':
                             file_path = tool_input.get('filePath', 'unknown')
                             old_str_preview = str(tool_input.get('oldString', ''))[:50]
-                            print(f'📝 Editing: {file_path}')
-                            print(f'🔄 Replacing: {old_str_preview}...')
+                            print(f'│ 📝 Editing: {file_path}')
+                            print(f'│ 🔄 Replacing: {old_str_preview}...')
                         elif tool_name == 'read_file':
                             file_path = tool_input.get('filePath', 'unknown')
                             start_line = tool_input.get('startLine', 'N/A')
                             end_line = tool_input.get('endLine', 'N/A')
-                            print(f'📖 Reading: {file_path} (lines {start_line}-{end_line})')
+                            print(f'│ 📖 Reading: {file_path} (lines {start_line}-{end_line})')
                         elif tool_name == 'run_in_terminal':
                             command = tool_input.get('command', 'unknown')
-                            print(f'⚡ Running: {command[:50]}...' if len(command) > 50 else f'⚡ Running: {command}')
+                            print(f'│ ⚡ Running: {command[:50]}...' if len(command) > 50 else f'│ ⚡ Running: {command}')
                         elif tool_name == 'list_dir':
                             path = tool_input.get('path', 'unknown')
-                            print(f'📁 Listing directory: {path}')
+                            print(f'│ 📁 Listing directory: {path}')
                         else:
                             # Generic tool display
-                            print(f'⚙️  Tool parameters: {str(tool_input)[:100]}...' if len(str(tool_input)) > 100 else f'⚙️  Tool parameters: {tool_input}')
+                            print(f'│ ⚙️  Tool parameters: {str(tool_input)[:100]}...' if len(str(tool_input)) > 100 else f'│ ⚙️  Tool parameters: {tool_input}')
                     elif item_type == 'text':
                         text_content = item.get('text', '')
                         if text_content and len(text_content.strip()) > 0:
-                            print(f'💬 [{timestamp}] {text_content[:200]}...' if len(text_content) > 200 else f'💬 [{timestamp}] {text_content}')
+                            print(f'│ 💬 [{timestamp}] {text_content[:200]}...' if len(text_content) > 200 else f'│ 💬 [{timestamp}] {text_content}')
     elif event_type == 'error':
         error_msg = data.get('error', {}).get('message', 'Unknown error')
-        print(f'❌ [{timestamp}] Error: {error_msg}')
+        print(f'│ ❌ [{timestamp}] Error: {error_msg}')
     elif event_type == 'ping':
-        print(f'🔍 [{timestamp}] Connection alive')
+        print(f'│ 🔍 [{timestamp}] Connection alive')
     else:
         # For debugging other event types
         if event_type:
-            print(f'📡 [{timestamp}] Event: {event_type}')
+            print(f'│ 📡 [{timestamp}] Event: {event_type}')
 
 except json.JSONDecodeError:
     # Not valid JSON, might be direct text output
     if line and len(line.strip()) > 0:
-        print(f'📄 [{timestamp}] Direct output: {line}')
+        print(f'│ 📄 [{timestamp}] Direct output: {line}')
 except Exception as e:
     # For debugging
     if line and len(line.strip()) > 0 and len(line) < 200:
-        print(f'🔍 [{timestamp}] Raw: {line}')
-" 2>/dev/null
-        fi
-    }
-    
-    # Function to add colored prefixes to output lines with comprehensive Claude activity parsing
-    stream_with_prefix() {
-        local content_buffer=""
-        
-        while IFS= read -r line; do
-            if [[ -n "$line" ]]; then
-                # Parse and display Claude's real-time activity
-                local claude_activity=$(parse_claude_json "$line")
-                if [[ -n "$claude_activity" ]]; then
-                    # Handle multi-line output from parse_claude_json
-                    while IFS= read -r activity_line; do
-                        if [[ -n "$activity_line" ]]; then
-                            echo -e "${CYAN}│${NC} $activity_line"
-                        fi
-                    done <<< "$claude_activity"
-                else
-                    # Fallback: show raw JSON for debugging if parser produces no output
+        print(f'│ 🔍 [{timestamp}] Raw: {line}')
+" 2>/dev/null || {
+                    # Fallback: show raw JSON for debugging if parser fails
                     if [[ "$line" =~ ^\{.*\}$ ]]; then
                         echo -e "${YELLOW}│${NC} 🔍 Raw JSON: ${line:0:100}..."
                     else
                         echo -e "${WHITE}│${NC} 📄 Raw output: $line"
                     fi
-                fi
+                }
                 
                 # Flush output for real-time display
                 exec 1>&1
@@ -771,8 +755,8 @@ except Exception as e:
     echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━ CLAUDE OUTPUT END ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
     # Check if it's a quota issue
-    local error_content=$(cat "$claude_error" "$line" 2>/dev/null || echo "")
-    local output_content=$(cat "$claude_output" "$line" 2>/dev/null || echo "")
+    local error_content=$(cat "$claude_error" 2>/dev/null || echo "")
+    local output_content=$(cat "$claude_output" 2>/dev/null || echo "")
     local combined_content="$error_content $output_content"
     
     if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
@@ -1241,13 +1225,13 @@ complete_session_with_merge() {
     
     # Switch back to original branch
     echo -e "${CYAN}Switching to original branch: $ORIGINAL_BRANCH${NC}"
-    if git checkout "$ORIGINAL_BRANCH" "$line" 2>/dev/null; then
+    if git checkout "$ORIGINAL_BRANCH" 2>/dev/null; then
         echo -e "${GREEN}✅ Switched to $ORIGINAL_BRANCH${NC}"
         
         # Pull latest changes (if it's a remote-tracking branch)
         if git rev-parse --verify "origin/$ORIGINAL_BRANCH" >/dev/null 2>&1; then
             echo -e "${CYAN}Pulling latest changes from origin/$ORIGINAL_BRANCH...${NC}"
-            git pull origin "$ORIGINAL_BRANCH" "$line" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not pull from origin${NC}"
+            git pull origin "$ORIGINAL_BRANCH" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not pull from origin${NC}"
         fi
         
         # Merge the session branch
@@ -1419,7 +1403,7 @@ TASK DESCRIPTION: $description
 AFFECTED FILES: $files
 
 CURRENT PROJECT CONTEXT:
-$(cat "$INSTRUCTIONS_FILE" "$line" 2>/dev/null | head -50)
+$(cat "$INSTRUCTIONS_FILE" 2>/dev/null | head -50)
 
 IMPLEMENTATION REQUIREMENTS:
 1. Read and analyze the affected files
@@ -1692,12 +1676,12 @@ initialize_session() {
     else
         echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
         echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
-        if git checkout -b "$SESSION_BRANCH" "$line" 2>/dev/null; then
+        if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
             echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
             log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
         else
             echo -e "${YELLOW}Branch may already exist - attempting to switch to it${NC}"
-            if git checkout "$SESSION_BRANCH" "$line" 2>/dev/null; then
+            if git checkout "$SESSION_BRANCH" 2>/dev/null; then
                 echo -e "${GREEN}Switched to existing session branch: $SESSION_BRANCH${NC}"
                 log_action "Switched to existing session branch: $SESSION_BRANCH"
             else
