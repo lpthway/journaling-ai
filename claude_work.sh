@@ -1391,6 +1391,65 @@ except Exception as e:
 }
 
 # =============================================================================
+# Documentation Functions
+# =============================================================================
+
+create_basic_documentation() {
+    local task_id="$1"
+    local task_name="$2" 
+    local description="$3"
+    local files="$4"
+    
+    echo -e "${WHITE}Creating basic documentation structure...${NC}"
+    
+    # Create folder structure
+    mkdir -p "docs/tasks/$task_id"
+    mkdir -p "docs/implementations/$(date +%Y)/$(date +%m)/$task_id"
+    mkdir -p "docs/testing/$(date +%Y%m%d)/$task_id"
+    
+    # Create basic completion report
+    cat > "docs/tasks/$task_id/completion_report.md" << EOF
+# Task Completion Report: $task_name
+
+**Task ID:** $task_id  
+**Completion Date:** $(date +%Y-%m-%d)  
+**Session:** $SESSION_BRANCH  
+
+## Task Summary:
+$description
+
+## Implementation Details:
+### Files Modified:
+$files
+
+### Key Changes:
+Implementation completed via automated system.
+
+## Testing Results:
+Basic validation completed.
+
+## Usage Instructions:
+Task implementation complete.
+
+## References:
+- Implementation details: [docs/implementations/$(date +%Y)/$(date +%m)/$task_id/](../../implementations/$(date +%Y)/$(date +%m)/$task_id/)
+- Code changes: See git commit history for session $SESSION_BRANCH
+EOF
+
+    # Copy implementation logs if they exist
+    if [ -f "implementation_results/active/$task_id/implementation_log.md" ]; then
+        cp "implementation_results/active/$task_id/implementation_log.md" "docs/implementations/$(date +%Y)/$(date +%m)/$task_id/"
+    fi
+    
+    # Update task index
+    if ! grep -q "\\[$task_id\\]" docs/task_index.md 2>/dev/null; then
+        sed -i "/<!-- Format: /a - [$task_id] $task_name - $(date +%Y-%m-%d) - [View Report](tasks/$task_id/completion_report.md)" docs/task_index.md
+    fi
+    
+    echo -e "${GREEN}✅ Basic documentation created${NC}"
+}
+
+# =============================================================================
 # Claude Execution Functions
 # =============================================================================
 
@@ -1865,8 +1924,32 @@ else:
         fi
     fi
     
-    # Phase 5: Completion and Documentation
+    # Phase 5: Completion and Documentation (Enhanced)
     echo -e "${CYAN}Phase 5: Completion and Documentation${NC}"
+    
+    # Check if documentation already exists to prevent rebuilding
+    if [ -f "docs/tasks/$task_id/completion_report.md" ] && [ "$FORCE_REDOC" != "true" ]; then
+        echo -e "${YELLOW}📝 Documentation already exists for task $task_id - skipping rebuild${NC}"
+        echo -e "${WHITE}Use FORCE_REDOC=true to override this behavior${NC}"
+    else
+        echo -e "${WHITE}📝 Creating structured documentation for task $task_id${NC}"
+        
+        # Run Phase 5 with our modular system for documentation
+        local task_context="Task ID: $task_id
+Task Name: $task_name  
+Description: $description
+Implementation Status: COMPLETED
+Files Modified: $files
+Session: $SESSION_BRANCH"
+        
+        if run_claude_with_phase "5" "$task_context" "$CLAUDE_QUICK_TIMEOUT"; then
+            echo -e "${GREEN}✅ Enhanced documentation created successfully${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Enhanced documentation failed, using basic documentation${NC}"
+            # Fallback to basic documentation creation
+            create_basic_documentation "$task_id" "$task_name" "$description" "$files"
+        fi
+    fi
     
     # Auto-generate implementation notes based on what was done
     local implementation_notes=""
