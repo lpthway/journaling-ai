@@ -32,7 +32,7 @@ const AskQuestion = () => {
     try {
       const response = await insightsAPI.askQuestion(currentQuestion);
       
-      console.log('API Response:', response.data); // Debug log
+      // API Response received
       
       const newEntry = {
         id: Date.now(),

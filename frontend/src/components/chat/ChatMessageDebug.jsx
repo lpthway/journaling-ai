@@ -6,7 +6,7 @@ import { formatTime } from '../../utils/helpers';
 
 const ChatMessageDebug = ({ message, isTyping = false }) => {
   // Debug logging
-  console.log('ChatMessageDebug received:', { message, isTyping });
+  // Debug logging disabled for production
 
   // Enhanced safety checks with detailed logging
   if (!message && !isTyping) {
@@ -19,7 +19,7 @@ const ChatMessageDebug = ({ message, isTyping = false }) => {
   }
 
   if (isTyping) {
-    console.log('ChatMessage: Rendering typing indicator');
+    // Rendering typing indicator
     return (
       <div className="flex justify-start mb-4">
         <div className="flex max-w-[80%] items-start space-x-3">
@@ -57,7 +57,7 @@ const ChatMessageDebug = ({ message, isTyping = false }) => {
   }
 
   const isUser = message.role === 'user';
-  console.log('ChatMessage: Rendering valid message for', isUser ? 'user' : 'assistant');
+  // Rendering valid message
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>

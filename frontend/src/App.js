@@ -33,7 +33,7 @@ function App() {
     const testConnection = async () => {
       try {
         await healthCheck();
-        console.log('✅ API connection successful');
+        // API connection successful
       } catch (error) {
         console.error('❌ API connection failed:', error);
         // Could show a connection status indicator

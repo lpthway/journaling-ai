@@ -63,7 +63,7 @@ const OptimizedInsights = () => {
         last_updated: result.last_updated
       });
       
-      console.log(`📊 Insights loaded in ${responseTime}ms`);
+      // Insights loaded successfully
       
     } catch (err) {
       console.error('❌ Error fetching insights:', err);
@@ -84,7 +84,7 @@ const OptimizedInsights = () => {
       });
       
       if (response.ok) {
-        console.log('🔄 Cache refresh initiated');
+        // Cache refresh initiated
         // Reload insights after a brief delay
         setTimeout(() => fetchInsights(), 2000);
       }
