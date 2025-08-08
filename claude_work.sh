@@ -564,7 +564,7 @@ run_claude_with_quota_monitoring() {
     parse_claude_json() {
         local line="$1"
         if [[ -n "$line" ]]; then
-            python3 -c "
+            echo "$line" | python3 -c "
 import json
 import sys
 from datetime import datetime
@@ -586,7 +586,7 @@ try:
         else:
             print(f'🧠 [{timestamp}] System: {subtype}')
     elif event_type == 'user':
-        print(f'� [{timestamp}] User message processed')
+        print(f'👤 [{timestamp}] User message processed')
     elif event_type == 'assistant':
         # Claude CLI format: {"type":"assistant","message":{"content":[...]}}
         message = data.get('message', {})
@@ -658,7 +658,7 @@ try:
                             file_path = tool_input.get('filePath', tool_input.get('file_path', 'unknown'))
                             content_preview = str(tool_input.get('content', ''))[:50]
                             print(f'📄 Creating: {file_path}')
-                            print(f'� Content preview: {content_preview}...')
+                            print(f'💾 Content preview: {content_preview}...')
                         elif tool_name == 'replace_string_in_file':
                             file_path = tool_input.get('filePath', 'unknown')
                             old_str_preview = str(tool_input.get('oldString', ''))[:50]
@@ -668,7 +668,7 @@ try:
                             file_path = tool_input.get('filePath', 'unknown')
                             start_line = tool_input.get('startLine', 'N/A')
                             end_line = tool_input.get('endLine', 'N/A')
-                            print(f'� Reading: {file_path} (lines {start_line}-{end_line})')
+                            print(f'📖 Reading: {file_path} (lines {start_line}-{end_line})')
                         elif tool_name == 'run_in_terminal':
                             command = tool_input.get('command', 'unknown')
                             print(f'⚡ Running: {command[:50]}...' if len(command) > 50 else f'⚡ Running: {command}')
@@ -686,7 +686,7 @@ try:
         error_msg = data.get('error', {}).get('message', 'Unknown error')
         print(f'❌ [{timestamp}] Error: {error_msg}')
     elif event_type == 'ping':
-        print(f'� [{timestamp}] Connection alive')
+        print(f'🔍 [{timestamp}] Connection alive')
     else:
         # For debugging other event types
         if event_type:
