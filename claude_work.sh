@@ -1391,6 +1391,66 @@ except Exception as e:
 }
 
 # =============================================================================
+# Claude Execution Functions
+# =============================================================================
+
+run_claude_with_phase() {
+    local phase="$1"
+    local task_context="$2"
+    local timeout="${3:-$CLAUDE_TIMEOUT}"
+    
+    echo -e "${CYAN}🤖 Running Claude with Phase $phase instructions...${NC}"
+    
+    # Build phase-specific prompt
+    local core_instructions=$(cat implementation_results/claude_work_core.md 2>/dev/null || echo "# Core instructions file not found")
+    local phase_instructions=$(cat implementation_results/claude_work_phase${phase}.md 2>/dev/null || echo "# Phase $phase instructions file not found")
+    
+    local prompt="
+$(echo "$core_instructions")
+
+=== CURRENT PHASE: $phase ===
+$(echo "$phase_instructions")
+
+=== TASK CONTEXT ===
+$task_context
+
+=== AVAILABLE TOOLS (use these exact names) ===
+- Write: Create new files or completely overwrite existing files
+- Edit: Make exact string replacements in existing files
+- MultiEdit: Make multiple edits to a single file in one operation
+- Read: Read file contents with optional line range
+- LS: List directory contents
+- Bash: Execute shell commands
+- Glob: Find files using patterns
+- Grep: Search file contents
+
+CRITICAL: You must use these exact tool names. Do NOT use:
+- create_file, replace_string_in_file, read_file, list_dir, run_in_terminal (these don't exist)
+
+=== REFERENCE FILES ===
+- Templates: implementation_results/claude_work_templates.md
+- Troubleshooting: implementation_results/claude_work_troubleshooting.md
+- Session tracking: implementation_results/current_session.md
+- Available tasks: implementation_results/tasks/
+
+Read reference files as needed using the Read tool.
+"
+    
+    echo -e "${WHITE}  → Phase: $phase${NC}"
+    echo -e "${WHITE}  → Context length: ${#task_context} characters${NC}"
+    echo -e "${BLUE}  → Total prompt length: ${#prompt} characters${NC}"
+    
+    # Run Claude with the phase-specific prompt
+    if run_claude_with_quota_monitoring "$prompt" "$PROJECT_ROOT" "phase-$phase" "$timeout"; then
+        echo -e "${GREEN}✅ Phase $phase completed successfully${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ Phase $phase failed${NC}"
+        return 1
+    fi
+}
+
+# =============================================================================
 # Automated Implementation Functions
 # =============================================================================
 
@@ -1403,17 +1463,26 @@ automated_implement_task() {
     echo -e "${CYAN}🤖 Starting automated implementation...${NC}"
     echo -e "${WHITE}  → Building implementation prompt for Claude${NC}"
     
-    # Build comprehensive implementation prompt with self-debugging capabilities
+    # Build modular implementation prompt using phase 4 instructions
+    local core_instructions=$(cat implementation_results/claude_work_core.md 2>/dev/null || echo "# Core instructions file not found")
+    local phase4_instructions=$(cat implementation_results/claude_work_phase4.md 2>/dev/null || echo "# Phase 4 instructions file not found")
+    
     local implementation_prompt="
-You are implementing task $task_id: $task_name
+$(echo "$core_instructions")
 
-TASK DESCRIPTION: $description
-AFFECTED FILES: $files
+=== CURRENT PHASE: 4 (Code Implementation) ===
+$(echo "$phase4_instructions")
 
-PROJECT CONTEXT:
+=== TASK CONTEXT ===
+Task ID: $task_id
+Task Name: $task_name
+Description: $description
+Affected Files: $files
+
+=== PROJECT CONTEXT ===
 This is a journaling application with React frontend and Python backend.
 
-AVAILABLE TOOLS (use these exact names):
+=== AVAILABLE TOOLS (use these exact names) ===
 - Write: Create new files or completely overwrite existing files
 - Edit: Make exact string replacements in existing files
 - MultiEdit: Make multiple edits to a single file in one operation
@@ -1427,25 +1496,12 @@ CRITICAL: You must use these exact tool names. Do NOT use:
 - create_file, replace_string_in_file, read_file, list_dir, run_in_terminal (these don't exist)
 - Use ONLY the Claude CLI tools listed above
 
-SELF-DEBUGGING WORKFLOW:
-1. ANALYZE: Use Read tool to understand current state of affected files
-2. PLAN: Identify exactly what needs to be changed
-3. IMPLEMENT: Use Edit tool to make changes step by step
-4. VALIDATE: Use Bash tool to check for problems after each change (e.g., python -m py_compile)
-5. FIX: If errors found, use Edit tool to fix them immediately
-6. VERIFY: Use Read tool to confirm changes are correct
+=== REFERENCE FILES ===
+- Templates: implementation_results/claude_work_templates.md
+- Troubleshooting: implementation_results/claude_work_troubleshooting.md
+- Session tracking: implementation_results/current_session.md
 
-IMPLEMENTATION REQUIREMENTS:
-1. Start by using Read tool on all affected files to understand current state
-2. Use Bash tool to check for syntax errors in existing files (e.g., python -m py_compile file.py)
-3. Make changes using ONLY Edit tool for modifications or Write tool for new files
-4. After EACH file modification, use Bash tool to check for syntax errors
-5. If errors detected, immediately fix with Edit tool
-6. Create new files only if needed using Write tool
-7. Follow React/JavaScript best practices for frontend files
-8. Follow Python/FastAPI best practices for backend files
-9. Make focused changes that directly address the task description
-10. Always verify changes by using Read tool to read the modified sections back
+Read reference files as needed using the Read tool.
 
 ERROR PREVENTION AND FIXING:
 - Before making any change, use read_file to understand existing code structure
@@ -2098,6 +2154,19 @@ main() {
             read_self_instructions
             main_loop
             ;;
+        "phase")
+            local phase_num="$2"
+            local task_context="$3"
+            if [[ -z "$phase_num" ]]; then
+                echo -e "${RED}Error: Phase number required${NC}"
+                echo "Usage: $0 phase <1-5> [task_context]"
+                exit 1
+            fi
+            print_banner
+            initialize_session
+            check_claude_availability
+            run_claude_with_phase "$phase_num" "$task_context"
+            ;;
         "status")
             show_status
             ;;
@@ -2105,19 +2174,27 @@ main() {
             cat << EOF
 Claude Work - AI Journaling Assistant Implementation Script
 
-Usage: $0 [COMMAND]
+Usage: $0 [COMMAND] [OPTIONS]
 
 Commands:
-  work      Start interactive implementation session (default)
-  --resume  Resume previous session
-  status    Show current implementation progress
-  help      Show this help message
+  work           Start interactive implementation session (default)
+  --resume       Resume previous session
+  phase <1-5>    Run specific phase with Claude
+  status         Show current implementation progress
+  help           Show this help message
+
+Phase Commands:
+  $0 phase 1 "task description"    # Session Initialization
+  $0 phase 2 "task description"    # Task Selection & Analysis  
+  $0 phase 3 "task description"    # Implementation Planning
+  $0 phase 4 "task description"    # Code Implementation
+  $0 phase 5 "task description"    # Testing & Documentation
 
 Environment Variables:
   WORK_SESSION_ID    Custom session ID (default: timestamp)
   
 Features:
-  • 📋 Self-instruction guided implementation
+  • 📋 Modular phase-specific instructions for Claude
   • 🧪 Automated testing after each task
   • 📝 Comprehensive progress tracking
   • 🔄 Git integration with automated commits
@@ -2125,16 +2202,19 @@ Features:
   
 The script follows a 5-phase implementation workflow:
   1. Session Initialization
-  2. Task Preparation  
-  3. Implementation Execution (manual)
-  4. Testing and Validation (automated)
-  5. Completion and Documentation (automated)
+  2. Task Selection & Analysis
+  3. Implementation Planning
+  4. Code Implementation
+  5. Testing & Documentation
 
 Files:
-  implementation_results/implementation_todo.md    - Task tracking
+  implementation_results/claude_work_core.md           - Core instructions
+  implementation_results/claude_work_phase[1-5].md    - Phase-specific instructions
+  implementation_results/claude_work_templates.md     - Documentation templates
+  implementation_results/claude_work_troubleshooting.md - Troubleshooting guide
+  implementation_results/implementation_todo.md       - Task tracking
   implementation_results/implementation_progress.json - Progress data
-  implementation_results/claude_work_instructions.md - Self-instructions
-  implementation_results/logs/session_*.log - Session logs
+  implementation_results/logs/session_*.log          - Session logs
 EOF
             ;;
         *)

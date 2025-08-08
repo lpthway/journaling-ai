@@ -40,10 +40,15 @@ class RedisSettings(BaseSettings):
     """Redis configuration for caching and sessions."""
     
     url: str = Field(
-        default="redis://localhost:6379",
+        default_factory=lambda: os.getenv(
+            "REDIS_URL", 
+            "redis://:password@localhost:6379/0"  # Match docker-compose.yml password
+        ),
         description="Redis connection URL"
     )
-    password: Optional[str] = Field(default=None)
+    password: Optional[str] = Field(
+        default_factory=lambda: os.getenv("REDIS_PASSWORD", "password")  # Match docker-compose.yml
+    )
     db: int = Field(default=0, ge=0, le=15)
     
     # Connection pool settings
@@ -100,7 +105,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(
         default_factory=lambda: os.getenv(
             "DATABASE_URL", 
-            "postgresql+asyncpg://postgres:secure_password@localhost:5432/journaling_ai"
+            "postgresql+asyncpg://postgres:password@localhost:5432/journaling_ai"
         )
     )
     DB_POOL_SIZE: int = 20
@@ -150,7 +155,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = Field(
         default_factory=lambda: os.getenv(
             "REDIS_URL", 
-            "redis://:secure_redis_password@localhost:6379/0"
+            "redis://:password@localhost:6379/0"  # Match docker-compose.yml password
         ),
         description="Redis connection URL with authentication for Docker Redis"
     )
@@ -162,14 +167,14 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = Field(
         default_factory=lambda: os.getenv(
             "CELERY_BROKER_URL", 
-            "redis://:secure_redis_password@localhost:6379/0"
+            "redis://:password@localhost:6379/0"  # Match docker-compose.yml password
         ),
         description="Celery broker URL with authentication for Docker Redis"
     )
     CELERY_RESULT_BACKEND: str = Field(
         default_factory=lambda: os.getenv(
             "CELERY_RESULT_BACKEND", 
-            "redis://:secure_redis_password@localhost:6379/0"
+            "redis://:password@localhost:6379/0"  # Match docker-compose.yml password
         ),
         description="Celery result backend with authentication for Docker Redis"
     )
