@@ -30,7 +30,6 @@ backend/env.bak/
 backend/venv.bak/
 .venv/
 .env/
-tools/ai-code-analyzer/venv
 
 # Environment variables
 .env

@@ -53,10 +53,10 @@
     "average_task_time": 0.0
   },
   "current_session": {
-    "session_id": null,
+    "session_id": "fresh_start",
     "started_at": null,
     "current_task": null,
-    "last_updated": "2025-08-07T17:00:00Z"
+    "last_updated": null
   },
   "completed_tasks": [],
   "failed_tasks": [],
