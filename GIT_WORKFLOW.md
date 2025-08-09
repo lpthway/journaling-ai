@@ -56,6 +56,18 @@ The `claude_work.sh` script now follows a simplified, consistent git workflow de
 
 ### Manual Commands (if needed)
 
+#### Resume a specific session
+```bash
+# List available sessions
+./claude_work.sh sessions
+
+# Resume a specific session by ID
+WORK_SESSION_ID=20250809_120500 ./claude_work.sh work
+
+# Or run resume scripts (if available)
+./implementation_results/work_resume_20250809_120500.sh
+```
+
 #### Clean up a specific session branch
 ```bash
 git branch -d phase-YYYYMMDD_HHMMSS
@@ -71,6 +83,27 @@ git log --oneline --graph --decorate
 ```bash
 git branch -a | grep phase-
 ```
+
+### Session Management
+
+#### Interrupted Session Recovery
+If your session gets interrupted (quota exhausted, connection lost, etc.):
+
+1. **Check available sessions**: `./claude_work.sh sessions`
+2. **Resume by session ID**: `WORK_SESSION_ID=YYYYMMDD_HHMMSS ./claude_work.sh work`
+3. **Use resume scripts**: `./implementation_results/work_resume_*.sh` (automatic timing)
+
+#### Session Resume Logic
+- **Environment Variable**: `WORK_SESSION_ID=YYYYMMDD_HHMMSS` forces resume of specific session
+- **Automatic Detection**: If already on a `phase-*` branch, continues that session
+- **Branch Verification**: Checks if session branch exists before attempting switch
+- **Smart Switching**: Automatically switches to existing session branch when resuming
+
+#### Session States
+- **New Session**: Creates `phase-YYYYMMDD_HHMMSS` from main
+- **Active Session**: Working on existing session branch
+- **Interrupted Session**: Session branch exists but not currently active
+- **Completed Session**: Work merged to main, session branch cleaned up
 
 ### Benefits
 
