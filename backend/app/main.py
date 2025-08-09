@@ -18,6 +18,13 @@ from app.services.unified_database_service import unified_db_service
 from app.services.redis_service import redis_service
 from app.core.service_interfaces import service_registry
 
+# Security middleware imports
+from app.core.security_middleware import (
+    SecurityHeadersMiddleware,
+    RequestLoggingMiddleware,
+    RateLimitingMiddleware
+)
+
 # API routers
 from app.api import entries, topics, insights_v2, psychology, circuit_breaker
 # Temporarily disabled sessions API due to missing legacy dependencies
@@ -243,13 +250,27 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Configure CORS for development and production
+# Add security middleware (order matters - add from innermost to outermost)
+app.add_middleware(SecurityHeadersMiddleware, nonce_generator=True)
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(RateLimitingMiddleware, requests_per_minute=100)
+
+# Configure CORS for development and production with security restrictions
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],  # Specific methods only
+    allow_headers=[
+        "Accept",
+        "Accept-Language", 
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Cache-Control"
+    ],  # Specific headers only
+    expose_headers=["X-Request-ID"],  # Only expose safe headers
 )
 
 # Include API routers with proper ordering

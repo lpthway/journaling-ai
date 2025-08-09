@@ -62,12 +62,24 @@ class RedisSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     """Security and authentication configuration."""
     
+    @staticmethod
+    def _generate_secure_key() -> str:
+        """Generate a secure random key if none provided."""
+        import secrets
+        import warnings
+        
+        warnings.warn(
+            "No SECURITY_SECRET_KEY environment variable found. "
+            "Using auto-generated key. Set SECURITY_SECRET_KEY in production!",
+            UserWarning
+        )
+        return secrets.token_urlsafe(32)
+    
     # JWT settings
     secret_key: str = Field(
         default_factory=lambda: os.getenv(
-            "SECURITY_SECRET_KEY", 
-            "change-this-secret-key-in-production-environment"
-        ),
+            "SECURITY_SECRET_KEY"
+        ) or SecuritySettings._generate_secure_key(),
         description="Secret key for JWT tokens"
     )
     algorithm: str = Field(default="HS256")
@@ -207,8 +219,13 @@ class Settings(BaseSettings):
     def validate_security_settings(cls, v, values):
         """Validate security settings for production."""
         if values.get('ENVIRONMENT') == 'production':
-            if v.secret_key == "change-this-secret-key-in-production-environment":
-                raise ValueError("Secret key must be changed for production")
+            # Check if using environment variable (more secure)
+            if not os.getenv("SECURITY_SECRET_KEY"):
+                raise ValueError("SECURITY_SECRET_KEY environment variable must be set in production")
+            
+            # Ensure key is sufficiently long
+            if len(v.secret_key) < 32:
+                raise ValueError("Secret key must be at least 32 characters in production")
         return v
     
     @validator('DEBUG')
