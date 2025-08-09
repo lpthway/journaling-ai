@@ -73,13 +73,20 @@ const EntryCard: React.FC<EntryCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200">
+    <article 
+      className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:scale-[1.01] animate-fade-in"
+      aria-labelledby={`entry-title-${entry.id}`}
+      role="article"
+    >
       <div className="p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center space-x-2">
-              <h3 className="text-lg font-semibold text-gray-900 truncate">
+              <h3 
+                id={`entry-title-${entry.id}`}
+                className="text-lg font-semibold text-gray-900 truncate"
+              >
                 {entry.title}
               </h3>
               {entry.is_favorite && (
@@ -110,12 +117,14 @@ const EntryCard: React.FC<EntryCardProps> = ({
               <button
                 onClick={handleToggleFavorite}
                 disabled={isTogglingFavorite}
-                className={`p-1.5 rounded-md transition-colors ${
+                className={`p-1.5 rounded-md transition-all duration-200 transform hover:scale-110 focus:scale-110 ${
                   entry.is_favorite
                     ? 'text-red-500 hover:text-red-600 hover:bg-red-50'
                     : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
                 }`}
                 title={entry.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                aria-label={entry.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                aria-pressed={entry.is_favorite}
               >
                 {entry.is_favorite ? (
                   <HeartSolidIcon className="w-4 h-4" />
@@ -125,15 +134,17 @@ const EntryCard: React.FC<EntryCardProps> = ({
               </button>
               <button
                 onClick={handleEdit}
-                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all duration-200 transform hover:scale-110 focus:scale-110"
                 title="Edit entry"
+                aria-label="Edit entry"
               >
                 <PencilIcon className="w-4 h-4" />
               </button>
               <button
                 onClick={handleDelete}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-all duration-200 transform hover:scale-110 focus:scale-110"
                 title="Delete entry"
+                aria-label="Delete entry"
               >
                 <TrashIcon className="w-4 h-4" />
               </button>
@@ -181,13 +192,14 @@ const EntryCard: React.FC<EntryCardProps> = ({
 
           <button
             onClick={handleReadMore}
-            className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-all duration-200 hover:translate-x-1"
+            aria-label={`Read more about ${entry.title}`}
           >
             Read more →
           </button>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 

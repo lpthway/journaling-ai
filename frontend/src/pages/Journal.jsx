@@ -8,12 +8,15 @@ import AdvancedSearch from '../components/Entry/AdvancedSearch';
 import EntryTemplates from '../components/Entry/EntryTemplates';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
+import SkeletonList from '../components/Common/SkeletonList';
+import ErrorState from '../components/Common/ErrorState';
 import MoodIndicator from '../components/Common/MoodIndicator';
 
 const Journal = ({ searchQuery = null }) => {
   const [entries, setEntries] = useState([]);
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -43,6 +46,7 @@ const Journal = ({ searchQuery = null }) => {
 
   const loadData = async () => {
     try {
+      setError(null);
       const [entriesResponse, topicsResponse] = await Promise.all([
         entryAPI.getAll({ limit: 50 }),
         topicAPI.getAll()
@@ -52,6 +56,7 @@ const Journal = ({ searchQuery = null }) => {
       setTopics(topicsResponse.data);
     } catch (error) {
       console.error('Error loading data:', error);
+      setError(error);
       toast.error('Failed to load journal data');
     } finally {
       setLoading(false);
@@ -216,9 +221,32 @@ const Journal = ({ searchQuery = null }) => {
 
   if (loading && entries.length === 0) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner size="lg" />
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="h-8 bg-gray-200 rounded w-48 animate-shimmer"></div>
+            <div className="h-4 bg-gray-200 rounded w-32 mt-2 animate-shimmer"></div>
+          </div>
+          <div className="mt-4 sm:mt-0 flex space-x-2">
+            <div className="h-10 bg-gray-200 rounded w-32 animate-shimmer"></div>
+            <div className="h-10 bg-gray-200 rounded w-28 animate-shimmer"></div>
+            <div className="h-10 bg-gray-200 rounded w-24 animate-shimmer"></div>
+          </div>
+        </div>
+        <SkeletonList count={6} />
       </div>
+    );
+  }
+
+  if (error && entries.length === 0) {
+    return (
+      <ErrorState
+        type="network"
+        title="Unable to load journal entries"
+        description="Please check your internet connection and try again."
+        onRetry={loadData}
+        showHomeButton
+      />
     );
   }
 

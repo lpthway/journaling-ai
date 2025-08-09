@@ -93,7 +93,9 @@ const Header = ({ onSearch }) => {
           <div className="md:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all duration-200"
+              aria-expanded={isMenuOpen}
+              aria-label="Toggle mobile menu"
             >
               {isMenuOpen ? (
                 <XMarkIcon className="block h-6 w-6" />
@@ -106,7 +108,7 @@ const Header = ({ onSearch }) => {
 
         {/* Mobile menu */}
         {isMenuOpen && (
-          <div className="md:hidden">
+          <div className="md:hidden animate-slide-down" role="menu" aria-label="Mobile navigation menu">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               {navigation.map((item) => {
                 const Icon = item.icon;
@@ -115,11 +117,12 @@ const Header = ({ onSearch }) => {
                     key={item.name}
                     to={item.href}
                     onClick={() => setIsMenuOpen(false)}
-                    className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                    className={`block px-3 py-2 rounded-md text-base font-medium transition-all duration-200 ${
                       isActive(item.href)
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                     }`}
+                    role="menuitem"
                   >
                     <div className="flex items-center">
                       <Icon className="w-5 h-5 mr-3" />
