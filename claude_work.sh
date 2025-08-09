@@ -777,8 +777,16 @@ except Exception as e:
     local output_content=$(cat "$claude_output" 2>/dev/null || echo "")
     local combined_content="$error_content $output_content"
     
-    if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
-        echo -e "${RED}❌ Claude quota/rate limit reached: $output_content${NC}"
+    # Debug quota detection
+    if [[ -n "$combined_content" ]]; then
+        echo -e "${CYAN}Debug: Checking for quota issues in output...${NC}"
+        echo -e "${YELLOW}Error content length: ${#error_content} chars${NC}"
+        echo -e "${YELLOW}Output content length: ${#output_content} chars${NC}"
+    fi
+    
+    # More specific quota detection - look for actual quota error patterns
+    if [[ "$combined_content" == *"Claude AI usage limit reached"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"rate limit exceeded"* ]] || [[ "$combined_content" == *"quota exceeded"* ]]; then
+        echo -e "${RED}❌ Claude quota/rate limit reached: $combined_content${NC}"
         rm -f "$claude_output" "$claude_error"
         cd "$original_dir"
         handle_claude_quota_exhausted "$task_id" "$combined_content"
@@ -796,8 +804,8 @@ check_claude_availability() {
     
     # Check if claude is installed
     if command -v claude &> /dev/null; then
-        CLAUDE_CMD="claude --dangerously-skip-permissions"
-        echo -e "${GREEN}✅ Found Claude CLI as 'claude' (with permissions bypass)${NC}"
+        CLAUDE_CMD="claude --dangerously-skip-permissions --model sonnet"
+        echo -e "${GREEN}✅ Found Claude CLI as 'claude' (with permissions bypass, using Sonnet 4)${NC}"
     else
         echo -e "${RED}❌ ERROR: Claude CLI not found${NC}"
         echo -e "${WHITE}Please install it with: curl -fsSL claude.ai/install.sh | bash${NC}"
@@ -826,8 +834,8 @@ check_claude_availability() {
         
         rm -f "$test_output" "$test_error"
         
-        # Check if it's a quota issue
-        if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"usage limit"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"Claude AI usage limit reached"* ]]; then
+        # Check if it's a quota issue - use more specific detection
+        if [[ "$combined_content" == *"Claude AI usage limit reached"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"rate limit exceeded"* ]] || [[ "$combined_content" == *"quota exceeded"* ]]; then
             echo -e "${RED}❌ Claude quota exhausted${NC}"
             echo -e "${YELLOW}⚠️  Claude quota has been reached. Please wait for reset or try resume scripts.${NC}"
             echo -e "${WHITE}💡 You may have resume scripts available in: ${IMPL_DIR}/${NC}"
@@ -2485,7 +2493,7 @@ main() {
                 local output_content=$(cat "$test_output" 2>/dev/null || echo "")
                 local combined_content="$error_content $output_content"
                 
-                if [[ "$combined_content" == *"quota"* ]] || [[ "$combined_content" == *"rate limit"* ]] || [[ "$combined_content" == *"limit exceeded"* ]] || [[ "$combined_content" == *"usage limit"* ]]; then
+                if [[ "$combined_content" == *"Claude AI usage limit reached"* ]] || [[ "$combined_content" == *"Your limit will reset"* ]] || [[ "$combined_content" == *"usage limit reached"* ]] || [[ "$combined_content" == *"rate limit exceeded"* ]] || [[ "$combined_content" == *"quota exceeded"* ]]; then
                     echo -e "${RED}❌ Claude quota exhausted${NC}"
                     echo -e "${YELLOW}Quota message: $combined_content${NC}"
                 else
@@ -2519,6 +2527,32 @@ main() {
         "status")
             show_status
             ;;
+        "model")
+            echo -e "${GREEN}🤖 Checking Claude model configuration...${NC}"
+            echo ""
+            
+            # Check Claude CLI availability and setup
+            set +e  # Temporarily disable exit on error
+            check_claude_availability
+            claude_status=$?
+            set -e  # Re-enable exit on error
+            
+            if [[ $claude_status -eq 0 ]]; then
+                echo -e "${CYAN}📊 Model Information:${NC}"
+                echo -e "${WHITE}   Command: $CLAUDE_CMD${NC}"
+                echo ""
+                echo -e "${CYAN}🔍 Querying Claude for model details...${NC}"
+                $CLAUDE_CMD -p "What model are you? Please provide your exact model ID and version." --output-format text
+                echo ""
+                echo -e "${GREEN}✅ Claude Sonnet 4 is configured and ready${NC}"
+            elif [[ $claude_status -eq 2 ]]; then
+                echo -e "${RED}❌ Claude quota exhausted - cannot check model${NC}"
+                echo -e "${YELLOW}⚠️  Wait for quota reset and try again${NC}"
+            else
+                echo -e "${RED}❌ Claude CLI not available${NC}"
+                echo -e "${WHITE}Command attempted: $CLAUDE_CMD${NC}"
+            fi
+            ;;
         "help")
             cat << EOF
 Claude Work - AI Journaling Assistant Implementation Script
@@ -2528,9 +2562,11 @@ Usage: $0 [COMMAND] [OPTIONS]
 Commands:
   work           Start interactive implementation session (default)
   --resume       Resume previous session
+  --auto-resume  Intelligent auto-resume with quota monitoring
   phase <1-5>    Run specific phase with Claude
   quota          Check Claude quota status and available resume scripts
   status         Show current implementation progress
+  model          Check which Claude model is being used
   help           Show this help message
 
 Phase Commands:
