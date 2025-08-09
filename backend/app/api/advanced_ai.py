@@ -621,18 +621,7 @@ def _interpret_personality_dimensions(dimensions: Dict[Any, float]) -> Dict[str,
     return interpretations
 
 # ==================== ERROR HANDLERS ====================
-
-@router.exception_handler(ValueError)
-async def value_error_handler(request, exc):
-    """Handle value errors in advanced AI processing"""
-    logger.error(f"Value error in advanced AI: {exc}")
-    raise HTTPException(status_code=400, detail=f"Invalid input data: {str(exc)}")
-
-@router.exception_handler(Exception)
-async def general_error_handler(request, exc):
-    """Handle general errors in advanced AI processing"""
-    logger.error(f"Unexpected error in advanced AI: {exc}")
-    raise HTTPException(status_code=500, detail="An unexpected error occurred in AI processing")
+# Note: Exception handlers are registered on the main app, not router
 
 # ==================== ROUTER METADATA ====================
 
