@@ -93,17 +93,39 @@ If your session gets interrupted (quota exhausted, connection lost, etc.):
 2. **Resume by session ID**: `WORK_SESSION_ID=YYYYMMDD_HHMMSS ./claude_work.sh work`
 3. **Use resume scripts**: `./implementation_results/work_resume_*.sh` (automatic timing)
 
+#### Automation Mode
+For unattended execution (CI/automation):
+
+```bash
+# Fully automatic mode - no user prompts
+AUTO_MODE=true ./claude_work.sh work
+
+# Automatic cleanup of old branches
+AUTO_CLEANUP_BRANCHES=true ./claude_work.sh work
+
+# Automatic merging of completed sessions  
+AUTO_MERGE_COMPLETED=true ./claude_work.sh work
+
+# Combined automation (recommended for CI)
+AUTO_MODE=true AUTO_CLEANUP_BRANCHES=true ./claude_work.sh work
+
+# Resume specific session automatically
+AUTO_MODE=true WORK_SESSION_ID=20250809_140000 ./claude_work.sh work
+```
+
 #### Session Resume Logic
 - **Environment Variable**: `WORK_SESSION_ID=YYYYMMDD_HHMMSS` forces resume of specific session
 - **Automatic Detection**: If already on a `phase-*` branch, continues that session
 - **Branch Verification**: Checks if session branch exists before attempting switch
 - **Smart Switching**: Automatically switches to existing session branch when resuming
+- **Auto Mode**: `AUTO_MODE=true` bypasses all user prompts and proceeds automatically
 
 #### Session States
 - **New Session**: Creates `phase-YYYYMMDD_HHMMSS` from main
 - **Active Session**: Working on existing session branch
 - **Interrupted Session**: Session branch exists but not currently active
 - **Completed Session**: Work merged to main, session branch cleaned up
+- **Automated Session**: Runs without user interaction when `AUTO_MODE=true`
 
 ### Benefits
 
