@@ -36,6 +36,8 @@ from app.api import entries, topics, insights_v2, psychology, circuit_breaker, m
 from app.api import health
 # Performance optimized API router import
 from app.api import performance_optimized
+# Advanced AI API routers
+from app.api import advanced_ai, enhanced_chat
 # Temporarily disabled sessions API due to missing legacy dependencies
 # from app.api import sessions
 
@@ -222,6 +224,14 @@ app = FastAPI(
         {
             "name": "performance",
             "description": "High-performance optimized endpoints for better UX"
+        },
+        {
+            "name": "advanced-ai",
+            "description": "Advanced AI capabilities including personality profiling and predictive analytics"
+        },
+        {
+            "name": "enhanced-chat",
+            "description": "Sophisticated conversational AI with therapeutic capabilities"
         }
     ],
     contact={
@@ -316,6 +326,10 @@ app.include_router(circuit_breaker.router, tags=["circuit-breakers"])
 
 # Performance optimized endpoints
 app.include_router(performance_optimized.router, prefix=f"{settings.API_V1_STR}", tags=["performance"])
+
+# Advanced AI endpoints
+app.include_router(advanced_ai.router, prefix=f"{settings.API_V1_STR}/ai/advanced", tags=["advanced-ai"])
+app.include_router(enhanced_chat.router, prefix=f"{settings.API_V1_STR}/chat", tags=["enhanced-chat"])
 
 # Monitoring and health endpoints
 app.include_router(health.router, prefix=f"{settings.API_V1_STR}/health", tags=["health"])
