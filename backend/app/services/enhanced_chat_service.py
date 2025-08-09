@@ -367,7 +367,7 @@ class EnhancedChatService:
         """Get or create conversation context"""
         try:
             cache_key = f"chat_context_{session_id}"
-            cached_context = await unified_cache_service.get_ai_model_instance(cache_key)
+            cached_context = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if cached_context:
                 return cached_context
@@ -404,7 +404,7 @@ class EnhancedChatService:
             )
             
             # Cache context
-            await unified_cache_service.set_ai_model_instance(context, cache_key, ttl=3600)  # 1 hour
+            await unified_cache_service.set_ai_analysis_result(context, cache_key, ttl=3600)  # 1 hour
             
             return context
             
@@ -466,9 +466,7 @@ class EnhancedChatService:
             # Generate response using LLM service
             response = await llm_service.generate_response(
                 prompt=prompt,
-                max_tokens=300,
-                temperature=0.7,
-                context_window=2048
+                context=context.conversation_history[-3:] if context and context.conversation_history else None
             )
             
             # Post-process response for therapeutic appropriateness
@@ -915,7 +913,7 @@ Response:"""
             
             # Save to cache
             cache_key = f"chat_context_{context.session_id}"
-            await unified_cache_service.set_ai_model_instance(context, cache_key, ttl=3600)
+            await unified_cache_service.set_ai_analysis_result(context, cache_key, ttl=3600)
             
         except Exception as e:
             logger.error(f"❌ Error updating conversation context: {e}")
@@ -1070,7 +1068,7 @@ Response:"""
         """End conversation and generate summary"""
         try:
             cache_key = f"chat_context_{session_id}"
-            context = await unified_cache_service.get_ai_model_instance(cache_key)
+            context = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if not context:
                 return {"status": "session_not_found"}
@@ -1160,8 +1158,8 @@ Response:"""
             # Check cache
             test_key = "health_check_enhanced_chat"
             test_context = self._create_fallback_context("test_user", "test_session", ConversationMode.SUPPORTIVE_LISTENING)
-            await unified_cache_service.set_ai_model_instance(test_context, test_key, ttl=60)
-            cached_context = await unified_cache_service.get_ai_model_instance(test_key)
+            await unified_cache_service.set_ai_analysis_result(test_context, test_key, ttl=60)
+            cached_context = await unified_cache_service.get_ai_analysis_result(test_key)
             health["cache_operational"] = cached_context is not None
             
             # Overall status

@@ -246,25 +246,17 @@ class AIModelManager:
                 logger.debug(f"📖 Using cached model: {model_key}")
                 return self.loaded_models[model_key]
             
-            # Check cache using Phase 2 patterns
-            cache_key = CachePatterns.ai_model_instance(model_key, "latest")
-            cached_model = await unified_cache_service.get_ai_model_instance(cache_key)
-            
-            if cached_model:
-                logger.debug(f"🗃️ Model retrieved from cache: {model_key}")
-                self.loaded_models[model_key] = cached_model
-                self._update_model_usage(model_key)
-                return cached_model
+            # NOTE: AI model objects (transformers pipelines) cannot be properly serialized
+            # for Redis cache due to their complexity. They should only be cached in memory.
+            # Redis cache is only suitable for serializable data objects, not model instances.
             
             # Load model with memory management
             model = await self._load_model_with_fallback(model_key, **kwargs)
             
             if model:
-                # Cache model using Phase 2 patterns
-                await unified_cache_service.set_ai_model_instance(
-                    model, cache_key, ttl=21600  # 6 hours
-                )
-                logger.info(f"✅ Model loaded and cached: {model_key}")
+                # Store in memory only (AI models can't be serialized for Redis)
+                self.loaded_models[model_key] = model
+                logger.info(f"✅ Model loaded and stored in memory: {model_key}")
             
             return model
             

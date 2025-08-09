@@ -205,18 +205,18 @@ class HardwareService:
                 fallback_model="cardiffnlp/twitter-roberta-base-sentiment-latest"
             ),
             "high": ModelConfig(
-                model_name="microsoft/deberta-v3-base",
+                model_name="cardiffnlp/twitter-roberta-base-sentiment-latest",
                 memory_requirement_gb=2.5,
                 min_compute_capability=7.0,
                 prefers_gpu=True,
                 fallback_model="nlptown/bert-base-multilingual-uncased-sentiment"
             ),
             "enterprise": ModelConfig(
-                model_name="microsoft/deberta-v3-large",
+                model_name="cardiffnlp/twitter-roberta-base-sentiment-latest",
                 memory_requirement_gb=4.0,
                 min_compute_capability=7.5,
                 prefers_gpu=True,
-                fallback_model="microsoft/deberta-v3-base"
+                fallback_model="cardiffnlp/twitter-roberta-base-sentiment-latest"
             )
         }
         

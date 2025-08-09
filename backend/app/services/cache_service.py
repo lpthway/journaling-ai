@@ -189,14 +189,22 @@ class UnifiedCacheService:
     # =============================================================================
     
     async def get_ai_model_instance(self, model_name: str, version: str = "latest") -> Optional[Any]:
-        """Get AI model instance from cache"""
-        cache_key = CachePatterns.ai_model_instance(model_name, version)
-        return await self.redis.get(cache_key)
+        """Get AI model instance from cache - DEPRECATED: Models should not be cached in Redis"""
+        logger.warning("AI model instances should not be cached in Redis due to serialization issues")
+        return None
     
     async def set_ai_model_instance(self, data: Any, model_name: str, version: str = "latest", 
                                    ttl: int = None) -> bool:
-        """Set AI model instance in cache"""
-        cache_key = CachePatterns.ai_model_instance(model_name, version)
+        """Set AI model instance in cache - DEPRECATED: Models should not be cached in Redis"""
+        logger.warning("AI model instances should not be cached in Redis due to serialization issues")
+        return False
+    
+    async def get_ai_analysis_result(self, cache_key: str) -> Optional[Any]:
+        """Get AI analysis result from cache (for data objects, not model instances)"""
+        return await self.redis.get(cache_key)
+    
+    async def set_ai_analysis_result(self, data: Any, cache_key: str, ttl: int = None) -> bool:
+        """Set AI analysis result in cache (for data objects, not model instances)"""
         ttl = ttl or CacheTTL.AI_MODEL_DEFAULT
         return await self.redis.set(cache_key, data, ttl=ttl)
     

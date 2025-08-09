@@ -226,7 +226,7 @@ class AIEmotionService:
         try:
             # Check cache first using Phase 2 patterns
             cache_key = self._build_emotion_cache_key(text, language, include_patterns)
-            cached_analysis = await unified_cache_service.get_ai_model_instance(cache_key)
+            cached_analysis = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if cached_analysis:
                 self.analysis_stats["cache_hits"] += 1
@@ -240,7 +240,7 @@ class AIEmotionService:
             
             if analysis:
                 # Cache the analysis
-                await unified_cache_service.set_ai_model_instance(
+                await unified_cache_service.set_ai_analysis_result(
                     analysis, cache_key, ttl=3600  # 1 hour
                 )
                 
@@ -733,8 +733,8 @@ class AIEmotionService:
                 emotional_stability=0.0, detected_patterns=[],
                 analysis_metadata={}, created_at=datetime.utcnow()
             )
-            await unified_cache_service.set_ai_model_instance(test_analysis, test_key, ttl=60)
-            cached_value = await unified_cache_service.get_ai_model_instance(test_key)
+            await unified_cache_service.set_ai_analysis_result(test_analysis, test_key, ttl=60)
+            cached_value = await unified_cache_service.get_ai_analysis_result(test_key)
             health["cache_operational"] = cached_value is not None
             
             # Overall status

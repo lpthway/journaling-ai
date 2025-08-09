@@ -206,7 +206,7 @@ class AdvancedAIService:
         """
         try:
             cache_key = self._build_cache_key(f"temporal_{user_id}_{timeframe.value}", entries)
-            cached_insights = await unified_cache_service.get_ai_model_instance(cache_key)
+            cached_insights = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if cached_insights:
                 self.analytics_stats["cache_hits"] += 1
@@ -264,7 +264,7 @@ class AdvancedAIService:
 
             # Cache results
             if insights:
-                await unified_cache_service.set_ai_model_instance(insights, cache_key, ttl=7200)  # 2 hours
+                await unified_cache_service.set_ai_analysis_result(insights, cache_key, ttl=7200)  # 2 hours
                 self.analytics_stats["insights_created"] += len(insights)
                 self.analytics_stats["total_analyses"] += 1
 
@@ -477,7 +477,7 @@ class AdvancedAIService:
         """
         try:
             cache_key = self._build_cache_key(f"personality_{user_id}", entries)
-            cached_profile = await unified_cache_service.get_ai_model_instance(cache_key)
+            cached_profile = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if cached_profile:
                 self.analytics_stats["cache_hits"] += 1
@@ -516,7 +516,7 @@ class AdvancedAIService:
             )
             
             # Cache the profile
-            await unified_cache_service.set_ai_model_instance(profile, cache_key, ttl=86400)  # 24 hours
+            await unified_cache_service.set_ai_analysis_result(profile, cache_key, ttl=86400)  # 24 hours
             self.analytics_stats["personality_profiles"] += 1
             
             logger.info(f"🧠 Generated personality profile for user {user_id} (confidence: {confidence_score:.2f})")
@@ -689,7 +689,7 @@ class AdvancedAIService:
         """
         try:
             cache_key = self._build_cache_key(f"prediction_{user_id}_{prediction_horizon}", entries)
-            cached_analysis = await unified_cache_service.get_ai_model_instance(cache_key)
+            cached_analysis = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if cached_analysis:
                 self.analytics_stats["cache_hits"] += 1
@@ -726,7 +726,7 @@ class AdvancedAIService:
             )
             
             # Cache results
-            await unified_cache_service.set_ai_model_instance(analysis, cache_key, ttl=14400)  # 4 hours
+            await unified_cache_service.set_ai_analysis_result(analysis, cache_key, ttl=14400)  # 4 hours
             self.analytics_stats["predictions_generated"] += 1
             
             logger.info(f"🔮 Generated predictive analysis for user {user_id} ({prediction_horizon} day horizon)")
@@ -1127,8 +1127,8 @@ class AdvancedAIService:
             # Check cache
             test_key = "health_check_advanced_ai"
             test_data = {"test": "data"}
-            await unified_cache_service.set_ai_model_instance(test_data, test_key, ttl=60)
-            cached_data = await unified_cache_service.get_ai_model_instance(test_key)
+            await unified_cache_service.set_ai_analysis_result(test_data, test_key, ttl=60)
+            cached_data = await unified_cache_service.get_ai_analysis_result(test_key)
             health["cache_operational"] = cached_data is not None
             
             # Overall status
