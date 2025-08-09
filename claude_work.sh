@@ -87,6 +87,51 @@ cleanup_old_session_branches() {
     fi
 }
 
+list_available_sessions() {
+    echo -e "${CYAN}📋 Available session branches:${NC}"
+    echo ""
+    
+    # List local session branches with last commit info
+    local session_branches=$(git for-each-ref --format='%(refname:short) %(committerdate:relative) %(subject)' refs/heads/phase-*)
+    
+    if [[ -n "$session_branches" ]]; then
+        echo -e "${GREEN}Local session branches:${NC}"
+        echo "$session_branches" | while IFS=' ' read -r branch date rest; do
+            echo -e "${WHITE}  🌿 $branch${NC} ${YELLOW}($date)${NC}"
+            echo -e "     ${CYAN}Last commit:${NC} $rest"
+        done
+        echo ""
+        echo -e "${WHITE}To resume a session:${NC}"
+        echo -e "${WHITE}  WORK_SESSION_ID=YYYYMMDD_HHMMSS ./claude_work.sh${NC}"
+        echo -e "${WHITE}  (Use the timestamp part after 'phase-')${NC}"
+    else
+        echo -e "${YELLOW}No session branches found${NC}"
+    fi
+    
+    echo ""
+    
+    # List available resume scripts
+    echo -e "${GREEN}Available resume scripts:${NC}"
+    if ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
+        for resume_script in "$IMPL_DIR"/work_resume_*.sh; do
+            if [[ -f "$resume_script" ]]; then
+                script_name=$(basename "$resume_script")
+                session_id=$(echo "$script_name" | sed 's/work_resume_\(.*\)\.sh/\1/')
+                echo -e "${WHITE}  📄 $script_name${NC} ${YELLOW}(session: $session_id)${NC}"
+                
+                # Check if corresponding branch exists
+                if git show-ref --verify --quiet "refs/heads/phase-$session_id"; then
+                    echo -e "     ${GREEN}✅ Session branch exists${NC}"
+                else
+                    echo -e "     ${RED}❌ Session branch missing${NC}"
+                fi
+            fi
+        done
+    else
+        echo -e "${YELLOW}No resume scripts found${NC}"
+    fi
+}
+
 ensure_main_branch_current() {
     echo -e "${CYAN}🔄 Ensuring main branch is up to date...${NC}"
     
@@ -122,19 +167,33 @@ LOGS_DIR="${IMPL_DIR}/logs"
 # Detect if we're already on a session branch or original branch
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
 
-# Check if we're already on a session branch (starts with "phase-")
-if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
+# Check if we're resuming a specific session via WORK_SESSION_ID
+if [[ -n "$WORK_SESSION_ID" ]]; then
+    # We're resuming a specific session - check if that session branch exists
+    TIMESTAMP="$WORK_SESSION_ID"
+    SESSION_BRANCH="phase-${TIMESTAMP}"
+    ORIGINAL_BRANCH="main"
+    
+    if git show-ref --verify --quiet "refs/heads/$SESSION_BRANCH"; then
+        echo "🔄 Resuming session: $SESSION_BRANCH (session ID from environment)"
+        if [[ "$CURRENT_BRANCH" != "$SESSION_BRANCH" ]]; then
+            echo "🔄 Switching to existing session branch: $SESSION_BRANCH"
+        fi
+    else
+        echo "⚠️  Session branch $SESSION_BRANCH does not exist - will create it"
+    fi
+elif [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
     # We're already on a session branch - reuse it
     SESSION_BRANCH="$CURRENT_BRANCH"
     TIMESTAMP=$(echo "$SESSION_BRANCH" | sed 's/^phase-//')
     # Always use main as the target branch for merging
     ORIGINAL_BRANCH="main"
-    echo "🔄 Resuming existing session branch: $SESSION_BRANCH"
+    echo "🔄 Continuing existing session branch: $SESSION_BRANCH"
 else
     # We're on an original branch - ensure we use main for consistent workflow
     ORIGINAL_BRANCH="main"
-    # Use existing session ID or create new one
-    TIMESTAMP=${WORK_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}
+    # Create new session ID
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
     SESSION_BRANCH="phase-${TIMESTAMP}"
     echo "🆕 Will create new session branch: $SESSION_BRANCH from $ORIGINAL_BRANCH"
     
@@ -2208,26 +2267,32 @@ initialize_session() {
     source venv/bin/activate
     echo -e "${GREEN}Virtual environment activated.${NC}"
     
-    # Create a new branch for this session phase (from instructions) or continue on existing
-    if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
-        echo -e "${CYAN}🔄 Continuing on existing session branch: $SESSION_BRANCH${NC}"
+    # Handle session branch creation/switching (improved logic)
+    if [[ "$CURRENT_BRANCH" == "$SESSION_BRANCH" ]]; then
+        echo -e "${CYAN}🔄 Already on session branch: $SESSION_BRANCH${NC}"
         echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
-        log_action "Continuing session on existing branch: $SESSION_BRANCH"
+        log_action "Continuing session on current branch: $SESSION_BRANCH"
+    elif git show-ref --verify --quiet "refs/heads/$SESSION_BRANCH"; then
+        echo -e "${CYAN}🔄 Switching to existing session branch: $SESSION_BRANCH${NC}"
+        echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
+        if git checkout "$SESSION_BRANCH" 2>/dev/null; then
+            echo -e "${GREEN}✅ Switched to existing session branch: $SESSION_BRANCH${NC}"
+            log_action "Switched to existing session branch: $SESSION_BRANCH"
+        else
+            echo -e "${RED}❌ Could not switch to session branch: $SESSION_BRANCH${NC}"
+            log_error "Failed to switch to session branch"
+            exit 1
+        fi
     else
-        echo -e "${CYAN}Creating new branch for this session: $SESSION_BRANCH${NC}"
+        echo -e "${CYAN}🆕 Creating new session branch: $SESSION_BRANCH${NC}"
         echo -e "${WHITE}Original branch: $ORIGINAL_BRANCH${NC}"
         if git checkout -b "$SESSION_BRANCH" 2>/dev/null; then
-            echo -e "${GREEN}New branch created: $SESSION_BRANCH${NC}"
+            echo -e "${GREEN}✅ New session branch created: $SESSION_BRANCH${NC}"
             log_action "Created new session branch: $SESSION_BRANCH (from $ORIGINAL_BRANCH)"
         else
-            echo -e "${YELLOW}Branch may already exist - attempting to switch to it${NC}"
-            if git checkout "$SESSION_BRANCH" 2>/dev/null; then
-                echo -e "${GREEN}Switched to existing session branch: $SESSION_BRANCH${NC}"
-                log_action "Switched to existing session branch: $SESSION_BRANCH"
-            else
-                echo -e "${YELLOW}Could not create or switch to session branch - continuing on current branch${NC}"
-                log_action "Could not create/switch to session branch - continuing on current branch"
-            fi
+            echo -e "${RED}❌ Could not create session branch: $SESSION_BRANCH${NC}"
+            log_error "Failed to create session branch"
+            exit 1
         fi
     fi
     
@@ -2574,6 +2639,9 @@ main() {
             fi
             run_claude_with_phase "$phase_num" "$task_context"
             ;;
+        "sessions")
+            list_available_sessions
+            ;;
         "quota")
             echo -e "${CYAN}🔍 Checking Claude quota status and resume options...${NC}"
             echo ""
@@ -2661,6 +2729,7 @@ Commands:
   --resume       Resume previous session
   --auto-resume  Intelligent auto-resume with quota monitoring
   phase <1-5>    Run specific phase with Claude
+  sessions       List available session branches and resume scripts
   quota          Check Claude quota status and available resume scripts
   status         Show current implementation progress
   model          Check which Claude model is being used
@@ -2691,6 +2760,8 @@ Git Workflow:
   • Session branches are automatically cleaned up after successful merge
   • Old session branches (>7 days) are offered for cleanup on start
   • Remote branches are also cleaned up to keep repository tidy
+  • Use WORK_SESSION_ID=YYYYMMDD_HHMMSS to resume a specific session
+  • Use './claude_work.sh sessions' to list available sessions
   
 The script follows a 5-phase implementation workflow:
   1. Session Initialization - Setup and branch creation
