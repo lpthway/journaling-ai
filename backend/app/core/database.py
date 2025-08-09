@@ -75,7 +75,7 @@ class DatabaseConfig:
                     "server_settings": {
                         "application_name": "journaling_ai",
                         "jit": "off",  # Disable JIT for consistent performance
-                        "shared_preload_libraries": "pg_stat_statements",
+                        # Note: shared_preload_libraries cannot be set per connection - must be in postgresql.conf
                         "work_mem": "32MB",  # Optimize query memory
                         "effective_cache_size": "1GB",  # Optimize query planning
                         "random_page_cost": "1.1",  # Optimize for SSD
