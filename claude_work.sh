@@ -26,21 +26,85 @@ NC='\033[0m' # No Color
 # =============================================================================
 
 detect_original_branch() {
-    # Try to detect the original branch from git history
-    local merge_commit=$(git log --oneline --grep="Merging phase branch" -1 --format="%s" 2>/dev/null)
-    if [[ -n "$merge_commit" ]]; then
-        # Extract branch name from merge commit message
-        echo "$merge_commit" | sed -n 's/.*into \([^[:space:]]*\).*/\1/p'
+    # Default to main branch for all new sessions
+    # This simplifies the workflow and ensures consistency
+    if git show-ref --verify --quiet refs/heads/main; then
+        echo "main"
+    elif git show-ref --verify --quiet refs/heads/master; then
+        echo "master"
     else
-        # Look for common branch patterns or fall back to default
-        if git show-ref --verify --quiet refs/heads/feature/phase-1-foundation; then
-            echo "feature/phase-1-foundation"
-        elif git show-ref --verify --quiet refs/heads/main; then
-            echo "main"
-        elif git show-ref --verify --quiet refs/heads/master; then
-            echo "master"
+        # Get the default branch from remote if available
+        local default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+        if [[ -n "$default_branch" ]]; then
+            echo "$default_branch"
         else
-            echo "main"  # Default fallback
+            echo "main"  # Ultimate fallback
+        fi
+    fi
+}
+
+cleanup_old_session_branches() {
+    echo -e "${CYAN}🧹 Cleaning up old session branches...${NC}"
+    
+    # Get list of local phase branches (older than 7 days)
+    local old_branches=$(git for-each-ref --format='%(refname:short) %(committerdate:unix)' refs/heads/phase-* | while read branch date; do
+        local days_old=$(( ($(date +%s) - date) / 86400 ))
+        if [[ $days_old -gt 7 ]]; then
+            echo "$branch"
+        fi
+    done)
+    
+    if [[ -n "$old_branches" ]]; then
+        echo -e "${YELLOW}Found old session branches (>7 days):${NC}"
+        echo "$old_branches" | sed 's/^/  - /'
+        
+        read -p "Delete these old branches? (y/n): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "$old_branches" | while read branch; do
+                if [[ -n "$branch" ]]; then
+                    echo -e "${CYAN}Deleting branch: $branch${NC}"
+                    git branch -D "$branch" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not delete $branch${NC}"
+                fi
+            done
+        fi
+    fi
+    
+    # Cleanup remote phase branches that no longer exist locally
+    local remote_phase_branches=$(git branch -r | grep -E 'origin/phase-[0-9]{8}_[0-9]{6}$' | sed 's|origin/||' | xargs)
+    if [[ -n "$remote_phase_branches" ]]; then
+        echo -e "${YELLOW}Found orphaned remote phase branches:${NC}"
+        echo "$remote_phase_branches" | tr ' ' '\n' | sed 's/^/  - /'
+        
+        read -p "Delete these remote branches? (y/n): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            for branch in $remote_phase_branches; do
+                echo -e "${CYAN}Deleting remote branch: origin/$branch${NC}"
+                git push origin --delete "$branch" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not delete origin/$branch${NC}"
+            done
+        fi
+    fi
+}
+
+ensure_main_branch_current() {
+    echo -e "${CYAN}🔄 Ensuring main branch is up to date...${NC}"
+    
+    # Fetch latest changes
+    if git fetch origin 2>/dev/null; then
+        echo -e "${GREEN}✅ Fetched latest changes from origin${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Could not fetch from origin${NC}"
+    fi
+    
+    # If we're on main, pull latest changes
+    local current_branch=$(git branch --show-current 2>/dev/null)
+    if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+        echo -e "${CYAN}Pulling latest changes...${NC}"
+        if git pull origin "$current_branch" 2>/dev/null; then
+            echo -e "${GREEN}✅ Main branch updated${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Could not pull latest changes${NC}"
         fi
     fi
 }
@@ -63,16 +127,27 @@ if [[ "$CURRENT_BRANCH" =~ ^phase-[0-9]{8}_[0-9]{6}$ ]]; then
     # We're already on a session branch - reuse it
     SESSION_BRANCH="$CURRENT_BRANCH"
     TIMESTAMP=$(echo "$SESSION_BRANCH" | sed 's/^phase-//')
-    # Find the original branch from git history
-    ORIGINAL_BRANCH=$(detect_original_branch)
+    # Always use main as the target branch for merging
+    ORIGINAL_BRANCH="main"
     echo "🔄 Resuming existing session branch: $SESSION_BRANCH"
 else
-    # We're on an original branch - this will be our merge target
-    ORIGINAL_BRANCH="$CURRENT_BRANCH"
+    # We're on an original branch - ensure we use main for consistent workflow
+    ORIGINAL_BRANCH="main"
     # Use existing session ID or create new one
     TIMESTAMP=${WORK_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}
     SESSION_BRANCH="phase-${TIMESTAMP}"
     echo "🆕 Will create new session branch: $SESSION_BRANCH from $ORIGINAL_BRANCH"
+    
+    # If we're not on main, switch to main first
+    if [[ "$CURRENT_BRANCH" != "$ORIGINAL_BRANCH" ]]; then
+        echo "🔄 Switching to main branch for consistent workflow..."
+        if git checkout "$ORIGINAL_BRANCH" 2>/dev/null; then
+            echo -e "${GREEN}✅ Switched to $ORIGINAL_BRANCH${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Could not switch to $ORIGINAL_BRANCH - continuing on $CURRENT_BRANCH${NC}"
+            ORIGINAL_BRANCH="$CURRENT_BRANCH"
+        fi
+    fi
 fi
 
 SESSION_LOG="${LOGS_DIR}/session_${TIMESTAMP}.log"
@@ -1315,9 +1390,27 @@ Generated: $(date)
                 fi
             fi
             
-            # Clean up session branch (optional)
-            echo -e "${WHITE}Session branch $session_branch can be deleted if no longer needed${NC}"
-            echo -e "${WHITE}To delete: git branch -d $session_branch${NC}"
+            # Clean up session branch automatically after successful merge
+            echo -e "${CYAN}🧹 Cleaning up session branch: $session_branch${NC}"
+            if git branch -d "$session_branch" 2>/dev/null; then
+                echo -e "${GREEN}✅ Session branch deleted locally${NC}"
+                log_success "Session branch cleaned up locally"
+                
+                # Also clean up remote session branch if it exists
+                if git rev-parse --verify "origin/$session_branch" >/dev/null 2>&1; then
+                    echo -e "${CYAN}Cleaning up remote session branch: origin/$session_branch${NC}"
+                    if git push origin --delete "$session_branch" 2>/dev/null; then
+                        echo -e "${GREEN}✅ Remote session branch deleted${NC}"
+                        log_success "Remote session branch cleaned up"
+                    else
+                        echo -e "${YELLOW}⚠️  Could not delete remote session branch${NC}"
+                        log_action "Manual cleanup required for origin/$session_branch"
+                    fi
+                fi
+            else
+                echo -e "${YELLOW}⚠️  Could not delete session branch - may contain unmerged changes${NC}"
+                echo -e "${WHITE}You can delete it manually with: git branch -D $session_branch${NC}"
+            fi
             
             return 0
         else
@@ -2085,6 +2178,10 @@ Session: $SESSION_BRANCH"
 initialize_session() {
     echo -e "${CYAN}🚀 Initializing Claude Work session...${NC}"
     
+    # First, ensure we have the latest updates and clean workspace
+    ensure_main_branch_current
+    cleanup_old_session_branches
+    
     # Create directories if they don't exist
     mkdir -p "$LOGS_DIR"
     
@@ -2583,15 +2680,24 @@ Features:
   • 📋 Modular phase-specific instructions for Claude
   • 🧪 Automated testing after each task
   • 📝 Comprehensive progress tracking
-  • 🔄 Git integration with automated commits
+  • 🔄 Git integration with automated commits and branch management
   • ⚡ Interactive task selection and validation
+  • 🧹 Automatic cleanup of old session branches
+  
+Git Workflow:
+  • All work starts from main branch for consistency
+  • Each session creates a temporary phase-YYYYMMDD_HHMMSS branch
+  • Work is automatically merged back to main upon completion
+  • Session branches are automatically cleaned up after successful merge
+  • Old session branches (>7 days) are offered for cleanup on start
+  • Remote branches are also cleaned up to keep repository tidy
   
 The script follows a 5-phase implementation workflow:
-  1. Session Initialization
-  2. Task Selection & Analysis
-  3. Implementation Planning
-  4. Code Implementation
-  5. Testing & Documentation
+  1. Session Initialization - Setup and branch creation
+  2. Task Selection & Analysis - Choose and analyze tasks
+  3. Implementation Planning - Plan the implementation approach
+  4. Code Implementation - Execute the coding work
+  5. Testing & Documentation - Test and document changes
 
 Files:
   implementation_results/claude_work_core.md           - Core instructions
