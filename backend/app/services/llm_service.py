@@ -5,6 +5,7 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 import logging
 from app.core.config import settings
+from app.core.circuit_breaker import CircuitBreakerConfig, get_service_circuit_breaker
 from app.services.psychology_knowledge_service import (
     psychology_knowledge_service, 
     PsychologyDomain
@@ -30,6 +31,31 @@ class EnhancedLLMService:
         self.psychology_service = psychology_knowledge_service
         self._active_requests = 0
         self._max_concurrent_requests = 5
+        
+        # Circuit breaker configuration for Ollama service
+        ollama_config = CircuitBreakerConfig(
+            failure_threshold=3,        # Open circuit after 3 failures
+            recovery_timeout=30,        # Try recovery after 30 seconds
+            success_threshold=2,        # Close circuit after 2 successes
+            timeout=20.0,              # 20 second timeout for LLM calls
+            expected_exceptions=(Exception,),  # All exceptions count as failures
+            max_concurrent_calls=5     # Match our existing concurrency limit
+        )
+        self.circuit_breaker = get_service_circuit_breaker("ollama-llm", ollama_config)
+    
+    async def _circuit_breaker_generate(self, **generate_kwargs) -> Dict[str, Any]:
+        """Circuit breaker protected Ollama generate call"""
+        async def _make_ollama_call():
+            # Convert to sync call since ollama client is synchronous
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            def _sync_generate():
+                return self.client.generate(**generate_kwargs)
+                
+            return await loop.run_in_executor(None, _sync_generate)
+        
+        return await self.circuit_breaker.call_async(_make_ollama_call)
         
     def __del__(self):
         """Destructor to ensure proper cleanup"""
@@ -256,7 +282,7 @@ When referencing psychology knowledge, format citations as: (Source Title, Year)
 Your response:"""
 
         try:
-            response = self.client.generate(
+            response = await self._circuit_breaker_generate(
                 model=self.model,
                 prompt=full_prompt,
                 stream=False
@@ -329,7 +355,7 @@ Respond supportively and ask a thoughtful follow-up question:"""
             if context:
                 full_prompt = f"Context:\n{context}\n\nQuestion: {prompt}\n\nAnswer:"
             
-            response = self.client.generate(
+            response = await self._circuit_breaker_generate(
                 model=self.model,
                 prompt=full_prompt,
                 stream=False
@@ -626,7 +652,7 @@ Text: {text[:500]}...
 
 Topics:"""
 
-            response = self.client.generate(
+            response = await self._circuit_breaker_generate(
                 model=self.model,
                 prompt=prompt,
                 stream=False
@@ -684,7 +710,7 @@ Recent relevant entries:
 
 Provide a helpful, insightful answer that connects their question to their actual journaling data. Be specific and reference the data when possible."""
 
-            response = self.client.generate(
+            response = await self._circuit_breaker_generate(
                 model=self.model,
                 prompt=prompt,
                 stream=False

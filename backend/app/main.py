@@ -19,7 +19,7 @@ from app.services.redis_service import redis_service
 from app.core.service_interfaces import service_registry
 
 # API routers
-from app.api import entries, topics, insights_v2, psychology
+from app.api import entries, topics, insights_v2, psychology, circuit_breaker
 # Temporarily disabled sessions API due to missing legacy dependencies
 # from app.api import sessions
 
@@ -188,6 +188,7 @@ app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=[
 # Temporarily disabled sessions API due to missing legacy dependencies
 # app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
 app.include_router(psychology.router, prefix=f"{settings.API_V1_STR}/psychology", tags=["psychology"])
+app.include_router(circuit_breaker.router, tags=["circuit-breakers"])
 
 # Enhanced health check endpoints
 @app.get("/health")
