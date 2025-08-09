@@ -43,16 +43,4 @@
   - heading "No journal entries yet" [level=3]
   - paragraph: Start your journaling journey by creating your first entry. Reflect on your day, thoughts, and experiences.
   - button "Write your first entry"
-- status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load journal data
-- status: Failed to load journal data
-- status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load journal data
-- status: Failed to load journal data
 ```

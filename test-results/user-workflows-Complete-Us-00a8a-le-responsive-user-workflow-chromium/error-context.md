@@ -4,16 +4,7 @@
 - banner:
   - link "Journal AI":
     - /url: /
-  - navigation:
-    - link "Journal":
-      - /url: /
-    - link "AI Chat":
-      - /url: /chat
-    - link "Topics":
-      - /url: /topics
-    - link "Insights":
-      - /url: /insights
-  - textbox "Search entries..."
+  - button
 - main:
   - heading "Your Journal" [level=1]
   - paragraph: 0 entries

@@ -45,14 +45,14 @@
   - button "Write your first entry"
 - status: Failed to load entries
 - status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load entries
-- status: Failed to load journal data
 - status: Failed to load journal data
 - status: Failed to load entries
 - status: Failed to load entries
+- status: Failed to load journal data
 - status: Failed to load entries
 - status: Failed to load entries
 - status: Failed to load journal data
+- status: Failed to load entries
+- status: Failed to load entries
 - status: Failed to load journal data
 ```
