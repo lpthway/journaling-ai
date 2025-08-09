@@ -307,14 +307,51 @@ class EnhancedBaseRepository(CachedRepositoryMixin[T], CacheableServiceInterface
             # Build query
             stmt = select(self.model_class)
             
-            # Apply filters
+            # Apply filters, skipping special keys
+            skip_value = 0
+            limit_value = None
+            
             for key, value in filters.items():
+                # Handle special keys
+                if key.startswith('_'):
+                    if key == '_skip':
+                        skip_value = value
+                    elif key == '_limit':
+                        limit_value = value
+                    continue
+                
+                # Handle comparison operators
+                if '__' in key:
+                    field_name, operator = key.split('__', 1)
+                    if hasattr(self.model_class, field_name):
+                        column = getattr(self.model_class, field_name)
+                        if operator == 'gte':
+                            stmt = stmt.where(column >= value)
+                        elif operator == 'lte':
+                            stmt = stmt.where(column <= value)
+                        elif operator == 'gt':
+                            stmt = stmt.where(column > value)
+                        elif operator == 'lt':
+                            stmt = stmt.where(column < value)
+                        elif operator == 'like':
+                            stmt = stmt.where(column.like(f"%{value}%"))
+                        elif operator == 'ilike':
+                            stmt = stmt.where(column.ilike(f"%{value}%"))
+                    continue
+                
+                # Handle direct column matches
                 if hasattr(self.model_class, key):
                     column = getattr(self.model_class, key)
                     if isinstance(value, list):
                         stmt = stmt.where(column.in_(value))
                     else:
                         stmt = stmt.where(column == value)
+            
+            # Apply pagination
+            if skip_value:
+                stmt = stmt.offset(skip_value)
+            if limit_value:
+                stmt = stmt.limit(limit_value)
             
             # Execute query
             result = await self.session.execute(stmt)

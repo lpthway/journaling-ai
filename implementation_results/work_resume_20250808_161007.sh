@@ -1,20 +1,20 @@
 #!/bin/bash
 # Intelligent Auto-Resume Work Script - Generated with intelligent scheduling
-# Resume from task: 4.4
-# Scheduled resume time: 2025-08-09 14:00:00
-# Generated: Sa 9. Aug 10:31:42 CEST 2025
+# Resume from task: 6.1
+# Scheduled resume time: 2025-08-09 19:00:00
+# Generated: Sa 9. Aug 15:13:30 CEST 2025
 
 export WORK_SESSION_ID="20250808_161007"
-export RESUME_FROM_TASK="4.4"
+export RESUME_FROM_TASK="6.1"
 
 echo "🤖 Intelligent Auto-Resume Work Script Activated"
 echo "📅 Original session: 20250808_161007"
-echo "⏰ Claude quota will reset at: 2025-08-09 14:00:00"
+echo "⏰ Claude quota will reset at: 2025-08-09 19:00:00"
 echo "🕐 Current time: $(date)"
 echo ""
 
 # Calculate remaining wait time dynamically (in case script is run later)
-reset_timestamp=$(date -d "2025-08-09 14:00:00" +%s 2>/dev/null)
+reset_timestamp=$(date -d "2025-08-09 19:00:00" +%s 2>/dev/null)
 current_timestamp=$(date +%s)
 
 if [[ -n "$reset_timestamp" ]] && [[ "$reset_timestamp" -gt "$current_timestamp" ]]; then
@@ -28,7 +28,7 @@ fi
 if [[ $wait_seconds -gt 0 ]]; then
     echo "⏳ Waiting $wait_seconds seconds ($(($wait_seconds / 60)) minutes) for quota reset..."
     echo "💡 You can safely close this terminal - the script will complete automatically"
-    echo "🎯 Will auto-resume at: 2025-08-09 14:00:00"
+    echo "🎯 Will auto-resume at: 2025-08-09 19:00:00"
     echo ""
     echo "⏱️  Countdown:"
     
@@ -39,9 +39,9 @@ if [[ $wait_seconds -gt 0 ]]; then
         seconds=$(($wait_seconds % 60))
         
         if [[ $hours -gt 0 ]]; then
-            printf "\r   🕐 %02d:%02d:%02d remaining - Resume at 2025-08-09 14:00:00" $hours $minutes $seconds
+            printf "\r   🕐 %02d:%02d:%02d remaining - Resume at 2025-08-09 19:00:00" $hours $minutes $seconds
         else
-            printf "\r   ⏰ %02d:%02d remaining - Resume at 2025-08-09 14:00:00" $minutes $seconds
+            printf "\r   ⏰ %02d:%02d remaining - Resume at 2025-08-09 19:00:00" $minutes $seconds
         fi
         
         sleep 1
@@ -70,7 +70,7 @@ else
     fi
 fi
 
-echo "🔄 Resuming intelligent work from task: 4.4"
+echo "🔄 Resuming intelligent work from task: 6.1"
 echo ""
 
 # Resume the work

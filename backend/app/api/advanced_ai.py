@@ -516,24 +516,23 @@ async def _fetch_user_entries(user_id: str, max_entries: int = 100) -> List[Dict
     """
     try:
         # Use unified database service to fetch entries
-        entries_result = await unified_db_service.get_entries_by_user(
-            user_id, 
-            limit=max_entries,
-            include_content=True
+        entries_result = await unified_db_service.get_entries(
+            user_id=user_id, 
+            limit=max_entries
         )
         
-        if not entries_result or "entries" not in entries_result:
+        if not entries_result:
             return []
         
-        # Convert to expected format
+        # Convert Entry objects to expected format
         entries = []
-        for entry in entries_result["entries"]:
+        for entry in entries_result:
             entries.append({
-                "id": entry.get("id"),
-                "content": entry.get("content", ""),
-                "created_at": entry.get("created_at", datetime.utcnow()),
-                "mood": entry.get("mood"),
-                "tags": entry.get("tags", [])
+                "id": str(entry.id),
+                "content": entry.content or "",
+                "created_at": entry.created_at,
+                "mood": entry.mood,
+                "tags": entry.tags or []
             })
         
         # Sort by creation date (newest first)

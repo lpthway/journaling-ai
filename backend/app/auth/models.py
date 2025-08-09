@@ -3,7 +3,7 @@
 Authentication-specific models and extensions to the base User model.
 """
 
-from sqlalchemy import String, Boolean, DateTime, func, Index
+from sqlalchemy import String, Boolean, DateTime, func, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
@@ -141,6 +141,7 @@ class RefreshToken(Base):
     token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )

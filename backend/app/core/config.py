@@ -13,7 +13,7 @@ class DatabaseSettings(BaseSettings):
     url: str = Field(
         default_factory=lambda: os.getenv(
             "DB_URL", 
-            "postgresql+asyncpg://postgres:secure_password@localhost:5432/journaling_ai"
+            "postgresql+asyncpg://postgres:password@localhost:5432/journaling_ai"
         ),
         description="PostgreSQL connection URL"
     )
@@ -144,8 +144,8 @@ class Settings(BaseSettings):
     # Note: Models are now selected automatically based on hardware capabilities
     # See app/services/hardware_service.py for adaptive model selection
     
-    # LLM Configuration (Ollama on host)
-    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    # LLM Configuration (Ollama on localhost)
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2"
     
     # Fallback model configurations (used if hardware detection fails)
@@ -153,7 +153,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     
     # Sentiment Analysis Model
-    SENTIMENT_MODEL: str = "j-hartmann/emotion-english-distilroberta-base"
+    SENTIMENT_MODEL: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
     
     # Vector Search
     VECTOR_SIMILARITY_THRESHOLD: float = 0.7
@@ -247,8 +247,8 @@ MODEL_SPECS = {
     "RTX_3500_Ada_Optimal": {
         "embedding_model": "intfloat/multilingual-e5-large",
         "emotion_model": "microsoft/DialoGPT-medium", 
-        "sentiment_model": "microsoft/deberta-v3-base",
-        "classification_model": "microsoft/deberta-v2-xlarge-mnli",
+        "sentiment_model": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        "classification_model": "facebook/bart-large-mnli",
         "gpu_memory_required": "8GB+",
         "performance_gain": "5-10x faster",
         "why_chosen": "Optimized for RTX 3500 Ada with 12GB VRAM - enterprise-tier models"
