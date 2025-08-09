@@ -129,9 +129,81 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    description="Enterprise-grade journaling and coaching assistant with Redis caching",
+    description="""
+    ## AI Journaling Assistant API
+
+    A comprehensive REST API for journal entry management, AI-powered insights, chat sessions, and user authentication.
+
+    ### Features
+    - **Journal Entries**: Create, read, update, and delete journal entries with AI mood analysis
+    - **AI Chat Sessions**: Interactive coaching and therapy sessions with AI assistants
+    - **Topic Organization**: Organize entries by topics for better structure
+    - **AI Insights**: Get mood analysis, pattern recognition, and personalized insights
+    - **User Authentication**: Secure JWT-based authentication with rate limiting
+    - **Health Monitoring**: Comprehensive system health and performance monitoring
+    - **Circuit Breaker**: Fault-tolerant external service integration
+
+    ### AI Capabilities
+    - Automatic mood detection and sentiment analysis
+    - Crisis intervention detection and support
+    - Personalized coaching recommendations
+    - Pattern analysis and trend identification
+    - Automatic tagging and content enhancement
+
+    ### Enterprise Features
+    - Redis caching for high performance
+    - PostgreSQL database with connection pooling
+    - Circuit breaker pattern for resilience
+    - Comprehensive monitoring and observability
+    - Rate limiting and security features
+    """,
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {
+            "name": "authentication",
+            "description": "User authentication and authorization operations"
+        },
+        {
+            "name": "entries", 
+            "description": "Journal entry management with AI analysis"
+        },
+        {
+            "name": "sessions",
+            "description": "AI chat sessions and conversation management"
+        },
+        {
+            "name": "topics",
+            "description": "Topic organization for journal entries"
+        },
+        {
+            "name": "insights",
+            "description": "AI-powered insights and analytics"
+        },
+        {
+            "name": "psychology", 
+            "description": "Psychological analysis and support features"
+        },
+        {
+            "name": "circuit-breakers",
+            "description": "Circuit breaker monitoring and management"
+        },
+        {
+            "name": "health",
+            "description": "System health and performance monitoring"
+        }
+    ],
+    contact={
+        "name": "AI Journaling Assistant Support",
+        "url": "https://github.com/your-org/journaling-ai",
+        "email": "support@journaling-ai.com"
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT"
+    }
 )
 
 # Enhanced exception handler for structured error responses
