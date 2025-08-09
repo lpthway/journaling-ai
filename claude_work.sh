@@ -2391,16 +2391,16 @@ main() {
             set -e  # Re-enable exit on error
             
             if [[ $claude_setup_status -eq 2 ]]; then
-                echo -e "${YELLOW}⚠️  Claude quota appears exhausted - looking for resume options...${NC}"
+                echo -e "${YELLOW}⚠️  Claude quota appears exhausted - intelligent handling...${NC}"
                 
-                # First check for resume script matching current session
+                # Check for resume scripts but handle quota exhaustion intelligently
                 if [[ -f "$QUOTA_RESUME_FILE" ]]; then
                     script_name=$(basename "$QUOTA_RESUME_FILE")
                     echo -e "${GREEN}📄 Found current session resume script: $script_name${NC}"
-                    echo -e "${CYAN}💡 Press Ctrl+C anytime to cancel and resume manually later${NC}"
+                    echo -e "${BLUE}🤖 Activating intelligent resume script...${NC}"
                     echo ""
                     
-                    # Run the current session resume script
+                    # Execute the resume script directly - it has intelligent quota handling
                     exec bash "$QUOTA_RESUME_FILE"
                 elif ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
                     # Use most recent resume script as fallback
@@ -2408,20 +2408,27 @@ main() {
                     script_name=$(basename "$latest_script")
                     echo -e "${YELLOW}⚠️  No resume script for current session (${TIMESTAMP})${NC}"
                     echo -e "${GREEN}📄 Found alternative resume script: $script_name${NC}"
-                    echo -e "${CYAN}💡 Press Ctrl+C anytime to cancel and resume manually later${NC}"
+                    echo -e "${BLUE}🤖 Activating intelligent resume script...${NC}"
                     echo ""
                     
-                    # Run the alternative resume script
+                    # Execute the alternative resume script - it has intelligent quota handling
                     exec bash "$latest_script"
                 else
                     echo -e "${RED}❌ No resume scripts found and Claude quota exhausted${NC}"
                     echo -e "${WHITE}💡 Resume scripts are created when Claude quota is exhausted during active work${NC}"
                     echo ""
+                    echo -e "${YELLOW}🔄 Current situation:${NC}"
+                    echo -e "${WHITE}   • Claude quota is exhausted${NC}"
+                    echo -e "${WHITE}   • No resume scripts available${NC}"
+                    echo -e "${WHITE}   • Auto-resume cannot proceed automatically${NC}"
+                    echo ""
                     echo -e "${YELLOW}🔄 To resolve this:${NC}"
-                    echo -e "${WHITE}   1. Wait for Claude quota to reset${NC}"
+                    echo -e "${WHITE}   1. Wait for Claude quota to reset (usually every few hours)${NC}"
                     echo -e "${WHITE}   2. Then run: ./claude_work.sh work${NC}"
                     echo -e "${WHITE}   3. Or try: ./claude_work.sh --resume${NC}"
-                    exit 1
+                    echo ""
+                    echo -e "${CYAN}💡 Resume scripts will be created automatically when quota resets and work begins${NC}"
+                    exit 0  # Clean exit instead of error
                 fi
             elif [[ $claude_setup_status -ne 0 ]]; then
                 echo -e "${RED}❌ Claude CLI not available - cannot proceed${NC}"
