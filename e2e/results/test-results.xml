@@ -1,0 +1,109 @@
+<testsuites id="" name="" tests="2" failures="1" skipped="0" errors="0" time="30.847628999999998">
+<testsuite name="comprehensive-validation.spec.js" timestamp="2025-08-09T12:11:37.342Z" hostname="chromium" tests="2" failures="1" skipped="0" time="46.023" errors="0">
+<testcase name="Comprehensive E2E Validation › E2E Test Suite Validation Summary" classname="comprehensive-validation.spec.js" time="30.112">
+<failure message="comprehensive-validation.spec.js:8:3 E2E Test Suite Validation Summary" type="FAILURE">
+<![CDATA[  [chromium] › comprehensive-validation.spec.js:8:3 › Comprehensive E2E Validation › E2E Test Suite Validation Summary 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: page.waitForSelector: Target page, context or browser has been closed
+
+       at utils/test-helpers.js:23
+
+      21 |     } catch {
+      22 |       // Fallback: wait for basic page elements
+    > 23 |       await page.waitForSelector('body', { timeout: 10000 });
+         |                  ^
+      24 |     }
+      25 |     
+      26 |     // Wait for any loading spinners to disappear
+        at Function.waitForAppReady (/home/abrasko/Projects/journaling-ai/e2e/utils/test-helpers.js:23:18)
+        at Function.navigateToPage (/home/abrasko/Projects/journaling-ai/e2e/utils/test-helpers.js:45:5)
+        at /home/abrasko/Projects/journaling-ai/e2e/comprehensive-validation.spec.js:159:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[🎯 Running comprehensive E2E test suite validation
+
+📋 Test Category 1: Basic Application Loading
+   ✓ Page loads with title: "Journaling Assistant"
+   ✓ Body element visible: true
+
+📋 Test Category 2: Navigation Structure Analysis
+   ✓ /: Accessible, title: "Journaling Assistant", has content: true
+   ✓ /chat: Accessible, title: "Journaling Assistant", has content: true
+   ✓ /insights: Accessible, title: "Journaling Assistant", has content: true
+   ✓ /topics: Accessible, title: "Journaling Assistant", has content: true
+
+📋 Test Category 3: Interactive Elements Detection
+   Interactive Elements Count:
+     - buttons: 7
+     - links: 5
+     - inputs: 1
+     - textareas: 0
+     - selects: 3
+   ✓ Total interactive elements: 16
+
+📋 Test Category 4: Form Detection
+   ✓ Forms detected: 1
+   Form Pattern Detection:
+     - login: ⚠ Not found
+     - entry-creation: ⚠ Not found
+     - search: ⚠ Not found
+     - chat: ⚠ Not found
+
+📋 Test Category 5: API Endpoint Testing
+   ✓ /api/health: HTTP 404
+   ✓ /api/entries: HTTP 404
+   ✓ /api/sessions: HTTP 404
+   ✓ /api/insights: HTTP 404
+
+📋 Test Category 6: Accessibility Features
+   Accessibility Features:
+     - Main headings: ✓ Present
+     - Alt text on images: ⚠ Missing
+     - Form labels: ✓ Present
+     - Semantic markup: ✓ Present
+     - ARIA attributes: ⚠ Missing
+
+📋 Test Category 7: Performance Baseline
+
+[[ATTACHMENT|../../test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../../test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/video.webm]]
+
+[[ATTACHMENT|../../test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Comprehensive E2E Validation › E2E Test Infrastructure Validation" classname="comprehensive-validation.spec.js" time="15.911">
+<system-out>
+<![CDATA[🔧 Validating E2E test infrastructure
+   Testing TestHelpers utilities:
+     ✓ navigateToPage() working
+     ✓ elementExists() working: true
+     ✓ takeScreenshot() working
+     ✓ getCurrentPath() working: /
+     ✓ getPerformanceMetrics() working
+     ✓ isAuthenticated() working: false
+   Testing fixtures and test data:
+     ✓ Sample entries available: 4
+     ✓ Sample chat messages available: 4
+     ✓ User flows available: 2
+
+🔧 E2E Infrastructure Status: Ready for Testing
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

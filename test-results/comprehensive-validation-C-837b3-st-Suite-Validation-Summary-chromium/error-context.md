@@ -1,0 +1,58 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "Journal AI":
+    - /url: /
+  - navigation:
+    - link "Journal":
+      - /url: /
+    - link "AI Chat":
+      - /url: /chat
+    - link "Topics":
+      - /url: /topics
+    - link "Insights":
+      - /url: /insights
+  - textbox "Search entries..."
+- main:
+  - heading "Your Journal" [level=1]
+  - paragraph: 0 entries
+  - button "All Entries"
+  - button "Favorites"
+  - button "Advanced Search"
+  - button "Use Template"
+  - button "New Entry"
+  - text: Filter by Mood
+  - combobox:
+    - option "All moods" [selected]
+    - option "Very Positive"
+    - option "Positive"
+    - option "Neutral"
+    - option "Negative"
+    - option "Very Negative"
+  - text: Filter by Topic
+  - combobox:
+    - option "All topics" [selected]
+  - text: Time Period
+  - combobox:
+    - option "Last 7 days"
+    - option "Last 30 days" [selected]
+    - option "Last 3 months"
+    - option "Last year"
+    - option "All time"
+  - heading "No journal entries yet" [level=3]
+  - paragraph: Start your journaling journey by creating your first entry. Reflect on your day, thoughts, and experiences.
+  - button "Write your first entry"
+- status: Failed to load entries
+- status: Failed to load entries
+- status: Failed to load entries
+- status: Failed to load journal data
+- status: Failed to load entries
+- status: Failed to load journal data
+- status: Failed to load entries
+- status: Failed to load entries
+- status: Failed to load entries
+- status: Failed to load journal data
+- status: Failed to load entries
+- status: Failed to load journal data
+```

@@ -2552,6 +2552,19 @@ main() {
                         exit 2
                     fi
                     
+                    # AUTO_MODE: Automatically use most recent resume script
+                    if [[ "$AUTO_MODE" == "true" ]] && ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
+                        echo -e "${CYAN}🤖 [AUTO MODE] Claude quota exhausted - automatically using resume script${NC}"
+                        latest_script=$(ls -t "$IMPL_DIR"/work_resume_*.sh | head -1)
+                        script_name=$(basename "$latest_script")
+                        echo -e "${GREEN}📄 Executing resume script: $script_name${NC}"
+                        echo -e "${WHITE}💡 Resume script will handle quota timing automatically${NC}"
+                        echo ""
+                        
+                        # Execute the resume script automatically
+                        exec bash "$latest_script"
+                    fi
+                    
                     # Check for existing resume scripts
                     if ls "$IMPL_DIR"/work_resume_*.sh >/dev/null 2>&1; then
                         echo -e "${CYAN}📋 Found existing resume scripts:${NC}"
@@ -2574,13 +2587,25 @@ main() {
                         done
                         echo ""
                         echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status anytime${NC}"
-                        exit 2
+                        
+                        # Only exit if not in AUTO_MODE (AUTO_MODE already handled above)
+                        if [[ "$AUTO_MODE" != "true" ]]; then
+                            exit 2
+                        fi
                     else
-                        echo -e "${WHITE}No existing resume scripts found.${NC}"
-                        echo -e "${WHITE}Please wait for quota reset or try again later.${NC}"
-                        echo ""
-                        echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status anytime${NC}"
-                        exit 2
+                        if [[ "$AUTO_MODE" == "true" ]]; then
+                            echo -e "${YELLOW}🤖 [AUTO MODE] No resume scripts found - quota exhausted${NC}"
+                            echo -e "${WHITE}💡 Automation cannot continue without resume scripts${NC}"
+                            echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status${NC}"
+                            echo ""
+                            exit 2
+                        else
+                            echo -e "${WHITE}No existing resume scripts found.${NC}"
+                            echo -e "${WHITE}Please wait for quota reset or try again later.${NC}"
+                            echo ""
+                            echo -e "${CYAN}💡 Run './claude_work.sh quota' to check status anytime${NC}"
+                            exit 2
+                        fi
                     fi
                 else
                     echo -e "${RED}❌ Cannot proceed: Claude CLI not available${NC}"

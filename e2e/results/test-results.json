@@ -1,0 +1,433 @@
+{
+  "config": {
+    "configFile": "/home/abrasko/Projects/journaling-ai/playwright.config.js",
+    "rootDir": "/home/abrasko/Projects/journaling-ai/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "e2e/results/test-results.json"
+        }
+      ],
+      [
+        "junit",
+        {
+          "outputFile": "e2e/results/test-results.xml"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/home/abrasko/Projects/journaling-ai/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/abrasko/Projects/journaling-ai/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/abrasko/Projects/journaling-ai/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/home/abrasko/Projects/journaling-ai/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/abrasko/Projects/journaling-ai/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/home/abrasko/Projects/journaling-ai/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/abrasko/Projects/journaling-ai/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "Mobile Chrome",
+        "name": "Mobile Chrome",
+        "testDir": "/home/abrasko/Projects/journaling-ai/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/abrasko/Projects/journaling-ai/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "Mobile Safari",
+        "name": "Mobile Safari",
+        "testDir": "/home/abrasko/Projects/journaling-ai/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.54.2",
+    "workers": 14,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "comprehensive-validation.spec.js",
+      "file": "comprehensive-validation.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Comprehensive E2E Validation",
+          "file": "comprehensive-validation.spec.js",
+          "line": 6,
+          "column": 6,
+          "specs": [
+            {
+              "title": "E2E Test Suite Validation Summary",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30112,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/abrasko/Projects/journaling-ai/e2e/utils/test-helpers.js",
+                            "column": 18,
+                            "line": 23
+                          },
+                          "message": "Error: page.waitForSelector: Target page, context or browser has been closed\n\n   at utils/test-helpers.js:23\n\n  21 |     } catch {\n  22 |       // Fallback: wait for basic page elements\n> 23 |       await page.waitForSelector('body', { timeout: 10000 });\n     |                  ^\n  24 |     }\n  25 |     \n  26 |     // Wait for any loading spinners to disappear\n    at Function.waitForAppReady (/home/abrasko/Projects/journaling-ai/e2e/utils/test-helpers.js:23:18)\n    at Function.navigateToPage (/home/abrasko/Projects/journaling-ai/e2e/utils/test-helpers.js:45:5)\n    at /home/abrasko/Projects/journaling-ai/e2e/comprehensive-validation.spec.js:159:5"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "🎯 Running comprehensive E2E test suite validation\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "📋 Test Category 1: Basic Application Loading\n"
+                        },
+                        {
+                          "text": "   ✓ Page loads with title: \"Journaling Assistant\"\n"
+                        },
+                        {
+                          "text": "   ✓ Body element visible: true\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "📋 Test Category 2: Navigation Structure Analysis\n"
+                        },
+                        {
+                          "text": "   ✓ /: Accessible, title: \"Journaling Assistant\", has content: true\n"
+                        },
+                        {
+                          "text": "   ✓ /chat: Accessible, title: \"Journaling Assistant\", has content: true\n"
+                        },
+                        {
+                          "text": "   ✓ /insights: Accessible, title: \"Journaling Assistant\", has content: true\n"
+                        },
+                        {
+                          "text": "   ✓ /topics: Accessible, title: \"Journaling Assistant\", has content: true\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "📋 Test Category 3: Interactive Elements Detection\n"
+                        },
+                        {
+                          "text": "   Interactive Elements Count:\n"
+                        },
+                        {
+                          "text": "     - buttons: 7\n"
+                        },
+                        {
+                          "text": "     - links: 5\n"
+                        },
+                        {
+                          "text": "     - inputs: 1\n"
+                        },
+                        {
+                          "text": "     - textareas: 0\n"
+                        },
+                        {
+                          "text": "     - selects: 3\n"
+                        },
+                        {
+                          "text": "   ✓ Total interactive elements: 16\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "📋 Test Category 4: Form Detection\n"
+                        },
+                        {
+                          "text": "   ✓ Forms detected: 1\n"
+                        },
+                        {
+                          "text": "   Form Pattern Detection:\n"
+                        },
+                        {
+                          "text": "     - login: ⚠ Not found\n"
+                        },
+                        {
+                          "text": "     - entry-creation: ⚠ Not found\n"
+                        },
+                        {
+                          "text": "     - search: ⚠ Not found\n"
+                        },
+                        {
+                          "text": "     - chat: ⚠ Not found\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "📋 Test Category 5: API Endpoint Testing\n"
+                        },
+                        {
+                          "text": "   ✓ /api/health: HTTP 404\n"
+                        },
+                        {
+                          "text": "   ✓ /api/entries: HTTP 404\n"
+                        },
+                        {
+                          "text": "   ✓ /api/sessions: HTTP 404\n"
+                        },
+                        {
+                          "text": "   ✓ /api/insights: HTTP 404\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "📋 Test Category 6: Accessibility Features\n"
+                        },
+                        {
+                          "text": "   Accessibility Features:\n"
+                        },
+                        {
+                          "text": "     - Main headings: ✓ Present\n"
+                        },
+                        {
+                          "text": "     - Alt text on images: ⚠ Missing\n"
+                        },
+                        {
+                          "text": "     - Form labels: ✓ Present\n"
+                        },
+                        {
+                          "text": "     - Semantic markup: ✓ Present\n"
+                        },
+                        {
+                          "text": "     - ARIA attributes: ⚠ Missing\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "📋 Test Category 7: Performance Baseline\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-09T12:11:37.871Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/abrasko/Projects/journaling-ai/test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/home/abrasko/Projects/journaling-ai/test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/abrasko/Projects/journaling-ai/test-results/comprehensive-validation-C-837b3-st-Suite-Validation-Summary-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "2a2365066a5aa0e8e51f-3606aeac1932b6a89c97",
+              "file": "comprehensive-validation.spec.js",
+              "line": 8,
+              "column": 3
+            },
+            {
+              "title": "E2E Test Infrastructure Validation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 15911,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🔧 Validating E2E test infrastructure\n"
+                        },
+                        {
+                          "text": "   Testing TestHelpers utilities:\n"
+                        },
+                        {
+                          "text": "     ✓ navigateToPage() working\n"
+                        },
+                        {
+                          "text": "     ✓ elementExists() working: true\n"
+                        },
+                        {
+                          "text": "     ✓ takeScreenshot() working\n"
+                        },
+                        {
+                          "text": "     ✓ getCurrentPath() working: /\n"
+                        },
+                        {
+                          "text": "     ✓ getPerformanceMetrics() working\n"
+                        },
+                        {
+                          "text": "     ✓ isAuthenticated() working: false\n"
+                        },
+                        {
+                          "text": "   Testing fixtures and test data:\n"
+                        },
+                        {
+                          "text": "     ✓ Sample entries available: 4\n"
+                        },
+                        {
+                          "text": "     ✓ Sample chat messages available: 4\n"
+                        },
+                        {
+                          "text": "     ✓ User flows available: 2\n"
+                        },
+                        {
+                          "text": "\n"
+                        },
+                        {
+                          "text": "🔧 E2E Infrastructure Status: Ready for Testing\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-09T12:11:37.867Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "2a2365066a5aa0e8e51f-7ecabceecaccf1a6e64f",
+              "file": "comprehensive-validation.spec.js",
+              "line": 274,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-08-09T12:11:37.242Z",
+    "duration": 30847.628999999997,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

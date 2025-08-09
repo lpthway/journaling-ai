@@ -120,6 +120,12 @@ AUTO_MODE=true WORK_SESSION_ID=20250809_140000 ./claude_work.sh work
 - **Smart Switching**: Automatically switches to existing session branch when resuming
 - **Auto Mode**: `AUTO_MODE=true` bypasses all user prompts and proceeds automatically
 
+#### Quota Handling in AUTO_MODE
+- **Automatic Resume**: When quota exhausted, AUTO_MODE automatically executes the most recent resume script
+- **No User Intervention**: Script continues without manual prompts when quota becomes available
+- **Resume Script Chaining**: Resume scripts themselves detect quota status and wait appropriately
+- **Fallback Behavior**: If no resume scripts exist, AUTO_MODE exits gracefully with helpful messages
+
 #### Session States
 - **New Session**: Creates `phase-YYYYMMDD_HHMMSS` from main
 - **Active Session**: Working on existing session branch

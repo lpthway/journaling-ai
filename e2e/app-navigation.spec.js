@@ -169,8 +169,10 @@ test.describe('App Navigation and Core Features', () => {
     
     if (stateElement) {
       // Set some state (e.g., search query)
-      if (await stateElement.getAttribute('type') === 'search' || 
-          await stateElement.getAttribute('placeholder')?.includes('search')) {
+      const elementType = await stateElement.getAttribute('type');
+      const placeholder = await stateElement.getAttribute('placeholder');
+      
+      if (elementType === 'search' || (placeholder && placeholder.includes('search'))) {
         await stateElement.fill('test query');
         
         // Navigate away and back
