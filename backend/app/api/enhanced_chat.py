@@ -627,19 +627,31 @@ async def _log_crisis_intervention(user_id: str, session_id: str, indicators: Li
     except Exception as e:
         logger.error(f"❌ Error logging crisis intervention: {e}")
 
-# ==================== ERROR HANDLERS ====================
+# ==================== ERROR HANDLING UTILITIES ====================
 
-@router.exception_handler(ValueError)
-async def value_error_handler(request, exc):
-    """Handle value errors in chat processing"""
-    logger.error(f"Value error in chat: {exc}")
-    raise HTTPException(status_code=400, detail=f"Invalid input: {str(exc)}")
-
-@router.exception_handler(Exception)
-async def general_error_handler(request, exc):
-    """Handle general errors in chat processing"""
-    logger.error(f"Unexpected error in chat: {exc}")
-    raise HTTPException(status_code=500, detail="An unexpected error occurred in chat processing")
+def handle_chat_error(error: Exception, context: str = "chat processing") -> HTTPException:
+    """
+    Centralized error handling for chat operations
+    
+    Args:
+        error: The exception that occurred
+        context: Context description for the error
+        
+    Returns:
+        HTTPException: Properly formatted HTTP exception
+    """
+    if isinstance(error, ValueError):
+        logger.error(f"Value error in {context}: {error}")
+        return HTTPException(status_code=400, detail=f"Invalid input: {str(error)}")
+    elif isinstance(error, KeyError):
+        logger.error(f"Key error in {context}: {error}")
+        return HTTPException(status_code=400, detail=f"Missing required field: {str(error)}")
+    elif isinstance(error, HTTPException):
+        # Re-raise HTTP exceptions as-is
+        return error
+    else:
+        logger.error(f"Unexpected error in {context}: {error}")
+        return HTTPException(status_code=500, detail=f"An unexpected error occurred in {context}")
 
 # ==================== ROUTER METADATA ====================
 
