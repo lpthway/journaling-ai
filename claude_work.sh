@@ -58,9 +58,7 @@ cleanup_old_session_branches() {
         echo -e "${YELLOW}Found old session branches (>7 days):${NC}"
         echo "$old_branches" | sed 's/^/  - /'
         
-        read -p "Delete these old branches? (y/n): " -n 1 -r
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ "$AUTO_CLEANUP_BRANCHES" == "true" ]] || auto_confirm "Delete these old branches?" "y"; then
             echo "$old_branches" | while read branch; do
                 if [[ -n "$branch" ]]; then
                     echo -e "${CYAN}Deleting branch: $branch${NC}"
@@ -76,9 +74,7 @@ cleanup_old_session_branches() {
         echo -e "${YELLOW}Found orphaned remote phase branches:${NC}"
         echo "$remote_phase_branches" | tr ' ' '\n' | sed 's/^/  - /'
         
-        read -p "Delete these remote branches? (y/n): " -n 1 -r
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ "$AUTO_CLEANUP_BRANCHES" == "true" ]] || auto_confirm "Delete these remote branches?" "y"; then
             for branch in $remote_phase_branches; do
                 echo -e "${CYAN}Deleting remote branch: origin/$branch${NC}"
                 git push origin --delete "$branch" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not delete origin/$branch${NC}"
@@ -214,6 +210,11 @@ ENABLE_AUTO_TEST=false
 ENABLE_AUTO_COMMIT=true
 REQUIRE_SUCCESS_CRITERIA=false
 
+# Automation configuration
+AUTO_MODE=${AUTO_MODE:-false}                    # Automatic mode bypasses user prompts
+AUTO_CLEANUP_BRANCHES=${AUTO_CLEANUP_BRANCHES:-false}  # Automatically clean old branches
+AUTO_MERGE_COMPLETED=${AUTO_MERGE_COMPLETED:-true}     # Automatically merge completed sessions
+
 # Resume and quota management
 QUOTA_RESUME_FILE="${IMPL_DIR}/work_resume_${TIMESTAMP}.sh"
 CLAUDE_CMD=""
@@ -268,6 +269,43 @@ log_success() {
     local message="$1"
     local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
     echo -e "${GREEN}[$timestamp] SUCCESS: $message${NC}" | tee -a "$SESSION_LOG"
+}
+
+# =============================================================================
+# Automation Helper Functions
+# =============================================================================
+
+auto_prompt() {
+    local prompt_message="$1"
+    local default_response="$2"
+    local prompt_flag="$3"
+    
+    if [[ "$AUTO_MODE" == "true" ]]; then
+        echo -e "${CYAN}[AUTO MODE] $prompt_message${NC}"
+        echo -e "${GREEN}[AUTO MODE] Automatically choosing: $default_response${NC}"
+        echo "$default_response"
+        return 0
+    else
+        echo -e "${WHITE}$prompt_message${NC}"
+        read -p "$prompt_flag" -n 1 -r
+        echo ""
+        echo "$REPLY"
+        return 0
+    fi
+}
+
+auto_confirm() {
+    local message="$1"
+    local default_choice="${2:-y}"
+    
+    if [[ "$AUTO_MODE" == "true" ]]; then
+        echo -e "${CYAN}[AUTO MODE] $message${NC}"
+        echo -e "${GREEN}[AUTO MODE] Automatically proceeding (default: $default_choice)${NC}"
+        return 0  # Always proceed in auto mode
+    else
+        local response=$(auto_prompt "$message" "$default_choice" "Continue? (y/n): ")
+        [[ "$response" =~ ^[Yy]$ ]]
+    fi
 }
 
 # =============================================================================
@@ -1385,9 +1423,7 @@ else:
     echo -e "${CYAN}Manual validation required for: $criteria${NC}"
     echo -e "${WHITE}Please verify that the success criteria have been met.${NC}"
     
-    read -p "Have the success criteria been met? (y/n): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if auto_confirm "Have the success criteria been met?" "y"; then
         log_success "Success criteria validated for task $task_id"
         return 0
     else
@@ -2407,11 +2443,8 @@ COMPLETION_EOF
             
             echo -e "${GREEN}✅ Completion report generated: $(basename "$completion_report")${NC}"
             
-            # Ask if user wants to merge back to original branch  
-            echo -e "${WHITE}All tasks completed! Do you want to merge this session back to $ORIGINAL_BRANCH? (y/n):${NC}"
-            read -p "Merge to $ORIGINAL_BRANCH? (y/n): " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
+            # Ask if user wants to merge back to original branch (with auto mode support)
+            if [[ "$AUTO_MERGE_COMPLETED" == "true" ]] || auto_confirm "All tasks completed! Merge this session back to $ORIGINAL_BRANCH?" "y"; then
                 complete_session_with_merge "$SESSION_BRANCH"
             else
                 echo -e "${CYAN}Session branch $SESSION_BRANCH kept for manual merge later${NC}"
@@ -2424,25 +2457,30 @@ COMPLETION_EOF
         echo -e "${YELLOW}Next task to implement: $next_task${NC}"
         echo ""
         
-        # Ask if user wants to proceed
-        echo -e "${WHITE}Do you want to implement this task now?${NC}"
-        echo -e "${WHITE}Options:${NC}"
-        echo -e "${WHITE}  y - Yes, implement now${NC}"
-        echo -e "${WHITE}  s - Skip this task for now${NC}"
-        echo -e "${WHITE}  q - Quit and save progress${NC}"
-        echo -e "${WHITE}  ? - Show task details${NC}"
-        
-        read -p "Choice (y/s/q/?): " -n 1 -r
-        echo
-        
-        case $REPLY in
-            [Yy])
-                implement_task "$next_task"
-                echo ""
-                ;;
-            [Ss])
-                echo -e "${YELLOW}Skipping task: $next_task${NC}"
-                # Could implement task skipping logic here
+        # Ask if user wants to proceed (with auto mode support)
+        if [[ "$AUTO_MODE" == "true" ]]; then
+            echo -e "${CYAN}[AUTO MODE] Automatically implementing task: $next_task${NC}"
+            implement_task "$next_task"
+            echo ""
+        else
+            echo -e "${WHITE}Do you want to implement this task now?${NC}"
+            echo -e "${WHITE}Options:${NC}"
+            echo -e "${WHITE}  y - Yes, implement now${NC}"
+            echo -e "${WHITE}  s - Skip this task for now${NC}"
+            echo -e "${WHITE}  q - Quit and save progress${NC}"
+            echo -e "${WHITE}  ? - Show task details${NC}"
+            
+            read -p "Choice (y/s/q/?): " -n 1 -r
+            echo
+            
+            case $REPLY in
+                [Yy])
+                    implement_task "$next_task"
+                    echo ""
+                    ;;
+                [Ss])
+                    echo -e "${YELLOW}Skipping task: $next_task${NC}"
+                    # Could implement task skipping logic here
                 echo -e "${RED}Task skipping not implemented yet${NC}"
                 break
                 ;;
@@ -2474,6 +2512,7 @@ else:
                 echo -e "${RED}Invalid choice. Please try again.${NC}"
                 ;;
         esac
+        fi
     done
     
     # Final session update
@@ -2743,12 +2782,22 @@ Phase Commands:
   $0 phase 5 "task description"    # Testing & Documentation
 
 Environment Variables:
-  WORK_SESSION_ID    Custom session ID (default: timestamp)
+  WORK_SESSION_ID           Custom session ID (default: timestamp)
+  AUTO_MODE                 Enable fully automatic mode (true/false)
+  AUTO_CLEANUP_BRANCHES     Automatically clean old branches (true/false)  
+  AUTO_MERGE_COMPLETED      Automatically merge completed sessions (true/false)
+
+Automation Examples:
+  AUTO_MODE=true ./claude_work.sh work              # Fully automatic mode
+  AUTO_CLEANUP_BRANCHES=true ./claude_work.sh work  # Auto cleanup only
+  AUTO_MODE=true WORK_SESSION_ID=20250809_140000 ./claude_work.sh work  # Auto resume
   
 Features:
   • 📋 Modular phase-specific instructions for Claude
   • 🧪 Automated testing after each task
   • 📝 Comprehensive progress tracking
+  • 🤖 Fully automatic mode with no user prompts
+  • 🧹 Automatic cleanup of old session branches
   • 🔄 Git integration with automated commits and branch management
   • ⚡ Interactive task selection and validation
   • 🧹 Automatic cleanup of old session branches
