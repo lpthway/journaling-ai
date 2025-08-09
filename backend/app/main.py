@@ -34,6 +34,8 @@ from app.core.security_middleware import (
 from app.api import entries, topics, insights_v2, psychology, circuit_breaker, monitoring
 # Health API router import
 from app.api import health
+# Performance optimized API router import
+from app.api import performance_optimized
 # Temporarily disabled sessions API due to missing legacy dependencies
 # from app.api import sessions
 
@@ -216,6 +218,10 @@ app = FastAPI(
         {
             "name": "health",
             "description": "System health and performance monitoring"
+        },
+        {
+            "name": "performance",
+            "description": "High-performance optimized endpoints for better UX"
         }
     ],
     contact={
@@ -307,6 +313,9 @@ app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=[
 # app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
 app.include_router(psychology.router, prefix=f"{settings.API_V1_STR}/psychology", tags=["psychology"])
 app.include_router(circuit_breaker.router, tags=["circuit-breakers"])
+
+# Performance optimized endpoints
+app.include_router(performance_optimized.router, prefix=f"{settings.API_V1_STR}", tags=["performance"])
 
 # Monitoring and health endpoints
 app.include_router(health.router, prefix=f"{settings.API_V1_STR}/health", tags=["health"])

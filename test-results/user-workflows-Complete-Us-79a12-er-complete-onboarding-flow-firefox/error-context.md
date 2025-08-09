@@ -1,0 +1,56 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "Journal AI":
+    - /url: /
+  - navigation:
+    - link "Journal":
+      - /url: /
+    - link "AI Chat":
+      - /url: /chat
+    - link "Topics":
+      - /url: /topics
+    - link "Insights":
+      - /url: /insights
+  - textbox "Search entries..."
+- main:
+  - heading "Insights & Analytics" [level=1]
+  - paragraph: Discover patterns, trends, and get AI-powered insights from your journaling and conversations
+  - navigation:
+    - button "Overview"
+    - button "Coaching"
+    - button "Ask AI"
+    - button "Trends"
+    - button "Patterns"
+  - paragraph: Total Interactions
+  - paragraph: "0"
+  - text: →
+  - paragraph: 0 entries, 0 chats
+  - paragraph: Journal Activity
+  - paragraph: "0.00"
+  - text: ↘
+  - paragraph: entries per day
+  - paragraph: Chat Activity
+  - paragraph: "0.0"
+  - text: ↘
+  - paragraph: avg messages per chat
+  - paragraph: Current Streak
+  - paragraph: "0"
+  - text: ↘
+  - paragraph: days active
+  - heading "Activity Overview (Last 30 Days)" [level=3]
+  - text: Journal Entries 0 Conversations 0
+  - heading "Mood Distribution" [level=3]
+  - paragraph: No mood data available
+  - heading "Quick Insights" [level=3]
+  - paragraph: ℹ️ You've had 0 total interactions in the last 30 days (0 journal entries, 0 conversations)
+  - heading "Pattern Analysis Preview" [level=3]
+  - button "View Full Analysis"
+  - paragraph: Writing Trend
+  - paragraph: low
+  - paragraph: Consistency
+  - paragraph: 0.0/day
+  - paragraph: Chat Engagement
+  - paragraph: No chats
+```
