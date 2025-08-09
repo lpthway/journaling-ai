@@ -1,4 +1,4 @@
-# backend/app/main.py - Enhanced FastAPI Application with Redis Integration
+# backend/app/main.py - Enhanced FastAPI Application with Monitoring and Observability
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +18,11 @@ from app.services.unified_database_service import unified_db_service
 from app.services.redis_service import redis_service
 from app.core.service_interfaces import service_registry
 
+# Monitoring and observability imports
+from app.core.logging_config import setup_logging, get_logger
+from app.core.monitoring_config import monitoring_settings, create_monitoring_directories
+from app.core.request_tracing import RequestTracingMiddleware, set_request_tracer
+
 # Security middleware imports
 from app.core.security_middleware import (
     SecurityHeadersMiddleware,
@@ -26,20 +31,24 @@ from app.core.security_middleware import (
 )
 
 # API routers
-from app.api import entries, topics, insights_v2, psychology, circuit_breaker
+from app.api import entries, topics, insights_v2, psychology, circuit_breaker, monitoring
+# Health API router import
+from app.api import health
 # Temporarily disabled sessions API due to missing legacy dependencies
 # from app.api import sessions
 
 # Authentication router
 from app.auth import auth_router
 
-# Configure enhanced logging
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Initialize structured logging
+setup_logging(
+    log_level=monitoring_settings.log_level,
+    log_format=monitoring_settings.log_format,
+    log_file=monitoring_settings.log_file,
+    enable_console=monitoring_settings.enable_console_logging
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,9 +56,16 @@ async def lifespan(app: FastAPI):
     Enhanced application lifespan with Redis and performance monitoring
     Manages initialization and cleanup of all enterprise services
     """
-    logger.info("🚀 Starting Journaling Assistant API with Redis Integration...")
+    logger.info("🚀 Starting Journaling Assistant API with Monitoring and Observability...")
     
     try:
+        # Phase 0: Initialize monitoring infrastructure
+        logger.info("📊 Initializing monitoring and observability...")
+        
+        # Create monitoring directories
+        create_monitoring_directories()
+        logger.info("✅ Monitoring directories created")
+        
         # Phase 1: Initialize core infrastructure
         logger.info("📊 Initializing core infrastructure...")
         
@@ -250,10 +266,19 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Add security middleware (order matters - add from innermost to outermost)
+# Add monitoring and security middleware (order matters - add from innermost to outermost)
+# Create and set request tracing middleware
+request_tracing_middleware = RequestTracingMiddleware(
+    app=app,
+    enable_detailed_logging=monitoring_settings.enable_detailed_request_logging
+)
+set_request_tracer(request_tracing_middleware)
+
+# Add middleware in proper order
 app.add_middleware(SecurityHeadersMiddleware, nonce_generator=True)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitingMiddleware, requests_per_minute=100)
+app.add_middleware(RequestTracingMiddleware, enable_detailed_logging=monitoring_settings.enable_detailed_request_logging)
 
 # Configure CORS for development and production with security restrictions
 app.add_middleware(
@@ -282,6 +307,10 @@ app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=[
 # app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
 app.include_router(psychology.router, prefix=f"{settings.API_V1_STR}/psychology", tags=["psychology"])
 app.include_router(circuit_breaker.router, tags=["circuit-breakers"])
+
+# Monitoring and health endpoints
+app.include_router(health.router, prefix=f"{settings.API_V1_STR}/health", tags=["health"])
+app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}", tags=["monitoring"])
 
 # Enhanced health check endpoints
 @app.get("/health")
