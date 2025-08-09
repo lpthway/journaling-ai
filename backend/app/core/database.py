@@ -212,11 +212,8 @@ class DatabaseConfig:
         def on_invalidate(dbapi_connection, connection_record, exception):
             logger.warning(f"🚫 Connection invalidated: {exception}")
             
-        # Add engine-level event for timeout tracking
-        @event.listens_for(self.engine.sync_engine.pool, "timeout")
-        def on_timeout():
-            logger.warning("⏱️ Connection pool timeout occurred")
-            self._pool_metrics["connection_timeouts"] += 1
+        # Note: 'timeout' event doesn't exist for connection pools in SQLAlchemy
+        # Pool timeouts are handled internally and logged through other means
     
     async def _validate_connection(self) -> None:
         """Validate database connection and basic functionality."""

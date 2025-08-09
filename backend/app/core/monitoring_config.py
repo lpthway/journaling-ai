@@ -125,7 +125,9 @@ def get_monitoring_config() -> Dict[str, Any]:
 
 def create_monitoring_directories():
     """Create necessary directories for monitoring"""
-    base_dir = Path("/var/log/journaling-ai")
+    # Use local logs directory instead of system /var/log
+    project_root = Path(__file__).parent.parent.parent  # Go up from app/core to backend root
+    base_dir = project_root / "logs" / "journaling-ai"
     
     # Create log directories
     if monitoring_settings.log_file:
