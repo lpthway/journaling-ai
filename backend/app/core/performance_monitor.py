@@ -457,6 +457,15 @@ class PerformanceMonitor:
         except Exception as e:
             logger.error(f"Error checking performance targets: {e}")
             return {"error": True, "overall_health": False}
+    
+    def monitor_endpoint(self, endpoint_name: str):
+        """Decorator for monitoring API endpoint performance"""
+        def decorator(func):
+            async def wrapper(*args, **kwargs):
+                async with self.timed_operation(f"endpoint_{endpoint_name}"):
+                    return await func(*args, **kwargs)
+            return wrapper
+        return decorator
 
 # Global performance monitor instance
 performance_monitor = PerformanceMonitor()
