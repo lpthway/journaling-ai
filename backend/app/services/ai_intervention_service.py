@@ -589,6 +589,15 @@ class AIInterventionService:
     async def _ai_enhanced_crisis_detection(self, text: str) -> List[CrisisIndicator]:
         """Use AI models for enhanced crisis detection"""
         try:
+            # Validate input
+            if not text or not text.strip():
+                return []
+            
+            # Smart text processing for crisis detection (preserves crisis-related content)
+            processed_text = self._intelligently_process_text_for_crisis(text, max_chars=1500)
+            if processed_text != text:
+                logger.debug(f"Processed text for crisis detection: {len(processed_text)} chars (original: {len(text)})")
+            
             # Get zero-shot classification model
             model = await ai_model_manager.get_model("zero_shot_classifier")
             
@@ -606,8 +615,21 @@ class AIInterventionService:
                 "trauma response"
             ]
             
-            # Classify text
-            results = model(text, crisis_categories)
+            # Classify text with error handling
+            try:
+                results = model(processed_text, crisis_categories)
+            except Exception as model_error:
+                if "tensor" in str(model_error).lower() or "size" in str(model_error).lower():
+                    logger.warning(f"🤖 Tensor dimension error in crisis detection, trying shorter text: {model_error}")
+                    # Try with even shorter text as final fallback
+                    short_text = processed_text[:400]
+                    try:
+                        results = model(short_text, crisis_categories)
+                    except Exception:
+                        logger.warning("🤖 Crisis detection failed completely, skipping AI analysis")
+                        return []
+                else:
+                    raise
             
             indicators = []
             if results and "scores" in results:
@@ -795,6 +817,81 @@ class AIInterventionService:
         return enhanced
 
     # ==================== UTILITY METHODS ====================
+
+    def _intelligently_process_text_for_crisis(self, text: str, max_chars: int) -> str:
+        """
+        Intelligently process text for crisis detection, preserving crisis-related content
+        
+        Prioritizes:
+        1. Sentences with crisis keywords
+        2. Recent content (emotional state)
+        3. Emotional escalation patterns
+        """
+        if len(text) <= max_chars:
+            return text
+        
+        # Split into sentences
+        sentences = [s.strip() for s in text.split('.') if s.strip()]
+        if not sentences:
+            return text[:max_chars]
+        
+        # Crisis keywords (high priority)
+        crisis_keywords = [
+            'suicide', 'kill', 'die', 'death', 'hurt', 'pain', 'hopeless', 'worthless',
+            'end it', 'give up', "can't go on", 'no point', 'better off dead', 
+            'cut myself', 'self harm', 'overdose', 'jump', 'hanging', 'pills'
+        ]
+        
+        # Emotional escalation keywords (medium priority) 
+        escalation_keywords = [
+            'rage', 'angry', 'furious', 'explosive', 'losing it', "can't control",
+            'panic', 'anxiety', 'terrified', 'overwhelmed', 'breakdown', 'crying'
+        ]
+        
+        important_sentences = []
+        current_length = 0
+        
+        # First pass: Crisis-related sentences (highest priority)
+        for sentence in sentences:
+            sentence_text = sentence + '. '
+            if any(keyword in sentence.lower() for keyword in crisis_keywords):
+                if current_length + len(sentence_text) <= max_chars:
+                    important_sentences.append(sentence)
+                    current_length += len(sentence_text)
+        
+        # Second pass: Emotional escalation sentences
+        for sentence in sentences:
+            sentence_text = sentence + '. '
+            if (sentence not in important_sentences and 
+                any(keyword in sentence.lower() for keyword in escalation_keywords)):
+                if current_length + len(sentence_text) <= max_chars:
+                    important_sentences.append(sentence)
+                    current_length += len(sentence_text)
+        
+        # Third pass: Recent sentences (last 5-10 sentences for current state)
+        recent_sentences = sentences[-8:] if len(sentences) > 8 else sentences
+        for sentence in reversed(recent_sentences):
+            sentence_text = sentence + '. '
+            if sentence not in important_sentences and current_length + len(sentence_text) <= max_chars:
+                important_sentences.insert(-len([s for s in important_sentences if s in recent_sentences]), sentence)
+                current_length += len(sentence_text)
+        
+        # Fourth pass: Fill remaining space with context from beginning
+        for sentence in sentences[:5]:  # First few sentences for context
+            sentence_text = sentence + '. '
+            if sentence not in important_sentences and current_length + len(sentence_text) <= max_chars:
+                important_sentences.insert(0, sentence)
+                current_length += len(sentence_text)
+        
+        if important_sentences:
+            processed = '. '.join(important_sentences) + '.'
+            # If still too long, truncate but preserve structure
+            if len(processed) > max_chars:
+                processed = processed[:max_chars-3] + "..."
+            return processed
+        
+        # Fallback: use smart truncation from emotion service
+        return text[:max_chars-3] + "..."
 
     def _select_immediate_interventions(self, crisis_level: CrisisLevel, 
                                       risk_factors: List[CrisisIndicator]) -> List[InterventionRecommendation]:

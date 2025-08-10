@@ -58,10 +58,66 @@ class VectorService:
             try:
                 self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
                 self.model_loaded = True
-                logger.info("✅ Loaded fallback embedding model")
+                logger.info("✅ Loaded basic embedding model as fallback")
             except Exception as fallback_error:
-                logger.error(f"Fallback embedding model also failed: {fallback_error}")
-                raise
+                logger.error(f"Failed to load any embedding model: {fallback_error}")
+                self.model_loaded = False
+
+    def _intelligently_process_content(self, content: str, max_chars: int) -> str:
+        """
+        Intelligently process content for vector embedding while preserving semantic meaning
+        """
+        if len(content) <= max_chars:
+            return content
+        
+        # For moderate overruns, preserve beginning and end
+        if len(content) < max_chars * 1.5:
+            first_part_size = int(max_chars * 0.6)
+            remaining_size = max_chars - first_part_size - 10
+            
+            first_part = content[:first_part_size]
+            last_part = content[-remaining_size:] if remaining_size > 0 else ""
+            
+            return f"{first_part}\n...\n{last_part}" if last_part else first_part
+        
+        # For large texts, extract key paragraphs
+        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+        if not paragraphs:
+            # Fallback to sentences
+            sentences = [s.strip() for s in content.split('.') if s.strip()]
+            if len(sentences) <= 6:
+                result = '. '.join(sentences) + '.'
+            else:
+                result = '. '.join(sentences[:3] + ["..."] + sentences[-3:]) + '.'
+            return result[:max_chars] if len(result) > max_chars else result
+        
+        # Select important paragraphs
+        selected_paragraphs = []
+        current_length = 0
+        
+        # Always include first paragraph (context)
+        if paragraphs and len(paragraphs[0]) + 4 <= max_chars:
+            selected_paragraphs.append(paragraphs[0])
+            current_length += len(paragraphs[0]) + 4
+        
+        # Include last paragraph if space allows
+        if len(paragraphs) > 1 and current_length + len(paragraphs[-1]) + 4 <= max_chars:
+            selected_paragraphs.append(paragraphs[-1])
+            current_length += len(paragraphs[-1]) + 4
+        
+        # Fill with middle paragraphs
+        for para in paragraphs[1:-1]:
+            if current_length + len(para) + 4 <= max_chars:
+                insert_pos = len(selected_paragraphs) - (1 if len(paragraphs) > 1 and paragraphs[-1] in selected_paragraphs else 0)
+                selected_paragraphs.insert(insert_pos, para)
+                current_length += len(para) + 4
+        
+        if selected_paragraphs:
+            result = '\n\n'.join(selected_paragraphs)
+            return result[:max_chars] if len(result) > max_chars else result
+        
+        # Final fallback
+        return content[:max_chars-3] + "..."
     
     def _prepare_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare metadata for ChromaDB by converting unsupported types"""
@@ -86,11 +142,30 @@ class VectorService:
     async def add_entry(self, entry_id: str, content: str, metadata: Dict[str, Any]):
         """Add an entry to the vector database"""
         try:
+            # Validate input
+            if not content or not content.strip():
+                logger.warning(f"Empty content for entry {entry_id}, skipping vector database")
+                return
+            
+            # Smart content processing to preserve important information
+            processed_content = self._intelligently_process_content(content, max_chars=8000)
+            if processed_content != content:
+                logger.debug(f"Processed content for embedding: {len(processed_content)} chars (original: {len(content)})")
+            
             # Ensure embedding model is loaded
             await self._ensure_model_loaded()
             
-            # Generate embedding
-            embedding = self.embedding_model.encode(content).tolist()
+            # Generate embedding with CUDA error handling
+            try:
+                embedding = self.embedding_model.encode(processed_content).tolist()
+            except RuntimeError as cuda_error:
+                if "CUDA" in str(cuda_error) or "device-side assert" in str(cuda_error):
+                    logger.warning(f"CUDA error in embedding generation, falling back to CPU: {cuda_error}")
+                    # Try to move model to CPU and retry
+                    self.embedding_model = self.embedding_model.to('cpu')
+                    embedding = self.embedding_model.encode(content).tolist()
+                else:
+                    raise
             
             # Prepare metadata for ChromaDB
             clean_metadata = self._prepare_metadata(metadata)
@@ -105,7 +180,8 @@ class VectorService:
             logger.info(f"Added entry {entry_id} to vector database")
         except Exception as e:
             logger.error(f"Error adding entry to vector database: {e}")
-            raise
+            # Don't raise the exception to prevent breaking entry creation
+            logger.warning(f"Vector database update failed for entry {entry_id}, but entry was still created")
     
     async def update_entry(self, entry_id: str, content: str, metadata: Dict[str, Any]):
         """Update an entry in the vector database"""

@@ -77,6 +77,9 @@ class AIEmotionService:
     """
     
     def __init__(self):
+        # In-memory cache for AI results (avoiding Redis recursion issues)
+        self._memory_cache = {}
+        self._cache_max_size = 1000  # Limit memory usage
         self.emotion_models = self._initialize_emotion_models()
         self.emotion_patterns = self._initialize_emotion_patterns()
         self.cultural_emotion_mappings = self._initialize_cultural_mappings()
@@ -206,6 +209,76 @@ class AIEmotionService:
             }
         }
 
+    def _intelligently_process_text(self, text: str, max_chars: int, purpose: str = "analysis") -> str:
+        """
+        Intelligently process text to preserve important content while staying within limits
+        
+        Uses smart truncation strategies:
+        1. For short texts: return as-is
+        2. For medium texts: preserve beginning and end
+        3. For long texts: extract key sentences/paragraphs
+        """
+        if len(text) <= max_chars:
+            return text
+        
+        # For sentiment analysis, preserve emotional content better
+        if purpose == "sentiment":
+            # Try to preserve beginning (context) and recent content (current state)
+            quarter = max_chars // 4
+            if len(text) > max_chars:
+                # Take first quarter + last three quarters, with ellipsis
+                beginning = text[:quarter]
+                remaining_space = max_chars - quarter - 5  # 5 for " ... "
+                end_portion = text[-remaining_space:] if remaining_space > 0 else ""
+                return f"{beginning} ... {end_portion}" if end_portion else beginning
+        
+        # For crisis detection, focus on recent and emotionally charged content
+        elif purpose == "crisis":
+            # Split into sentences and prioritize recent + emotional keywords
+            sentences = [s.strip() for s in text.split('.') if s.strip()]
+            if not sentences:
+                return text[:max_chars]
+            
+            # Look for crisis-related keywords
+            crisis_keywords = ['suicide', 'kill', 'die', 'hurt', 'pain', 'hopeless', 'worthless', 
+                             'end it', 'give up', 'can\'t go on', 'no point', 'better off dead']
+            
+            important_sentences = []
+            current_length = 0
+            
+            # First pass: prioritize sentences with crisis keywords
+            for sentence in sentences:
+                sentence_text = sentence + '. '
+                if any(keyword in sentence.lower() for keyword in crisis_keywords):
+                    if current_length + len(sentence_text) <= max_chars:
+                        important_sentences.append(sentence)
+                        current_length += len(sentence_text)
+            
+            # Second pass: add recent sentences if space remains
+            for sentence in reversed(sentences[-10:]):  # Last 10 sentences
+                sentence_text = sentence + '. '
+                if sentence not in important_sentences and current_length + len(sentence_text) <= max_chars:
+                    important_sentences.insert(0, sentence)
+                    current_length += len(sentence_text)
+            
+            if important_sentences:
+                return '. '.join(important_sentences) + '.'
+        
+        # Default: smart truncation with sentence boundaries
+        if max_chars > 100:
+            # Try to end at sentence boundary
+            truncated = text[:max_chars-3]
+            last_period = truncated.rfind('.')
+            last_exclamation = truncated.rfind('!')
+            last_question = truncated.rfind('?')
+            
+            sentence_end = max(last_period, last_exclamation, last_question)
+            if sentence_end > max_chars * 0.7:  # If we can preserve 70% and end cleanly
+                return text[:sentence_end + 1]
+        
+        # Fallback: simple truncation
+        return text[:max_chars-3] + "..."
+
     # ==================== MAIN EMOTION ANALYSIS ====================
 
     async def analyze_emotions(self, text: str, language: str = "en", 
@@ -224,14 +297,12 @@ class AIEmotionService:
             EmotionAnalysis with comprehensive results
         """
         try:
-            # Check cache first using Phase 2 patterns
+            # Use in-memory cache instead of Redis for AI results
             cache_key = self._build_emotion_cache_key(text, language, include_patterns)
-            cached_analysis = await unified_cache_service.get_ai_analysis_result(cache_key)
-            
-            if cached_analysis:
+            if hasattr(self, '_memory_cache') and cache_key in self._memory_cache:
                 self.analysis_stats["cache_hits"] += 1
-                logger.debug(f"🗃️ Using cached emotion analysis")
-                return cached_analysis
+                logger.debug(f"🗃️ Using memory-cached emotion analysis")
+                return self._memory_cache[cache_key]
             
             # Perform new analysis
             analysis = await self._perform_emotion_analysis(
@@ -239,10 +310,12 @@ class AIEmotionService:
             )
             
             if analysis:
-                # Cache the analysis
-                await unified_cache_service.set_ai_analysis_result(
-                    analysis, cache_key, ttl=3600  # 1 hour
-                )
+                # Store in memory cache (avoiding Redis recursion issues)
+                if len(self._memory_cache) >= self._cache_max_size:
+                    # Simple LRU: remove oldest entry
+                    oldest_key = next(iter(self._memory_cache))
+                    del self._memory_cache[oldest_key]
+                self._memory_cache[cache_key] = analysis
                 
                 self.analysis_stats["total_analyses"] += 1
                 if language != "en":
@@ -368,6 +441,15 @@ class AIEmotionService:
     async def _analyze_sentiment(self, text: str, language: str) -> float:
         """Analyze sentiment polarity"""
         try:
+            # Validate input
+            if not text or not text.strip():
+                return 0.0
+            
+            # Smart text processing for long content
+            processed_text = self._intelligently_process_text(text, max_chars=2000, purpose="sentiment")
+            if processed_text != text:
+                logger.debug(f"Processed text for sentiment analysis: {len(processed_text)} chars (original: {len(text)})")
+            
             # Select appropriate sentiment model based on language
             model_key = "multilingual_sentiment" if language != "en" else "sentiment_classifier"
             model = await ai_model_manager.get_model(model_key)
@@ -376,8 +458,21 @@ class AIEmotionService:
                 logger.warning("🤖 Sentiment model unavailable, using neutral fallback")
                 return 0.0
             
-            # Analyze sentiment
-            results = model(text)
+            # Analyze sentiment with comprehensive error handling
+            try:
+                results = model(processed_text)
+            except Exception as model_error:
+                if "tensor" in str(model_error).lower() or "size" in str(model_error).lower():
+                    logger.warning(f"🤖 Tensor dimension error in sentiment analysis, trying shorter text: {model_error}")
+                    # Try with even shorter text as fallback
+                    short_text = processed_text[:500]
+                    try:
+                        results = model(short_text)
+                    except Exception:
+                        logger.warning("🤖 Sentiment analysis failed completely, using neutral fallback")
+                        return 0.0
+                else:
+                    raise
             
             if not results or not isinstance(results, list):
                 return 0.0
