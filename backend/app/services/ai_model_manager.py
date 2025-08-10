@@ -22,6 +22,7 @@ import psutil
 from app.core.cache_patterns import CacheDomain, CachePatterns, CacheKeyBuilder
 from app.services.cache_service import unified_cache_service
 from app.core.service_interfaces import ServiceRegistry
+from app.core.config import settings
 
 # Hardware-adaptive model selection
 from app.services.hardware_service import hardware_service
@@ -56,8 +57,22 @@ class AIModelManager:
         self.max_memory_usage = self._get_max_memory_usage()
         self.models_directory = Path(__file__).parent.parent.parent / "models"
         
-        # Hardware detection
-        self.has_gpu = torch.cuda.is_available()
+        # Get configuration settings
+        self.settings = settings
+        
+        # Set CUDA memory management environment variables for better fragmentation handling
+        import os
+        if not os.environ.get('PYTORCH_CUDA_ALLOC_CONF'):
+            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+        
+        # Check for CPU fallback configuration
+        self.force_cpu = self.settings.AI_FORCE_CPU
+        if self.force_cpu:
+            logger.warning("🔄 AI_FORCE_CPU is enabled - forcing CPU mode for all models")
+            os.environ['CUDA_VISIBLE_DEVICES'] = ""
+        
+        # Hardware detection with fallback handling
+        self.has_gpu = torch.cuda.is_available() and not self.force_cpu
         self.gpu_memory = self._get_gpu_memory() if self.has_gpu else 0
         
         # Model configuration will be initialized async
@@ -65,7 +80,9 @@ class AIModelManager:
         self._initialized = False
         
         logger.info(f"🤖 AI Model Manager initializing...")
-        logger.info(f"   GPU Available: {self.has_gpu}")
+        logger.info(f"   GPU Available: {torch.cuda.is_available()}")
+        logger.info(f"   Force CPU Mode: {self.force_cpu}")
+        logger.info(f"   Using GPU: {self.has_gpu}")
         if self.has_gpu:
             logger.info(f"   GPU Memory: {self.gpu_memory:.1f} GB")
         logger.info(f"   Max Memory Usage: {self.max_memory_usage:.1f} GB")
@@ -117,14 +134,14 @@ class AIModelManager:
         return {
             # Hardware-optimized Emotion Analysis
             "emotion_classifier": {
-                "model_name": emotion_model,
+                "model_name": "j-hartmann/emotion-english-distilroberta-base",  # Use proper emotion model
                 "model_type": "text-classification",
                 "task": "emotion-analysis",
                 "languages": ["en"],
-                "memory_estimate": 2.0 if emotion_gpu else 0.8,  # GB
+                "memory_estimate": 1.2 if emotion_gpu else 0.5,  # GB
                 "priority": "high",
                 "use_gpu": emotion_gpu,
-                "fallback": "j-hartmann/emotion-english-distilroberta-base"
+                "fallback": "cardiffnlp/twitter-roberta-base-emotion-latest"
             },
             
             # Hardware-optimized Sentiment Analysis
@@ -188,14 +205,14 @@ class AIModelManager:
             
             # Hardware-optimized Zero-shot Classification
             "zero_shot_classifier": {
-                "model_name": classification_model,
+                "model_name": "facebook/bart-large-mnli",  # Proper zero-shot model
                 "model_type": "zero-shot-classification",
                 "task": "zero-shot-classification",
                 "languages": ["en"],
                 "memory_estimate": 6.0 if classification_gpu else 1.6,  # GB
                 "priority": "medium",
                 "use_gpu": classification_gpu,
-                "fallback": "facebook/bart-large-mnli"
+                "fallback": "microsoft/DialoGPT-medium"
             },
             
             # Hardware-optimized Embeddings
@@ -285,6 +302,18 @@ class AIModelManager:
         except Exception as e:
             logger.warning(f"Failed to load primary model {model_key}: {e}")
             
+            # Clear GPU cache if CUDA out of memory error
+            if "CUDA out of memory" in str(e) and self.has_gpu:
+                logger.warning("🧹 Clearing GPU cache due to CUDA memory error")
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                        torch.cuda.ipc_collect()
+                except Exception as cleanup_error:
+                    logger.error(f"Failed to clear GPU cache: {cleanup_error}")
+            
             # Try fallback model if available
             fallback_key = config.get("fallback")
             if fallback_key and fallback_key != model_key:
@@ -314,7 +343,7 @@ class AIModelManager:
                     "text-classification",
                     model=model_path,
                     tokenizer=model_path,
-                    return_all_scores=True,
+                    top_k=None,  # Updated from return_all_scores=True
                     device=device,
                     **kwargs
                 )
@@ -351,6 +380,72 @@ class AIModelManager:
                 
         except Exception as e:
             logger.error(f"Error loading model {model_name}: {e}")
+            
+            # Handle CUDA errors with CPU fallback
+            if ("CUDA" in str(e) or "device-side assert" in str(e)) and use_gpu:
+                logger.warning(f"🔄 CUDA error detected, retrying {model_key} on CPU: {e}")
+                
+                # Clear GPU cache
+                try:
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                        torch.cuda.ipc_collect()
+                except Exception as cleanup_error:
+                    logger.error(f"Failed to clear GPU cache: {cleanup_error}")
+                
+                # Retry on CPU
+                try:
+                    logger.info(f"🔄 Retrying {model_key} on CPU due to CUDA error")
+                    device = -1  # Force CPU
+                    
+                    if model_type == "text-classification":
+                        return pipeline(
+                            "text-classification",
+                            model=model_path,
+                            tokenizer=model_path,
+                            top_k=None,  # Updated from return_all_scores=True
+                            device=device,
+                            **kwargs
+                        )
+                    elif model_type == "zero-shot-classification":
+                        return pipeline(
+                            "zero-shot-classification",
+                            model=model_path,
+                            tokenizer=model_path,
+                            device=device,
+                            **kwargs
+                        )
+                    elif model_type == "sentence-transformers":
+                        from sentence_transformers import SentenceTransformer
+                        model = SentenceTransformer(str(model_path))
+                        # Keep on CPU for sentence transformers fallback
+                        return model
+                    else:
+                        return pipeline(
+                            model_type,
+                            model=model_path,
+                            tokenizer=model_path,
+                            device=device,
+                            **kwargs
+                        )
+                        
+                except Exception as cpu_error:
+                    logger.error(f"❌ CPU fallback also failed for {model_key}: {cpu_error}")
+                    return None
+            
+            # Clear GPU cache if CUDA out of memory error
+            elif "CUDA out of memory" in str(e) and self.has_gpu:
+                logger.warning("🧹 Clearing GPU cache due to CUDA memory error in single model load")
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                        torch.cuda.ipc_collect()
+                except Exception as cleanup_error:
+                    logger.error(f"Failed to clear GPU cache: {cleanup_error}")
+            
             return None
 
     def _get_model_path(self, model_name: str) -> str:

@@ -146,7 +146,7 @@ class Settings(BaseSettings):
     
     # LLM Configuration (Ollama on localhost)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3.2"
+    OLLAMA_MODEL: str = "llama3.2:latest"
     
     # Fallback model configurations (used if hardware detection fails)
     # Embedding Model
@@ -158,6 +158,28 @@ class Settings(BaseSettings):
     # Vector Search
     VECTOR_SIMILARITY_THRESHOLD: float = 0.7
     VECTOR_SEARCH_LIMIT: int = 50
+    
+    # === AI MODEL CONFIGURATION ===
+    # GPU Configuration
+    AI_USE_GPU: bool = Field(
+        default_factory=lambda: os.getenv("AI_USE_GPU", "true").lower() == "true",
+        description="Enable GPU acceleration for AI models"
+    )
+    AI_FORCE_CPU: bool = Field(
+        default_factory=lambda: os.getenv("AI_FORCE_CPU", "false").lower() == "true",
+        description="Force CPU mode to resolve CUDA issues"
+    )
+    AI_CUDA_DEVICE: Optional[str] = Field(
+        default_factory=lambda: os.getenv("CUDA_VISIBLE_DEVICES"),
+        description="CUDA device selection (None for auto)"
+    )
+    
+    # Model Memory Configuration
+    AI_MAX_MEMORY_GB: float = Field(default=8.0, ge=1.0, le=32.0)
+    AI_MODEL_CACHE_DIR: str = Field(
+        default_factory=lambda: os.getenv("AI_MODEL_CACHE_DIR", "./models"),
+        description="Directory for caching AI models"
+    )
     
     # === EXTERNAL APIS ===
     OPENAI_API_KEY: Optional[str] = None

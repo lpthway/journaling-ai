@@ -49,6 +49,7 @@ class RedisService(CacheStrategy):
         self.redis_client: Optional[redis.Redis] = None
         self.connection_pool: Optional[redis.ConnectionPool] = None
         self._initialized = False
+        self._initializing = False  # Prevent recursive initialization
         self._metrics = CacheMetrics()
         
         # Configuration from settings
@@ -64,9 +65,10 @@ class RedisService(CacheStrategy):
     
     async def initialize(self) -> None:
         """Initialize Redis connection with enterprise-grade configuration"""
-        if self._initialized:
+        if self._initialized or self._initializing:
             return
             
+        self._initializing = True
         try:
             # Create connection pool with optimized settings
             self.connection_pool = redis.ConnectionPool.from_url(
@@ -85,8 +87,8 @@ class RedisService(CacheStrategy):
                 decode_responses=False
             )
             
-            # Test connection
-            await self._health_check()
+            # Simple connection test without full health check
+            await self.redis_client.ping()
             
             self._initialized = True
             logger.info("✅ Redis service initialized successfully")
@@ -97,6 +99,8 @@ class RedisService(CacheStrategy):
                 "Redis initialization failed",
                 context={"error": str(e), "redis_url": self.redis_url}
             )
+        finally:
+            self._initializing = False
     
     async def close(self) -> None:
         """Gracefully close Redis connections"""
@@ -174,7 +178,7 @@ class RedisService(CacheStrategy):
     
     async def get(self, key: str) -> Optional[Any]:
         """Get value from Redis cache"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         async with self._timed_operation("get"):
@@ -198,7 +202,7 @@ class RedisService(CacheStrategy):
         strategy: SerializationStrategy = None
     ) -> bool:
         """Set value in Redis cache with optional TTL"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         async with self._timed_operation("set"):
@@ -222,7 +226,7 @@ class RedisService(CacheStrategy):
     
     async def delete(self, key: str) -> bool:
         """Delete key from Redis cache"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         async with self._timed_operation("delete"):
@@ -236,7 +240,7 @@ class RedisService(CacheStrategy):
     
     async def exists(self, key: str) -> bool:
         """Check if key exists in Redis"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         try:
@@ -248,7 +252,7 @@ class RedisService(CacheStrategy):
     
     async def invalidate_pattern(self, pattern: str) -> int:
         """Invalidate all keys matching pattern"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         async with self._timed_operation("invalidate_pattern"):
@@ -268,7 +272,7 @@ class RedisService(CacheStrategy):
     
     async def get_multiple(self, keys: List[str]) -> Dict[str, Any]:
         """Get multiple values in a single operation"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         async with self._timed_operation("mget"):
@@ -295,7 +299,7 @@ class RedisService(CacheStrategy):
         ttl: Optional[int] = None
     ) -> bool:
         """Set multiple key-value pairs efficiently"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         async with self._timed_operation("mset"):
@@ -324,7 +328,7 @@ class RedisService(CacheStrategy):
     
     async def increment(self, key: str, amount: int = 1) -> int:
         """Increment numeric value atomically"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         try:
@@ -336,7 +340,7 @@ class RedisService(CacheStrategy):
     
     async def expire(self, key: str, ttl: int) -> bool:
         """Set expiration time for existing key"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         try:
@@ -348,7 +352,7 @@ class RedisService(CacheStrategy):
     
     async def get_ttl(self, key: str) -> int:
         """Get TTL for key (-1 if no expiration, -2 if key doesn't exist)"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         try:
@@ -390,7 +394,7 @@ class RedisService(CacheStrategy):
     
     async def get_info(self) -> Dict[str, Any]:
         """Get Redis server information"""
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         try:
@@ -413,7 +417,7 @@ class RedisService(CacheStrategy):
             logger.warning("flush_db called without confirmation - ignoring")
             return False
             
-        if not self._initialized:
+        if not self._initialized and not self._initializing:
             await self.initialize()
             
         try:

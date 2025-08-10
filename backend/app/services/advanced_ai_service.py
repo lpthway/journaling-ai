@@ -480,8 +480,16 @@ class AdvancedAIService:
             cached_profile = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if cached_profile:
-                self.analytics_stats["cache_hits"] += 1
-                return cached_profile
+                logger.debug(f"🔍 Cache returned type: {type(cached_profile)}")
+                logger.debug(f"🔍 Cache returned value: {cached_profile}")
+                
+                # Check if cache returned a string instead of PersonalityProfile
+                if isinstance(cached_profile, str):
+                    logger.warning(f"⚠️ Cache returned string instead of PersonalityProfile, ignoring cache")
+                    # Don't use corrupted cache data, fall through to regenerate
+                else:
+                    self.analytics_stats["cache_hits"] += 1
+                    return cached_profile
             
             # Analyze Big Five personality dimensions
             dimensions = await self._analyze_big_five_dimensions(entries)

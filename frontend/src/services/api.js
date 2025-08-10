@@ -86,37 +86,233 @@ export const insightsAPI = {
   getMoodTrends: (days = 30) => api.get('/insights/mood-stats', { params: { days } }),
 };
 
-// Session API - Add this to your existing api.js file
+// Enhanced Chat API - Updated to use /api/v1/chat endpoints
 export const sessionAPI = {
-  // Session management
-  createSession: (sessionData) => api.post('/sessions/', sessionData),
+  // Enhanced session management
+  createSession: (sessionData) => {
+    // Convert frontend session data to enhanced chat format
+    const enhancedData = {
+      user_id: sessionData.user_id || '1e05fb66-160a-4305-b84a-805c2f0c6910',
+      conversation_mode: sessionData.session_type || 'supportive_listening',
+      initial_context: {
+        title: sessionData.title || 'Enhanced Chat Session',
+        metadata: sessionData.metadata || {},
+        frontend_integration: true
+      }
+    };
+    return api.post('/chat/conversation/start', enhancedData).then(response => {
+      // Convert enhanced chat response to frontend expected format
+      const data = response.data;
+      const sessionInfo = {
+        id: data.session_id,
+        session_id: data.session_id,
+        title: sessionData.title || 'Enhanced Chat Session',
+        session_type: sessionData.session_type || 'supportive_listening',
+        conversation_mode: sessionData.session_type || 'supportive_listening',
+        status: 'active',
+        message_count: 0,
+        recent_messages: [],
+        created_at: new Date().toISOString(),
+        last_activity: new Date().toISOString()
+      };
+      
+      // Store session in localStorage
+      try {
+        const existingSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+        existingSessions.unshift(sessionInfo); // Add to beginning
+        localStorage.setItem('chatSessions', JSON.stringify(existingSessions.slice(0, 100))); // Keep max 100
+      } catch (error) {
+        console.error('Error storing session:', error);
+      }
+      
+      return { data: sessionInfo };
+    });
+  },
   
-  getSession: (sessionId) => api.get(`/sessions/${sessionId}`),
+  getSession: (sessionId) => api.get(`/chat/conversation/${sessionId}/history`),
   
-  getSessions: (params = {}) => api.get('/sessions/', { params }),
+  getSessions: (params = {}) => {
+    // Get sessions from localStorage since enhanced chat doesn't have session listing yet
+    try {
+      const storedSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+      // Sort by last activity, most recent first
+      const sortedSessions = storedSessions.sort((a, b) => 
+        new Date(b.last_activity) - new Date(a.last_activity)
+      );
+      return Promise.resolve({ data: sortedSessions.slice(0, params.limit || 50) });
+    } catch (error) {
+      console.error('Error getting sessions from storage:', error);
+      return Promise.resolve({ data: [] });
+    }
+  },
   
-  updateSession: (sessionId, updateData) => api.put(`/sessions/${sessionId}`, updateData),
+  updateSession: (sessionId, updateData) => {
+    // Enhanced chat handles session updates differently
+    return Promise.resolve({ data: { id: sessionId, ...updateData } });
+  },
   
-  deleteSession: (sessionId) => api.delete(`/sessions/${sessionId}`),
+  deleteSession: (sessionId) => {
+    // Remove from localStorage and end conversation
+    try {
+      const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+      const filteredSessions = sessions.filter(s => s.id !== sessionId && s.session_id !== sessionId);
+      localStorage.setItem('chatSessions', JSON.stringify(filteredSessions));
+    } catch (error) {
+      console.error('Error removing session from storage:', error);
+    }
+    
+    return api.post(`/chat/conversation/${sessionId}/end`).catch(error => {
+      // Even if API call fails, we've removed it from localStorage
+      console.warn('Could not end conversation on server:', error);
+      return Promise.resolve({ data: { success: true } });
+    });
+  },
   
-  // Session actions
-  pauseSession: (sessionId) => api.post(`/sessions/${sessionId}/pause`),
+  // Session actions - enhanced chat handles these internally
+  pauseSession: (sessionId) => Promise.resolve({ data: { status: 'paused' } }),
+  resumeSession: (sessionId) => Promise.resolve({ data: { status: 'active' } }),
   
-  resumeSession: (sessionId) => api.post(`/sessions/${sessionId}/resume`),
+  // Enhanced messages
+  sendMessage: (sessionId, messageData) => {
+    const enhancedMessageData = {
+      user_id: '1e05fb66-160a-4305-b84a-805c2f0c6910',
+      session_id: sessionId,
+      message: messageData.content,
+      conversation_mode: 'supportive_listening',
+      context_metadata: messageData.context || {}
+    };
+    return api.post('/chat/message', enhancedMessageData).then(response => {
+      const data = response.data;
+      // Convert enhanced chat response to frontend expected format
+      const formattedResponse = {
+        data: {
+          id: data.message_id,
+          role: 'assistant',
+          content: data.content,
+          timestamp: data.timestamp,
+          metadata: {
+            crisis_level: data.crisis_indicators?.length > 0 ? 'HIGH' : 'NONE',
+            emotion_analysis: {
+              primary_emotion: 'supportive',
+              confidence: data.confidence_score
+            },
+            response_time_ms: Math.round((data.processing_metadata?.processing_time_seconds || 0) * 1000),
+            conversation_stage: data.conversation_stage,
+            response_style: data.response_style,
+            therapeutic_techniques: data.therapeutic_techniques,
+            emotional_support_level: data.emotional_support_level
+          }
+        }
+      };
+      
+      // Update session in localStorage
+      try {
+        const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+        const sessionIndex = sessions.findIndex(s => s.id === sessionId || s.session_id === sessionId);
+        if (sessionIndex !== -1) {
+          sessions[sessionIndex].last_activity = new Date().toISOString();
+          sessions[sessionIndex].message_count = (sessions[sessionIndex].message_count || 0) + 1;
+          sessions[sessionIndex].recent_messages = sessions[sessionIndex].recent_messages || [];
+          sessions[sessionIndex].recent_messages.push({
+            role: 'assistant',
+            content: formattedResponse.data.content.substring(0, 100) + '...',
+            timestamp: formattedResponse.data.timestamp
+          });
+          // Keep only last 3 messages for preview
+          sessions[sessionIndex].recent_messages = sessions[sessionIndex].recent_messages.slice(-3);
+          localStorage.setItem('chatSessions', JSON.stringify(sessions));
+        }
+      } catch (error) {
+        console.error('Error updating session:', error);
+      }
+      
+      return formattedResponse;
+    });
+  },
   
-  // Messages
-  sendMessage: (sessionId, messageData) => api.post(`/sessions/${sessionId}/messages`, messageData),
+  getMessages: (sessionId, params = {}) => api.get(`/chat/conversation/${sessionId}/history`, { params }),
   
-  getMessages: (sessionId, params = {}) => api.get(`/sessions/${sessionId}/messages`, { params }),
+  getSuggestions: (sessionId) => {
+    // Return context-aware suggestions - will be handled by ContextAwareSuggestions component
+    return Promise.resolve({ data: [] });
+  },
   
-  getSuggestions: (sessionId) => api.get(`/sessions/${sessionId}/suggestions`),
-  
-  // Session types
-  getAvailableTypes: () => api.get('/sessions/types/available'),
+  // Enhanced chat modes (replaces session types)
+  getAvailableTypes: () => api.get('/chat/modes'),
 };
 
-// Health check
+// Health check and performance
 export const healthCheck = () => api.get('/health');
+export const performanceAPI = {
+  getStatus: () => api.get('/health/performance'),
+  getCacheStatus: () => api.get('/health/cache'),
+  runBenchmark: () => api.post('/monitoring/performance/benchmark')
+};
+
+// Advanced AI API
+export const advancedAI = {
+  // Personality Analysis
+  getPersonalityProfile: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910') => 
+    api.post('/ai/advanced/analysis/personality', {
+      user_id: userId,
+      include_detailed_traits: true
+    }),
+  
+  getPersonalityDimensions: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910') => 
+    api.get('/ai/advanced/personality/dimensions', { params: { user_id: userId } }),
+  
+  // Pattern Analysis & Insights
+  getComprehensiveAnalysis: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910', options = {}) =>
+    api.post('/ai/advanced/analysis/comprehensive', {
+      user_id: userId,
+      timeframe: options.timeframe || 'monthly',
+      include_predictions: options.include_predictions !== false,
+      include_personality: options.include_personality !== false,
+      max_entries: options.max_entries || 100
+    }),
+  
+  getTemporalInsights: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910', options = {}) => {
+    const params = { user_id: userId };
+    if (options.timeframe) params.timeframe = options.timeframe;
+    if (options.max_entries) params.max_entries = options.max_entries;
+    if (options.insight_types) params.insight_types = options.insight_types;
+    
+    return api.get('/ai/advanced/insights/temporal', { params });
+  },
+  
+  getPredictiveAnalysis: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910', options = {}) =>
+    api.post('/ai/advanced/analysis/predictive', {
+      user_id: userId,
+      prediction_horizon: options.prediction_horizon || 7,
+      include_risk_assessment: options.include_risk_assessment !== false,
+      include_opportunities: options.include_opportunities !== false
+    }),
+  
+  // Health & Status
+  getHealthCheck: () => api.get('/ai/advanced/health'),
+  getServiceStats: () => api.get('/ai/advanced/stats'),
+};
+
+// Dashboard API
+export const dashboardAPI = {
+  getOverview: () => api.get('/monitoring/metrics'),
+  getQuickStats: async () => {
+    try {
+      const [entriesRes, performanceRes] = await Promise.allSettled([
+        entryAPI.getAll({ limit: 100 }), // Get more entries for better stats
+        performanceAPI.getStatus()
+      ]);
+      
+      return {
+        entries: entriesRes.status === 'fulfilled' ? entriesRes.value.data : [],
+        performance: performanceRes.status === 'fulfilled' ? performanceRes.value.data : null
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      throw error;
+    }
+  }
+};
 
 export default api;
 // Enhanced Insights API - includes chat conversations

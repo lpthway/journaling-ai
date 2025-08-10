@@ -234,18 +234,18 @@ class HardwareService:
                 fallback_model="facebook/bart-base"
             ),
             "high": ModelConfig(
-                model_name="microsoft/deberta-v2-xlarge-mnli",
-                memory_requirement_gb=6.0,
-                min_compute_capability=7.0,
+                model_name="cardiffnlp/twitter-roberta-base-sentiment-latest",
+                memory_requirement_gb=3.0,
+                min_compute_capability=6.0,
                 prefers_gpu=True,
                 fallback_model="facebook/bart-large-mnli"
             ),
             "enterprise": ModelConfig(
-                model_name="microsoft/deberta-v2-xxlarge-mnli",
-                memory_requirement_gb=8.0,
-                min_compute_capability=7.5,
+                model_name="cardiffnlp/twitter-roberta-base-sentiment-latest",
+                memory_requirement_gb=4.0,
+                min_compute_capability=6.0,
                 prefers_gpu=True,
-                fallback_model="microsoft/deberta-v2-xlarge-mnli"
+                fallback_model="cardiffnlp/twitter-roberta-base-sentiment-latest"
             )
         }
     

@@ -5,7 +5,7 @@ from typing import Dict, Any
 from app.services.unified_database_service import unified_db_service
 from app.core.performance_monitor import performance_monitor
 from app.decorators.cache_decorators import get_cache_stats
-from app.services.redis_service import redis_service
+from app.services.redis_service_simple import simple_redis_service as redis_service
 import logging
 from datetime import datetime
 

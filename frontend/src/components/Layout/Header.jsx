@@ -3,9 +3,11 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
+  HomeIcon,
   BookOpenIcon, 
   TagIcon, 
-  ChartBarIcon, 
+  ChartBarIcon,
+  ArrowTrendingUpIcon, // Fixed import for Analytics
   ChatBubbleLeftRightIcon,  // New import
   MagnifyingGlassIcon,
   Bars3Icon,
@@ -18,10 +20,12 @@ const Header = ({ onSearch }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const navigation = [
-    { name: 'Journal', href: '/', icon: BookOpenIcon },
+    { name: 'Dashboard', href: '/', icon: HomeIcon },
+    { name: 'Journal', href: '/journal', icon: BookOpenIcon },
     { name: 'AI Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },  // New chat link
     { name: 'Topics', href: '/topics', icon: TagIcon },
     { name: 'Insights', href: '/insights', icon: ChartBarIcon },
+    { name: 'Analytics', href: '/analytics', icon: ArrowTrendingUpIcon },  // New analytics link
   ];
 
   const isActive = (path) => {

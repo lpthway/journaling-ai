@@ -19,7 +19,7 @@ from .ai_intervention_service import ai_intervention_service
 # Core Services - Database and caching
 from .unified_database_service import unified_db_service
 from .cache_service import unified_cache_service
-from .redis_service import redis_service
+from .redis_service_simple import simple_redis_service as redis_service  # Use simple Redis service
 
 # Analytics and Processing Services
 from .analytics_service import analytics_cache_service

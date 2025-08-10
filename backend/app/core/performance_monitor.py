@@ -143,15 +143,18 @@ class PerformanceMonitor:
         
         # Store in Redis for distributed monitoring
         try:
-            # Lazy import to avoid circular dependency
-            from app.services.redis_service import redis_service
-            await redis_service.set(
-                f"metrics:{name}:{int(time.time())}",
-                asdict(metric),
-                ttl=3600  # 1 hour retention
-            )
+            # Lazy import to avoid circular dependency - using simple Redis service
+            from app.services.redis_service_simple import simple_redis_service
+            
+            # Check if Simple Redis is initialized
+            if getattr(simple_redis_service, '_initialized', False):
+                await simple_redis_service.set(
+                    f"metrics:{name}:{int(time.time())}",
+                    asdict(metric),
+                    ttl=3600  # 1 hour retention
+                )
         except Exception as e:
-            logger.warning(f"Failed to store metric in Redis: {e}")
+            logger.warning(f"Failed to store metric in Simple Redis: {e}")
     
     async def _check_performance_target(self, operation_name: str, duration_ms: float) -> None:
         """Check operation against performance targets and alert if exceeded"""
@@ -269,12 +272,17 @@ class PerformanceMonitor:
     async def collect_cache_metrics(self) -> CacheMetrics:
         """Collect Redis cache performance metrics"""
         try:
-            # Lazy import to avoid circular dependency
-            from app.services.redis_service import redis_service
+            # Lazy import to avoid circular dependency - using simple Redis service
+            from app.services.redis_service_simple import simple_redis_service
+            
+            # Check if Simple Redis is initialized
+            if not getattr(simple_redis_service, '_initialized', False):
+                logger.debug("Simple Redis not yet initialized, returning empty cache metrics")
+                return CacheMetrics(0, 1, 0, 0, 0, 0, datetime.utcnow())
             
             # Get Redis info and metrics
-            redis_info = await redis_service.get_info()
-            cache_metrics = await redis_service.get_metrics()
+            redis_info = await simple_redis_service.get_info()
+            cache_metrics = await simple_redis_service.get_metrics()
             
             # Calculate derived metrics
             hit_rate = cache_metrics.hit_rate

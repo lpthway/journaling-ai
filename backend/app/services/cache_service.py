@@ -13,7 +13,7 @@ from app.core.cache_patterns import (
     CachePatterns, CacheTTL, CacheKeyBuilder, CacheDomain, 
     CacheInvalidationPatterns, CacheMetrics
 )
-from app.services.redis_service import redis_service
+from app.services.redis_service_simple import simple_redis_service as redis_service
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +219,11 @@ class UnifiedCacheService:
         cache_key = CachePatterns.ai_prompt_cache(prompt_hash, model)
         ttl = ttl or CacheTTL.HOURLY  # AI responses cache for 1 hour
         return await self.redis.set(cache_key, data, ttl=ttl)
+    
+    async def delete_ai_model_instance(self, model_key: str) -> bool:
+        """Delete AI model instance from cache (for cleanup operations)"""
+        cache_key = CachePatterns.ai_model_instance(model_key)
+        return await self.redis.delete(cache_key)
     
     # =============================================================================
     # CELERY DOMAIN METHODS

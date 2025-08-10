@@ -10,12 +10,50 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def _safe_get_metadata(db_topic) -> dict:
+    """Safely extract metadata from database topic object"""
+    try:
+        # Try different possible metadata attribute names
+        for attr_name in ['topic_metadata', 'metadata']:
+            if hasattr(db_topic, attr_name):
+                metadata = getattr(db_topic, attr_name)
+                if metadata is None:
+                    continue
+                elif isinstance(metadata, dict):
+                    return metadata
+                elif hasattr(metadata, '__dict__'):
+                    return metadata.__dict__
+                else:
+                    # If it's some other object, try to convert to dict
+                    try:
+                        return dict(metadata)
+                    except (TypeError, ValueError):
+                        continue
+        return {}
+    except Exception:
+        return {}
+
+def _convert_topic_to_response(db_topic) -> dict:
+    """Helper function to convert database topic to response dict with proper UUID handling"""
+    return {
+        "id": str(db_topic.id),
+        "name": db_topic.name,
+        "description": db_topic.description,
+        "color": getattr(db_topic, 'color', '#3B82F6'),
+        "tags": getattr(db_topic, 'tags', []),
+        "created_at": db_topic.created_at,
+        "updated_at": db_topic.updated_at,
+        "entry_count": getattr(db_topic, 'entry_count', 0),
+        "last_entry_date": getattr(db_topic, 'last_entry_date', None),
+        "metadata": _safe_get_metadata(db_topic)
+    }
+
 @router.post("/", response_model=TopicResponse)
 async def create_topic(topic: TopicCreate):
     """Create a new topic"""
     try:
-        db_topic = await unified_db_service.create_topic(topic)
-        return TopicResponse(**db_topic.model_dump())
+        db_topic = await unified_db_service.create_topic(topic.model_dump())
+        return TopicResponse.model_validate(_convert_topic_to_response(db_topic))
         
     except Exception as e:
         logger.error(f"Error creating topic: {e}")
@@ -26,7 +64,7 @@ async def get_topics():
     """Get all topics"""
     try:
         topics = await unified_db_service.get_topics()
-        return [TopicResponse(**topic.model_dump()) for topic in topics]
+        return [TopicResponse.model_validate(_convert_topic_to_response(topic)) for topic in topics]
         
     except Exception as e:
         logger.error(f"Error getting topics: {e}")
@@ -40,7 +78,7 @@ async def get_topic(topic_id: str):
         if not topic:
             raise HTTPException(status_code=404, detail="Topic not found")
         
-        return TopicResponse(**topic.model_dump())
+        return TopicResponse.model_validate(_convert_topic_to_response(topic))
         
     except HTTPException:
         raise
@@ -56,7 +94,7 @@ async def update_topic(topic_id: str, topic_update: TopicUpdate):
         if not updated_topic:
             raise HTTPException(status_code=404, detail="Topic not found")
         
-        return TopicResponse(**updated_topic.model_dump())
+        return TopicResponse.model_validate(updated_topic)
         
     except HTTPException:
         raise
@@ -97,9 +135,10 @@ async def get_topic_entries(
         entries = await unified_db_service.get_entries(skip=skip, limit=limit, topic_id=topic_id)
         
         from app.models.entry import EntryResponse
+        from app.api.entries import _convert_entry_to_response
         return {
-            'topic': TopicResponse(**topic.model_dump()),
-            'entries': [EntryResponse(**entry.model_dump()) for entry in entries],
+            'topic': TopicResponse.model_validate(_convert_topic_to_response(topic)),
+            'entries': [EntryResponse.model_validate(_convert_entry_to_response(entry)) for entry in entries],
             'total_entries': topic.entry_count
         }
         

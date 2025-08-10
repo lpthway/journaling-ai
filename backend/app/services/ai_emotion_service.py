@@ -393,8 +393,56 @@ class AIEmotionService:
 
     # ==================== EMOTION DETECTION ====================
 
+    def _split_text_into_chunks(self, text: str, max_chars: int = 1200, overlap: int = 200) -> List[str]:
+        """Split text into overlapping chunks to preserve context"""
+        if len(text) <= max_chars:
+            return [text]
+        
+        chunks = []
+        start = 0
+        
+        while start < len(text):
+            # Define chunk end
+            end = start + max_chars
+            
+            if end >= len(text):
+                # Last chunk
+                chunks.append(text[start:])
+                break
+            
+            # Try to break at sentence boundary within the chunk
+            chunk_text = text[start:end]
+            
+            # Look for sentence endings near the end of the chunk
+            sentence_endings = ['. ', '! ', '? ', '.\n', '!\n', '?\n']
+            best_break = -1
+            
+            # Search backwards from the end for a good breaking point
+            for i in range(len(chunk_text) - 1, max(0, len(chunk_text) - 200), -1):
+                for ending in sentence_endings:
+                    if chunk_text[i:i+len(ending)] == ending:
+                        best_break = start + i + len(ending)
+                        break
+                if best_break != -1:
+                    break
+            
+            if best_break != -1 and best_break > start + max_chars // 2:
+                # Good sentence boundary found
+                chunks.append(text[start:best_break])
+                start = best_break - overlap  # Overlap for context
+            else:
+                # No good boundary, just cut at max_chars
+                chunks.append(text[start:end])
+                start = end - overlap  # Overlap for context
+            
+            # Ensure we don't go backwards
+            if start < 0:
+                start = 0
+        
+        return chunks
+
     async def _detect_primary_emotions(self, text: str, language: str) -> List[EmotionScore]:
-        """Detect primary emotions using AI models"""
+        """Detect primary emotions using AI models with chunk processing"""
         try:
             # Get appropriate emotion model
             model = await ai_model_manager.get_model("emotion_classifier")
@@ -403,31 +451,63 @@ class AIEmotionService:
                 logger.warning("🤖 Primary emotion model unavailable, using sentiment fallback")
                 return await self._sentiment_to_emotion_fallback(text, language)
             
-            # Analyze emotions
-            results = model(text)
+            # Split text into manageable chunks
+            chunks = self._split_text_into_chunks(text, max_chars=1200)
             
-            if not results or not isinstance(results, list):
-                return []
+            if len(chunks) > 1:
+                logger.debug(f"🔄 Processing emotion analysis in {len(chunks)} chunks (original: {len(text)} chars)")
             
-            # Convert results to EmotionScore objects
+            # Process each chunk and collect results
+            all_emotion_results = {}
+            total_weight = 0
+            
+            for i, chunk in enumerate(chunks):
+                try:
+                    # Analyze emotions for this chunk
+                    results = model(chunk)
+                    
+                    if not results or not isinstance(results, list):
+                        continue
+                    
+                    # Weight chunks by their length (longer chunks have more influence)
+                    chunk_weight = len(chunk)
+                    total_weight += chunk_weight
+                    
+                    # Aggregate emotion scores
+                    for result in results[0]:  # First result set
+                        emotion_name = result['label'].lower()
+                        score = result['score']
+                        
+                        if emotion_name not in all_emotion_results:
+                            all_emotion_results[emotion_name] = {'total_score': 0, 'total_weight': 0}
+                        
+                        # Weighted accumulation
+                        all_emotion_results[emotion_name]['total_score'] += score * chunk_weight
+                        all_emotion_results[emotion_name]['total_weight'] += chunk_weight
+                
+                except Exception as chunk_error:
+                    logger.warning(f"🤖 Error processing chunk {i+1}: {chunk_error}")
+                    continue
+            
+            # Calculate final weighted averages
             emotion_scores = []
-            for result in results[0]:  # First result set
-                emotion_name = result['label'].lower()
-                score = result['score']
-                confidence = score  # Use score as confidence for now
-                
-                # Map to emotion category and intensity
-                category = self._map_emotion_to_category(emotion_name)
-                intensity = self._calculate_emotion_intensity(score)
-                
-                emotion_score = EmotionScore(
-                    emotion=emotion_name,
-                    score=score,
-                    confidence=confidence,
-                    category=category,
-                    intensity=intensity
-                )
-                emotion_scores.append(emotion_score)
+            for emotion_name, data in all_emotion_results.items():
+                if data['total_weight'] > 0:
+                    avg_score = data['total_score'] / data['total_weight']
+                    confidence = avg_score  # Use score as confidence for now
+                    
+                    # Map to emotion category and intensity
+                    category = self._map_emotion_to_category(emotion_name)
+                    intensity = self._calculate_emotion_intensity(avg_score)
+                    
+                    emotion_score = EmotionScore(
+                        emotion=emotion_name,
+                        score=avg_score,
+                        confidence=confidence,
+                        category=category,
+                        intensity=intensity
+                    )
+                    emotion_scores.append(emotion_score)
             
             # Sort by score (highest first)
             emotion_scores.sort(key=lambda x: x.score, reverse=True)
@@ -439,16 +519,11 @@ class AIEmotionService:
             return await self._sentiment_to_emotion_fallback(text, language)
 
     async def _analyze_sentiment(self, text: str, language: str) -> float:
-        """Analyze sentiment polarity"""
+        """Analyze sentiment polarity with chunk processing"""
         try:
             # Validate input
             if not text or not text.strip():
                 return 0.0
-            
-            # Smart text processing for long content
-            processed_text = self._intelligently_process_text(text, max_chars=2000, purpose="sentiment")
-            if processed_text != text:
-                logger.debug(f"Processed text for sentiment analysis: {len(processed_text)} chars (original: {len(text)})")
             
             # Select appropriate sentiment model based on language
             model_key = "multilingual_sentiment" if language != "en" else "sentiment_classifier"
@@ -458,49 +533,68 @@ class AIEmotionService:
                 logger.warning("🤖 Sentiment model unavailable, using neutral fallback")
                 return 0.0
             
-            # Analyze sentiment with comprehensive error handling
-            try:
-                results = model(processed_text)
-            except Exception as model_error:
-                if "tensor" in str(model_error).lower() or "size" in str(model_error).lower():
-                    logger.warning(f"🤖 Tensor dimension error in sentiment analysis, trying shorter text: {model_error}")
-                    # Try with even shorter text as fallback
-                    short_text = processed_text[:500]
-                    try:
-                        results = model(short_text)
-                    except Exception:
-                        logger.warning("🤖 Sentiment analysis failed completely, using neutral fallback")
-                        return 0.0
-                else:
-                    raise
+            # Split text into manageable chunks
+            chunks = self._split_text_into_chunks(text, max_chars=1200)
             
-            if not results or not isinstance(results, list):
+            if len(chunks) > 1:
+                logger.debug(f"🔄 Processing sentiment analysis in {len(chunks)} chunks (original: {len(text)} chars)")
+            
+            # Process each chunk and collect sentiment scores
+            sentiment_scores = []
+            chunk_weights = []
+            
+            for i, chunk in enumerate(chunks):
+                try:
+                    # Analyze sentiment with comprehensive error handling
+                    results = model(chunk)
+                    
+                    if not results or not isinstance(results, list):
+                        continue
+                    
+                    # Convert sentiment labels to polarity score
+                    sentiment_mapping = {
+                        "positive": 1.0,
+                        "negative": -1.0,
+                        "neutral": 0.0,
+                        "label_0": -1.0,  # Negative in some models
+                        "label_1": 0.0,   # Neutral in some models
+                        "label_2": 1.0    # Positive in some models
+                    }
+                    
+                    chunk_sentiment = 0.0
+                    chunk_weight = len(chunk)
+                    
+                    # Aggregate sentiment for this chunk
+                    for result in results[0]:
+                        label = result['label'].lower()
+                        score = result['score']
+                        
+                        if label in sentiment_mapping:
+                            polarity = sentiment_mapping[label]
+                            chunk_sentiment += polarity * score
+                    
+                    sentiment_scores.append(chunk_sentiment)
+                    chunk_weights.append(chunk_weight)
+                
+                except Exception as chunk_error:
+                    logger.warning(f"🤖 Error processing sentiment chunk {i+1}: {chunk_error}")
+                    continue
+            
+            # Calculate weighted average sentiment
+            if not sentiment_scores:
                 return 0.0
             
-            # Convert sentiment labels to polarity score
-            sentiment_mapping = {
-                "positive": 1.0,
-                "negative": -1.0,
-                "neutral": 0.0,
-                "label_0": -1.0,  # Negative in some models
-                "label_1": 0.0,   # Neutral in some models
-                "label_2": 1.0    # Positive in some models
-            }
+            total_weighted_sentiment = sum(score * weight for score, weight in zip(sentiment_scores, chunk_weights))
+            total_weight = sum(chunk_weights)
             
-            # Calculate weighted sentiment score
-            total_score = 0.0
-            total_weight = 0.0
+            final_sentiment = total_weighted_sentiment / total_weight if total_weight > 0 else 0.0
             
-            for result in results[0]:
-                label = result['label'].lower()
-                score = result['score']
-                
-                if label in sentiment_mapping:
-                    polarity = sentiment_mapping[label]
-                    total_score += polarity * score
-                    total_weight += score
+            # Normalize to [-1, 1] range
+            return max(-1.0, min(1.0, final_sentiment))
             
-            return total_score / max(total_weight, 0.01)
+        except Exception as e:
+            logger.error(f"❌ Error in sentiment analysis: {e}")
+            return 0.0
             
         except Exception as e:
             logger.error(f"❌ Error in sentiment analysis: {e}")
@@ -621,7 +715,10 @@ class AIEmotionService:
         """Detect gratitude expressions"""
         gratitude_markers = [
             "grateful", "thankful", "appreciate", "blessed", "lucky",
-            "glad", "grateful for", "thank you", "appreciate that"
+            "glad", "grateful for", "thank you", "appreciate that",
+            "wonderful", "amazing", "love spending", "love being",
+            "so happy", "feel blessed", "feel lucky", "feel grateful",
+            "treasure", "cherish", "value", "fortunate"
         ]
         
         return any(marker in text.lower() for marker in gratitude_markers)

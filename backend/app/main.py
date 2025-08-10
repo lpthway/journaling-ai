@@ -15,7 +15,7 @@ from app.core.exceptions import JournalingAIException
 from app.core.database import database
 from app.core.performance_monitor import performance_monitor
 from app.services.unified_database_service import unified_db_service
-from app.services.redis_service import redis_service
+from app.services.redis_service_simple import simple_redis_service
 from app.core.service_interfaces import service_registry
 
 # Monitoring and observability imports
@@ -77,13 +77,15 @@ async def lifespan(app: FastAPI):
         await database.initialize()
         logger.info("✅ PostgreSQL database initialized")
         
-        # Initialize Redis service
-        await redis_service.initialize()
-        logger.info("✅ Redis service initialized")
-        
-        # Register Redis as caching strategy
-        service_registry.set_cache_strategy(redis_service)
-        logger.info("✅ Redis registered as caching strategy")
+        # Initialize Simple Redis service to test recursion fix
+        try:
+            await simple_redis_service.initialize()
+            logger.info("✅ Simple Redis service initialized")
+            service_registry.set_cache_strategy(simple_redis_service)
+            logger.info("✅ Simple Redis registered as caching strategy")
+        except Exception as e:
+            logger.warning(f"⚠️  Simple Redis initialization failed, continuing without caching: {e}")
+            # Continue without Redis
         
         # Phase 2: Initialize unified database service
         logger.info("🔧 Initializing unified database service...")
@@ -140,7 +142,7 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Performance monitoring stopped")
             
             # Close Redis connections
-            await redis_service.close()
+            await simple_redis_service.close()
             logger.info("✅ Redis connections closed")
             
             # Close database connections
@@ -402,8 +404,8 @@ async def cache_health_check():
         cache_stats = await get_cache_stats()
         
         # Get Redis info
-        redis_info = await redis_service.get_info()
-        redis_metrics = await redis_service.get_metrics()
+        redis_info = await simple_redis_service.get_info()
+        redis_metrics = await simple_redis_service.get_metrics()
         
         return {
             "status": "healthy",

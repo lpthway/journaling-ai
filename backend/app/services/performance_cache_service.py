@@ -12,7 +12,7 @@ import hashlib
 import asyncio
 
 from app.core.config import settings
-from app.services.redis_service import redis_service
+from app.services.redis_service_simple import simple_redis_service as redis_service
 
 logger = logging.getLogger(__name__)
 

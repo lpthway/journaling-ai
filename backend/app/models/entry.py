@@ -25,10 +25,11 @@ class EntryBase(BaseModel):
     template_id: Optional[str] = None
 
 class EntryCreate(EntryBase):
-    pass
+    user_id: Optional[str] = None  # Allow user_id to be provided during creation
 
 class Entry(EntryBase):
     id: str
+    user_id: Optional[str] = None  # Include user_id in response
     created_at: datetime
     updated_at: datetime
     mood: Optional[MoodType] = None
@@ -38,9 +39,11 @@ class Entry(EntryBase):
     is_favorite: bool = False
     version: int = 1
     parent_entry_id: Optional[str] = None  # For versioning
+    emotion_analysis: Optional[Dict[str, Any]] = None  # AI emotion analysis results
+    ai_analysis: Optional[Dict[str, Any]] = None  # General AI analysis results
 
 class EntryResponse(Entry):
-    pass
+    model_config = {"from_attributes": True, "use_enum_values": True}
 
 class EntryUpdate(BaseModel):
     title: Optional[str] = None

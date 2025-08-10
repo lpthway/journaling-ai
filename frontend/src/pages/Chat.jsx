@@ -9,7 +9,7 @@ import {
   UserIcon 
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
-import ChatInterface from '../components/chat/ChatInterface';
+import EnhancedChatInterface from '../components/chat/EnhancedChatInterface';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
 import { sessionAPI } from '../services/api';
@@ -179,7 +179,7 @@ const Chat = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {currentSession || !sessionId ? (
-          <ChatInterface 
+          <EnhancedChatInterface 
             sessionId={sessionId} 
             onSessionChange={handleSessionChange}
           />

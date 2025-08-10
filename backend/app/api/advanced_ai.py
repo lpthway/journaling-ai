@@ -266,6 +266,15 @@ async def get_personality_analysis(request: PersonalityAnalysisRequest) -> Perso
             request.user_id, entries
         )
         
+        # Debug: Check what type personality_profile is
+        logger.debug(f"🔍 personality_profile type: {type(personality_profile)}")
+        logger.debug(f"🔍 personality_profile value: {personality_profile}")
+        
+        # Ensure we have a valid PersonalityProfile object
+        if isinstance(personality_profile, str):
+            logger.error(f"❌ Received string instead of PersonalityProfile: {personality_profile}")
+            raise HTTPException(status_code=500, detail="Invalid personality profile format")
+        
         # Build response
         response = PersonalityResponse(
             dimensions={dim.name.lower(): score for dim, score in personality_profile.dimensions.items()},

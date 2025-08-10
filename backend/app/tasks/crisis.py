@@ -18,7 +18,7 @@ from enum import Enum
 # Celery and app imports
 from app.services.celery_service import celery_app, monitored_task, TaskPriority, TaskCategory
 from app.services.unified_database_service import unified_db_service
-from app.services.redis_service import redis_service
+from app.services.redis_service_simple import simple_redis_service as redis_service
 from app.core.config import settings
 from app.core.performance_monitor import performance_monitor
 

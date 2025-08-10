@@ -10,6 +10,21 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
   const [selectedType, setSelectedType] = useState(null);
   const [loadingTypes, setLoadingTypes] = useState(true);
 
+  // Helper function to get icons for enhanced chat modes
+  const getIconForMode = (mode) => {
+    const iconMap = {
+      'supportive_listening': '💭',
+      'therapeutic_guidance': '🧠', 
+      'cognitive_reframing': '🔄',
+      'mindfulness_coaching': '🧘',
+      'goal_setting': '🎯',
+      'crisis_support': '🚨',
+      'reflection_facilitation': '✨',
+      'emotional_processing': '💙'
+    };
+    return iconMap[mode] || '💬';
+  };
+
   useEffect(() => {
     loadSessionTypes();
   }, []);
@@ -17,38 +32,54 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
   const loadSessionTypes = async () => {
     try {
       const response = await sessionAPI.getAvailableTypes();
-      setSessionTypes(response.data.session_types);
+      // Enhanced chat API returns {available_modes: {...}} format
+      const modes = response.data.available_modes || {};
+      const typesArray = Object.entries(modes).map(([key, value]) => ({
+        type: key,
+        name: value.name,
+        description: value.description,
+        icon: getIconForMode(key),
+        tags: value.suitable_for || []
+      }));
+      setSessionTypes(typesArray);
     } catch (error) {
       console.error('Error loading session types:', error);
-      // Fallback session types
+      // Fallback session types (using enhanced chat modes)
       setSessionTypes([
         {
-          type: 'reflection_buddy',
-          name: 'Reflection Buddy',
-          description: 'Chat with a curious friend who asks thoughtful questions',
+          type: 'supportive_listening',
+          name: 'Supportive Listening',
+          description: 'Active listening with validation and empathy',
           icon: '💭',
-          tags: ['casual', 'friendly', 'exploration']
+          tags: ['emotional distress', 'validation', 'empathy']
         },
         {
-          type: 'inner_voice',
-          name: 'Inner Voice Assistant',
-          description: 'Explore different perspectives on situations and decisions',
+          type: 'therapeutic_guidance',
+          name: 'Therapeutic Guidance',
+          description: 'Structured therapeutic conversation with professional techniques',
           icon: '🧠',
-          tags: ['perspective', 'wisdom', 'insight']
+          tags: ['problem-solving', 'skill building', 'guidance']
         },
         {
-          type: 'growth_challenge',
-          name: 'Growth Challenge',
-          description: 'Take on challenges designed to promote personal growth',
-          icon: '🌱',
-          tags: ['growth', 'challenge', 'development']
+          type: 'cognitive_reframing',
+          name: 'Cognitive Reframing',
+          description: 'Focus on identifying and challenging negative thought patterns',
+          icon: '🔄',
+          tags: ['negative thinking', 'perspective', 'reframing']
         },
         {
-          type: 'pattern_detective',
-          name: 'Pattern Detective',
-          description: 'Discover patterns in your thoughts and behaviors',
-          icon: '🔍',
-          tags: ['patterns', 'analysis', 'insights']
+          type: 'mindfulness_coaching',
+          name: 'Mindfulness Coaching',
+          description: 'Present-moment awareness and mindfulness practices',
+          icon: '🧘',
+          tags: ['anxiety', 'stress', 'mindfulness']
+        },
+        {
+          type: 'goal_setting',
+          name: 'Goal Setting',
+          description: 'Collaborative goal setting and action planning',
+          icon: '🎯',
+          tags: ['personal growth', 'planning', 'motivation']
         }
       ]);
     } finally {
@@ -71,7 +102,7 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-h-[80vh] overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -92,7 +123,7 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
 
       {/* Session Type Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {sessionTypes.map((type) => (
+        {sessionTypes && sessionTypes.length > 0 ? sessionTypes.map((type) => (
           <div
             key={type.type}
             onClick={() => setSelectedType(type)}
@@ -122,7 +153,19 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
               </div>
             </div>
           </div>
-        ))}
+        )) : (
+          <div className="col-span-full flex items-center justify-center py-8">
+            <div className="text-center">
+              <p className="text-gray-500 mb-2">No conversation types available</p>
+              <button 
+                onClick={loadSessionTypes}
+                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}

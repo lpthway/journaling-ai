@@ -370,7 +370,15 @@ class EnhancedChatService:
             cached_context = await unified_cache_service.get_ai_analysis_result(cache_key)
             
             if cached_context:
-                return cached_context
+                # Ensure we have a proper ConversationContext object
+                if isinstance(cached_context, ConversationContext):
+                    return cached_context
+                elif isinstance(cached_context, dict):
+                    # Reconstruct from dict if needed
+                    return ConversationContext(**cached_context)
+                else:
+                    logger.warning(f"⚠️ Invalid cached context type: {type(cached_context)}, creating new context")
+                    # Continue to create new context
             
             # Get user personality profile for context adaptation
             personality_profile = None

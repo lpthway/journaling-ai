@@ -13,7 +13,7 @@ from app.core.performance_monitor import performance_monitor
 from app.core.request_tracing import get_request_tracer, trace_metrics
 from app.core.logging_config import logging_metrics
 from app.services.unified_database_service import unified_db_service
-from app.services.redis_service import redis_service
+from app.services.redis_service_simple import simple_redis_service as redis_service
 from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)

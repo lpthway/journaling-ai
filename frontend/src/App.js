@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout/Layout';
+import Dashboard from './pages/Dashboard';  // New dashboard import
 import Journal from './pages/Journal';
 import Topics from './pages/Topics';
 import Insights from './pages/Insights';
+import Analytics from './pages/Analytics';  // New analytics import
 import Chat from './pages/Chat';  // New import
 import EntryDetail from './pages/EntryDetail';
 import { healthCheck } from './services/api';
@@ -18,8 +20,8 @@ function App() {
   const handleSearch = (query) => {
     setSearchQuery(query);
     // Navigate to journal page if not already there
-    if (window.location.pathname !== '/') {
-      window.location.href = '/';
+    if (window.location.pathname !== '/journal') {
+      window.location.href = '/journal';
     }
   };
 
@@ -50,6 +52,10 @@ function App() {
           <Route path="/" element={<Layout onSearch={handleSearch} />}>
             <Route 
               index 
+              element={<Dashboard />} 
+            />
+            <Route 
+              path="journal" 
               element={<Journal searchQuery={searchQuery} />} 
             />
             <Route 
@@ -60,6 +66,11 @@ function App() {
             <Route 
               path="insights" 
               element={<Insights />}
+              loader={clearSearch}
+            />
+            <Route 
+              path="analytics" 
+              element={<Analytics />}
               loader={clearSearch}
             />
             {/* New Chat Routes */}

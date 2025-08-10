@@ -1,7 +1,7 @@
 # backend/app/api/entries.py - Modernized with Unified Service Integration
 
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 import logging
 
@@ -19,6 +19,68 @@ from app.core.performance_monitor import performance_monitor
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+def _safe_get_entry_metadata(db_entry) -> dict:
+    """Safely extract metadata from database entry object"""
+    try:
+        # Check for common metadata attribute names
+        for attr_name in ['entry_metadata', 'metadata']:
+            if hasattr(db_entry, attr_name):
+                metadata = getattr(db_entry, attr_name)
+                if metadata is None:
+                    continue
+                elif isinstance(metadata, dict):
+                    return metadata
+                elif hasattr(metadata, '__dict__'):
+                    # Filter out SQLAlchemy internals
+                    metadata_dict = {}
+                    for key, value in metadata.__dict__.items():
+                        if not key.startswith('_') and not hasattr(value, '__table__'):
+                            try:
+                                # Test if value is JSON serializable
+                                import json
+                                json.dumps(value)
+                                metadata_dict[key] = value
+                            except (TypeError, ValueError):
+                                # Skip non-serializable values
+                                continue
+                    return metadata_dict
+                else:
+                    # If it's some other object, try to convert to dict safely
+                    try:
+                        result = dict(metadata)
+                        # Filter out any SQLAlchemy objects
+                        return {k: v for k, v in result.items() 
+                               if not hasattr(v, '__table__') and not str(type(v)).startswith('<class \'sqlalchemy')}
+                    except (TypeError, ValueError):
+                        continue
+        return {}
+    except Exception:
+        return {}
+
+def _convert_entry_to_response(db_entry) -> Dict[str, Any]:
+    """Helper function to convert database entry to response dict with proper UUID handling"""
+    return {
+        "id": str(db_entry.id),
+        "title": db_entry.title,
+        "content": db_entry.content,
+        "entry_type": db_entry.entry_type,
+        "user_id": str(db_entry.user_id) if db_entry.user_id else None,
+        "topic_id": str(db_entry.topic_id) if db_entry.topic_id else None,
+        "tags": db_entry.tags,
+        "template_id": db_entry.template_id,
+        "created_at": db_entry.created_at,
+        "updated_at": db_entry.updated_at,
+        "mood": db_entry.mood,
+        "sentiment_score": db_entry.sentiment_score,
+        "word_count": db_entry.word_count,
+        "emotion_analysis": getattr(db_entry, 'emotion_analysis', None),
+        "ai_analysis": getattr(db_entry, 'ai_analysis', None),
+        "metadata": _safe_get_entry_metadata(db_entry),
+        "is_favorite": getattr(db_entry, 'is_favorite', False),
+        "version": getattr(db_entry, 'version', 1),
+        "parent_entry_id": getattr(db_entry, 'parent_entry_id', None)
+    }
 
 @router.post("/", response_model=EntryResponse)
 @timed_operation("create_entry_api", track_errors=True)
@@ -41,18 +103,48 @@ async def create_entry(entry: EntryCreate, request: Request):
         
         try:
             # Use modern AI emotion analysis instead of legacy sentiment analysis
-            emotion_analysis = await ai_emotion_service.analyze_emotions(entry.content)
+            emotion_analysis = await ai_emotion_service.analyze_emotions(
+                entry.content, 
+                include_patterns=True
+            )
             
             # Convert emotion analysis to mood for backward compatibility
-            mood = emotion_analysis.primary_emotion.emotion.value  # Gets the EmotionCategory value
+            emotion_value = emotion_analysis.primary_emotion.emotion  # Already a string value
             sentiment_score = emotion_analysis.primary_emotion.confidence
             
+            # Map emotion labels to mood types
+            emotion_to_mood_mapping = {
+                'label_0': 'neutral',
+                'label_1': 'positive', 
+                'label_2': 'negative',
+                'joy': 'positive',
+                'happiness': 'very_positive',
+                'sadness': 'negative',
+                'anger': 'negative',
+                'fear': 'negative',
+                'neutral': 'neutral',
+                'positive': 'positive',
+                'negative': 'negative'
+            }
+            mood = emotion_to_mood_mapping.get(emotion_value.lower(), 'neutral')
+            
             # Check for crisis indicators using AI intervention service
-            intervention_assessment = await ai_intervention_service.assess_crisis_risk(
-                entry.content, user_context={"user_id": str(entry.user_id)}
+            intervention_assessment = await ai_intervention_service.assess_crisis_level(
+                entry.content, user_context={"user_id": "default_user"}
             )
+            
+            # Log crisis assessment results
+            if intervention_assessment.crisis_level.name != "MINIMAL":
+                logger.warning(f"🚨 Crisis detected: {intervention_assessment.crisis_level.name} - "
+                             f"Risk factors: {len(intervention_assessment.risk_factors)} - "
+                             f"Interventions: {len(intervention_assessment.immediate_interventions)}")
+            else:
+                logger.info(f"✅ No crisis detected - Level: {intervention_assessment.crisis_level.name}")
+                
         except Exception as e:
-            logger.warning(f"Sentiment analysis failed: {e}")
+            logger.warning(f"AI analysis failed: {e}")
+            emotion_analysis = None
+            intervention_assessment = None
         
         # Generate automatic tags
         auto_tags = []
@@ -73,15 +165,76 @@ async def create_entry(entry: EntryCreate, request: Request):
         final_tags = all_tags[:8]  # Limit to 8 tags
         
         # Create entry using unified service
-        async with performance_monitor.timed_operation("unified_create_entry", {"user_id": "default"}):
+        async with performance_monitor.timed_operation("unified_create_entry", {"user_id": entry.user_id or "default"}):
             db_entry = await unified_db_service.create_entry(
                 title=entry.title,
                 content=entry.content,
+                user_id=entry.user_id or "default_user",  # Use user_id from request or default
                 topic_id=entry.topic_id,
-                mood=mood.value if mood else None,
+                mood=mood if mood else None,
                 sentiment_score=sentiment_score,
                 tags=final_tags
             )
+        
+        # Store detailed AI analysis results if available
+        if emotion_analysis:
+            try:
+                # Convert emotion analysis to serializable format
+                emotion_data = {
+                    "primary_emotion": emotion_analysis.primary_emotion.emotion,
+                    "confidence": emotion_analysis.primary_emotion.confidence,
+                    "sentiment_polarity": emotion_analysis.sentiment_polarity,
+                    "emotional_complexity": emotion_analysis.emotional_complexity,
+                    "detected_patterns": emotion_analysis.detected_patterns,
+                    "secondary_emotions": [
+                        {"emotion": e.emotion, "score": e.confidence} 
+                        for e in emotion_analysis.secondary_emotions
+                    ],
+                    "analysis_timestamp": datetime.utcnow().isoformat()
+                }
+                
+                # Store emotion analysis in database by updating the db_entry object
+                db_entry.emotion_analysis = emotion_data
+                
+                # Also store crisis assessment if available
+                crisis_data = None
+                if intervention_assessment:
+                    # Convert InterventionRecommendation objects to dictionaries
+                    immediate_interventions_dict = []
+                    for intervention in intervention_assessment.immediate_interventions:
+                        immediate_interventions_dict.append({
+                            "intervention_type": intervention.intervention_type.value,
+                            "therapeutic_approach": intervention.therapeutic_approach.value,
+                            "priority": intervention.priority,
+                            "description": intervention.description,
+                            "specific_techniques": intervention.specific_techniques,
+                            "estimated_duration": intervention.estimated_duration,
+                            "prerequisites": intervention.prerequisites,
+                            "contraindications": intervention.contraindications
+                        })
+                    
+                    crisis_data = {
+                        "crisis_level": intervention_assessment.crisis_level.name,
+                        "risk_factors": [rf.indicator for rf in intervention_assessment.risk_factors],
+                        "protective_factors": intervention_assessment.protective_factors,
+                        "immediate_interventions": immediate_interventions_dict,
+                        "professional_referral_urgent": intervention_assessment.professional_referral_urgent,
+                        "assessment_timestamp": datetime.utcnow().isoformat()
+                    }
+                    db_entry.ai_analysis = crisis_data
+                    logger.info(f"✅ Stored crisis assessment for entry {db_entry.id}: {intervention_assessment.crisis_level.name}")
+                
+                # Update the entry in database with emotion analysis data
+                await unified_db_service.update_entry(
+                    str(db_entry.id),
+                    emotion_analysis=emotion_data,
+                    ai_analysis=crisis_data
+                )
+                
+                logger.info(f"✅ Added emotion analysis to entry {db_entry.id}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to store emotion analysis: {e}")
         
         # Add to vector database for search
         try:
@@ -100,7 +253,7 @@ async def create_entry(entry: EntryCreate, request: Request):
         except Exception as e:
             logger.warning(f"Vector database update failed: {e}")
         
-        return EntryResponse(**db_entry.__dict__)
+        return EntryResponse.model_validate(_convert_entry_to_response(db_entry))
         
     except ValidationException:
         raise
@@ -135,7 +288,7 @@ async def get_entries(
                 use_cache=True
             )
         
-        return [EntryResponse(**entry.__dict__) for entry in entries]
+        return [EntryResponse.model_validate(_convert_entry_to_response(entry)) for entry in entries]
         
     except Exception as e:
         logger.error(f"Error getting entries: {e}")
@@ -175,7 +328,7 @@ async def search_entries(
                 entry = entries_dict.get(result['id'])
                 if entry:
                     enriched_results.append({
-                        'entry': EntryResponse(**entry.__dict__),
+                        'entry': EntryResponse.model_validate(_convert_entry_to_response(entry)),
                         'similarity': result['similarity']
                     })
         except Exception as e:
@@ -186,7 +339,7 @@ async def search_entries(
                 entry = await unified_db_service.get_entry(result['id'], use_cache=True)
                 if entry:
                     enriched_results.append({
-                        'entry': EntryResponse(**entry.__dict__),
+                        'entry': EntryResponse.model_validate(_convert_entry_to_response(entry)),
                         'similarity': result['similarity']
                     })
         
@@ -216,7 +369,7 @@ async def get_favorite_entries(limit: int = Query(50, ge=1, le=100)):
         # Filter favorites (this will be optimized in the service later)
         favorite_entries = [entry for entry in entries if getattr(entry, 'is_favorite', False)]
         
-        return [EntryResponse(**entry.__dict__) for entry in favorite_entries[:limit]]
+        return [EntryResponse.model_validate(entry) for entry in favorite_entries[:limit]]
         
     except Exception as e:
         logger.error(f"Error getting favorite entries: {e}")
@@ -233,7 +386,7 @@ async def get_entry(entry_id: str):
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        return EntryResponse(**entry.__dict__)
+        return EntryResponse.model_validate(_convert_entry_to_response(entry))
         
     except HTTPException:
         raise
@@ -259,9 +412,28 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
         if entry_update.content:
             try:
                 # Use modern AI emotion analysis for content updates
-                emotion_analysis = await ai_emotion_service.analyze_emotions(entry_update.content)
-                mood = emotion_analysis.primary_emotion.emotion.value
+                emotion_analysis = await ai_emotion_service.analyze_emotions(
+                    entry_update.content, 
+                    include_patterns=True
+                )
+                emotion_value = emotion_analysis.primary_emotion.emotion
                 sentiment_score = emotion_analysis.primary_emotion.confidence
+                
+                # Map emotion labels to mood types
+                emotion_to_mood_mapping = {
+                    'label_0': 'neutral',
+                    'label_1': 'positive', 
+                    'label_2': 'negative',
+                    'joy': 'positive',
+                    'happiness': 'very_positive',
+                    'sadness': 'negative',
+                    'anger': 'negative',
+                    'fear': 'negative',
+                    'neutral': 'neutral',
+                    'positive': 'positive',
+                    'negative': 'negative'
+                }
+                mood = emotion_to_mood_mapping.get(emotion_value.lower(), 'neutral')
             except Exception as e:
                 logger.warning(f"AI emotion analysis failed: {e}")
                 # Fallback to basic mood if AI analysis fails
@@ -274,7 +446,7 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
                 entry_id=entry_id,
                 title=entry_update.title,
                 content=entry_update.content,
-                mood=mood.value if mood else None,
+                mood=mood if mood else None,
                 sentiment_score=sentiment_score,
                 tags=entry_update.tags
             )
@@ -299,7 +471,7 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
         except Exception as e:
             logger.warning(f"Vector database update failed: {e}")
         
-        return EntryResponse(**updated_entry.__dict__)
+        return EntryResponse.model_validate(updated_entry)
         
     except HTTPException:
         raise
@@ -357,7 +529,7 @@ async def toggle_favorite(entry_id: str):
             # This would need is_favorite parameter in unified service
         )
         
-        return EntryResponse(**updated_entry.__dict__)
+        return EntryResponse.model_validate(updated_entry)
         
     except HTTPException:
         raise
@@ -367,11 +539,12 @@ async def toggle_favorite(entry_id: str):
 
 @router.get("/analytics/mood")
 @cached(ttl=1800, key_prefix="mood_analytics", monitor_performance=True)
-async def get_mood_analytics(days: int = Query(30, ge=7, le=365)):
+async def get_mood_analytics(days: int = Query(30, ge=7, le=365), user_id: str = Query(..., description="User ID for analytics")):
     """Get mood analytics with unified service caching"""
     try:
         async with performance_monitor.timed_operation("mood_analytics", {"days": days}):
             analytics = await unified_db_service.get_mood_statistics(
+                user_id=user_id,
                 days=days,
                 use_cache=True
             )
@@ -384,11 +557,12 @@ async def get_mood_analytics(days: int = Query(30, ge=7, le=365)):
 
 @router.get("/analytics/writing")
 @cached(ttl=1800, key_prefix="writing_analytics", monitor_performance=True) 
-async def get_writing_analytics(days: int = Query(30, ge=7, le=365)):
+async def get_writing_analytics(days: int = Query(30, ge=7, le=365), user_id: str = Query(..., description="User ID for analytics")):
     """Get writing statistics with unified service caching"""
     try:
         async with performance_monitor.timed_operation("writing_analytics", {"days": days}):
             analytics = await unified_db_service.get_writing_statistics(
+                user_id=user_id,
                 days=days,
                 use_cache=True
             )
