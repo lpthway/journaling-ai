@@ -263,7 +263,7 @@ class EnhancedBaseRepository(CachedRepositoryMixin[T], CacheableServiceInterface
     async def delete(self, id: str, invalidate_cache: bool = True) -> bool:
         """Delete entity with cache invalidation"""
         try:
-            # Check if entity exists
+            # Check if entity exists - ALWAYS get from database, not cache for delete operations
             entity = await self.get_by_id(id, use_cache=False)
             if not entity:
                 return False
@@ -273,7 +273,10 @@ class EnhancedBaseRepository(CachedRepositoryMixin[T], CacheableServiceInterface
                 entity.deleted_at = func.now()
                 await self.session.flush()
             else:
-                # Hard delete
+                # Hard delete - ensure entity is attached to session
+                if entity not in self.session:
+                    # If entity is detached, merge it back to session first
+                    entity = await self.session.merge(entity)
                 await self.session.delete(entity)
                 await self.session.flush()
             
