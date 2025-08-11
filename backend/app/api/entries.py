@@ -269,7 +269,8 @@ async def get_entries(
     topic_id: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    mood_filter: Optional[str] = Query(None)
+    mood_filter: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None)
 ):
     """Get journal entries with unified service caching"""
     try:
@@ -279,6 +280,7 @@ async def get_entries(
         
         async with performance_monitor.timed_operation("unified_get_entries", {"limit": limit}):
             entries = await unified_db_service.get_entries(
+                user_id=user_id or "default_user",
                 skip=skip,
                 limit=limit,
                 topic_id=topic_id,

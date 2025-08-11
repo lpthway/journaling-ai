@@ -34,7 +34,12 @@ const WritingActivityHeatmap = ({ className = "" }) => {
       let maxCount = 0;
 
       entries.forEach(entry => {
-        const date = entry.created_at.split('T')[0]; // Get YYYY-MM-DD format
+        // Convert UTC timestamp to local date string for consistent comparison
+        const entryDate = new Date(entry.created_at);
+        const year = entryDate.getFullYear();
+        const month = String(entryDate.getMonth() + 1).padStart(2, '0');
+        const day = String(entryDate.getDate()).padStart(2, '0');
+        const date = `${year}-${month}-${day}`; // Local date in YYYY-MM-DD format
         if (!activityMap[date]) {
           activityMap[date] = {
             count: 0,
@@ -48,6 +53,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
         
         maxCount = Math.max(maxCount, activityMap[date].count);
       });
+      
       
       setData(activityMap);
       setMaxEntries(maxCount);
@@ -68,6 +74,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
   // Generate monthly grids for the last 4 months
   const generateMonthlyGrids = () => {
     const today = new Date();
+    const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const monthlyGrids = [];
     
 
@@ -95,11 +102,6 @@ const WritingActivityHeatmap = ({ className = "" }) => {
       const weeks = [];
       let currentWeekStart = new Date(startOfGrid);
       
-      if (monthName === 'August') {
-        console.log(`August grid generation:`);
-        console.log(`First day of month: ${firstDay.toISOString().split('T')[0]} (${firstDay.toLocaleDateString('en-US', { weekday: 'long' })})`);
-        console.log(`Start of grid (Sunday): ${startOfGrid.toISOString().split('T')[0]}`);
-      }
       
       while (currentWeekStart <= lastDay) {
         const week = [];
@@ -117,21 +119,19 @@ const WritingActivityHeatmap = ({ className = "" }) => {
           const dateStr = `${year}-${month}-${dayStr}`;
           
           const activity = data[dateStr] || null;
+          
           const isCurrentMonth = currentDate.getMonth() === monthDate.getMonth();
           
-          const isToday = dateStr === today.toISOString().split('T')[0];
+          // Create consistent local date comparison  
+          const isToday = dateStr === todayLocalStr;
           
-          if (monthName === 'August' && (dateStr === '2025-08-10' || dateStr === '2025-08-11')) {
-            console.log(`${dateStr}: day=${day} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day]}), isToday=${isToday}`);
-            console.log(`  currentDate: ${currentDate.toISOString()} (${currentDate.toLocaleDateString('en-US', { weekday: 'long' })})`);
-          }
           
           week.push({
             date: currentDate,
             dateStr,
             activity,
             isToday,
-            isFuture: currentDate > today,
+            isFuture: dateStr > todayLocalStr,
             isCurrentMonth
           });
         }
@@ -257,7 +257,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
                         } ${
                           day.isCurrentMonth && !day.isFuture ? 'border border-gray-300' : ''
                         } ${
-                          day.isToday ? 'ring-2 ring-blue-500' : ''
+                          day.isToday ? 'ring-1 ring-blue-600' : ''
                         } ${
                           hoveredDate === day.dateStr ? 'ring-2 ring-green-500' : ''
                         }`}
