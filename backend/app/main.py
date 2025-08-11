@@ -31,7 +31,8 @@ from app.core.security_middleware import (
 )
 
 # API routers
-from app.api import entries, topics, insights_v2, psychology, circuit_breaker, monitoring
+from app.api import entries, topics, psychology, circuit_breaker, monitoring
+# Removed: insights_v2 (unused API, frontend uses /entries/analytics/*)
 # Health API router import
 from app.api import health
 # Performance optimized API router import
@@ -317,7 +318,7 @@ app.add_middleware(
 
 # Include API routers with proper ordering
 app.include_router(auth_router, prefix=settings.API_V1_STR, tags=["authentication"])
-app.include_router(insights_v2.router, prefix=f"{settings.API_V1_STR}/insights", tags=["insights"])
+# Removed: insights_v2.router (unused API endpoint)
 app.include_router(entries.router, prefix=f"{settings.API_V1_STR}/entries", tags=["entries"])
 app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=["topics"])
 app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])

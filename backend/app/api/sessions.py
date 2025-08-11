@@ -9,7 +9,7 @@ from app.models.session import (
 from app.services.session_service import session_service
 from app.services.conversation_service import conversation_service
 from app.services.llm_service import llm_service
-from app.services.background_analytics import on_session_updated, on_session_completed
+from app.services.entry_analytics_processor import entry_analytics_processor
 import logging
 
 logger = logging.getLogger(__name__)
@@ -291,8 +291,14 @@ async def send_message(session_id: str, message_data: MessageCreate):
         except Exception as e:
             logger.warning(f"Failed to auto-tag conversation {session_id}: {e}")
         
-        # Trigger background analytics for session update
-        await on_session_updated(session_id)
+        # Invalidate analytics cache for session update
+        try:
+            # Get user_id for cache invalidation (assuming default user for now)
+            await entry_analytics_processor.invalidate_analytics_cache("default_user")
+            logger.debug(f"Invalidated analytics cache for session update {session_id}")
+        except Exception as e:
+            # Don't let cache invalidation errors break session operations
+            logger.warning(f"Failed to invalidate analytics cache for session {session_id}: {e}")
         
         return MessageResponse(**ai_message.model_dump())
         

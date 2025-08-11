@@ -21,9 +21,8 @@ from .unified_database_service import unified_db_service
 from .cache_service import unified_cache_service
 from .redis_service_simple import simple_redis_service as redis_service  # Use simple Redis service
 
-# Analytics and Processing Services
-from .analytics_service import analytics_cache_service
-from .background_analytics import background_processor
+# Analytics and Processing Services - MIGRATED to entry-time processing
+# Removed: analytics_service, background_analytics (replaced by entry_analytics_processor)
 
 # Psychology and Knowledge Services
 from .psychology_knowledge_service import psychology_knowledge_service
@@ -53,9 +52,8 @@ __all__ = [
     'unified_cache_service',
     'redis_service',
     
-    # Analytics Services
-    'analytics_cache_service',
-    'background_processor',
+    # Analytics Services - MIGRATED to entry-time processing
+    # Removed: analytics_cache_service, background_processor
     
     # Knowledge Services
     'psychology_knowledge_service',
