@@ -23,6 +23,7 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
       
       if (patterns && patterns.statistics) {
         const stats = patterns.statistics;
+        const moodDist = patterns.mood_distribution || {};
         
         // Calculate emotional stability based on sentiment variance
         const getStabilityLevel = (consistency) => {
@@ -48,15 +49,36 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
           return Math.min(10, Math.round((baseScore + consistencyBonus) * 10) / 10);
         };
 
+        // Calculate actual positive percentage from mood distribution
+        const actualPositivePercentage = moodDist.positive ? Math.round(moodDist.positive.percentage) : 0;
+        
+        // Count growth areas based on actual data
+        const calculateGrowthAreas = () => {
+          let areas = 0;
+          if (stats.overall_sentiment < 0.4) areas++; // Low overall sentiment
+          if (stats.consistency_percentage < 70) areas++; // Inconsistent mood
+          if (moodDist.negative && moodDist.negative.percentage > 40) areas++; // High negativity
+          return Math.max(1, areas); // At least 1 area
+        };
+
+        // Calculate emotional range from mood distribution
+        const calculateEmotionalRange = () => {
+          if (!moodDist.positive || !moodDist.negative) return 'Limited Data';
+          const range = moodDist.positive.percentage + moodDist.negative.percentage;
+          if (range > 60) return 'Wide Range';
+          if (range > 30) return 'Balanced';
+          return 'Stable';
+        };
+
         setData({
           emotionalStability: getStabilityLevel(stats.consistency_percentage),
           positiveTrend: getPositiveTrend(stats.overall_sentiment),
           resilienceScore: getResilienceScore(stats.overall_sentiment, stats.consistency_percentage),
-          growthAreas: Math.max(1, Math.floor(Math.random() * 4) + 1), // Mock for now
+          growthAreas: calculateGrowthAreas(),
           moodVariance: stats.mood_variance || 0.3,
-          positivePercentage: Math.round((stats.overall_sentiment + 1) * 50), // Convert to percentage
+          positivePercentage: actualPositivePercentage, // Use actual percentage from API
           stabilityTrend: stats.consistency_percentage >= 70 ? 'Improving' : 'Fluctuating',
-          emotionalRange: 'Balanced' // Could be calculated from mood distribution
+          emotionalRange: calculateEmotionalRange()
         });
       }
     } catch (err) {
