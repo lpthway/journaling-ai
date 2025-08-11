@@ -26,6 +26,7 @@ from app.core.cache_patterns import CacheDomain, CachePatterns, CacheKeyBuilder
 from app.services.cache_service import unified_cache_service
 from app.services.ai_model_manager import ai_model_manager
 from app.services.ai_emotion_service import ai_emotion_service, EmotionAnalysis
+from app.services.personality_analytics_processor import personality_analytics_processor
 from app.services.ai_prompt_service import ai_prompt_service
 from app.services.ai_intervention_service import ai_intervention_service
 from app.core.service_interfaces import ServiceRegistry
@@ -491,17 +492,38 @@ class AdvancedAIService:
                     self.analytics_stats["cache_hits"] += 1
                     return cached_profile
             
-            # Analyze Big Five personality dimensions
-            dimensions = await self._analyze_big_five_dimensions(entries)
-            
-            # Extract behavioral patterns
-            behavioral_patterns = await self._analyze_behavioral_patterns(entries)
-            
-            # Determine communication style
-            communication_style = await self._analyze_communication_style(entries)
-            
-            # Generate emotional profile
-            emotional_profile = await self._generate_emotional_profile(entries)
+            # PERFORMANCE OPTIMIZATION: Use stored emotion data instead of recomputing
+            try:
+                logger.info(f"🚀 Using optimized personality analysis for user {user_id}")
+                
+                # Get stored emotion data to avoid expensive recomputation
+                emotion_data = await personality_analytics_processor.get_stored_emotion_data(entries)
+                
+                if len(emotion_data) >= 5:  # Minimum entries for reliable analysis
+                    # Use optimized calculation based on stored emotion analysis
+                    dimensions = await personality_analytics_processor.calculate_personality_dimensions_from_stored_data(emotion_data)
+                    
+                    # Generate other components using optimized approach
+                    behavioral_patterns = await self._analyze_behavioral_patterns_optimized(entries, emotion_data)
+                    communication_style = await self._analyze_communication_style_optimized(entries, emotion_data)
+                    emotional_profile = await self._generate_emotional_profile_optimized(emotion_data)
+                    
+                    logger.info(f"✅ Used optimized personality analysis with {len(emotion_data)} stored emotion analyses")
+                else:
+                    # Fallback to original method if not enough stored data
+                    logger.warning(f"⚠️ Fallback to original personality analysis - insufficient stored emotion data ({len(emotion_data)} entries)")
+                    dimensions = await self._analyze_big_five_dimensions(entries)
+                    behavioral_patterns = await self._analyze_behavioral_patterns(entries)
+                    communication_style = await self._analyze_communication_style(entries)
+                    emotional_profile = await self._generate_emotional_profile(entries)
+                    
+            except Exception as e:
+                # If optimization fails, fallback to original approach
+                logger.warning(f"⚠️ Personality optimization failed, using fallback: {e}")
+                dimensions = await self._analyze_big_five_dimensions(entries)
+                behavioral_patterns = await self._analyze_behavioral_patterns(entries)
+                communication_style = await self._analyze_communication_style(entries)
+                emotional_profile = await self._generate_emotional_profile(entries)
             
             # Identify traits, strengths, and growth areas
             traits = self._extract_personality_traits(dimensions, behavioral_patterns)
@@ -1148,6 +1170,79 @@ class AdvancedAIService:
             health["error"] = str(e)
         
         return health
+
+    # ==================== OPTIMIZED METHODS ====================
+    
+    async def _analyze_behavioral_patterns_optimized(self, entries: List[Dict[str, Any]], emotion_data: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Optimized behavioral patterns analysis using stored emotion data"""
+        patterns = {
+            'routine_oriented': 0.5,
+            'spontaneous': 0.3,
+            'reflective': 0.4,
+            'action_oriented': 0.6,
+            'social_seeking': 0.5,
+            'independence': 0.6,
+            'growth_minded': 0.7,
+            'risk_taking': 0.3
+        }
+        
+        # Simplified pattern analysis based on stored emotion data
+        if emotion_data:
+            emotional_variance = len(set(e.get('primary_emotion', 'neutral') for e in emotion_data)) / len(emotion_data)
+            patterns['spontaneous'] = min(1.0, emotional_variance * 2)
+            patterns['routine_oriented'] = max(0.0, 1.0 - patterns['spontaneous'])
+            
+            # Analyze entry patterns for behavioral insights
+            avg_content_length = sum(e.get('content_length', 0) for e in emotion_data) / len(emotion_data)
+            patterns['reflective'] = min(1.0, avg_content_length / 1000)  # Longer entries suggest reflection
+            
+        return patterns
+    
+    async def _analyze_communication_style_optimized(self, entries: List[Dict[str, Any]], emotion_data: List[Dict[str, Any]]) -> str:
+        """Optimized communication style analysis using stored emotion data"""
+        if not emotion_data:
+            return "neutral"
+            
+        # Analyze dominant emotions
+        emotion_counts = {}
+        for entry in emotion_data:
+            emotion = entry.get('primary_emotion', 'neutral')
+            emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
+            
+        total_entries = len(emotion_data)
+        emotional_percentage = sum(count for emotion, count in emotion_counts.items() 
+                                 if emotion in ['joy', 'sadness', 'fear', 'anger']) / total_entries
+        
+        if emotional_percentage > 0.6:
+            return "emotional"
+        elif emotional_percentage < 0.3:
+            return "analytical" 
+        else:
+            return "balanced"
+    
+    async def _generate_emotional_profile_optimized(self, emotion_data: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Optimized emotional profile generation using stored emotion data"""
+        if not emotion_data:
+            return {'neutral': 100.0}
+            
+        # Count emotions from stored data
+        emotion_counts = {}
+        total_entries = len(emotion_data)
+        
+        for entry in emotion_data:
+            emotion = entry.get('primary_emotion', 'neutral')
+            confidence = entry.get('confidence', 0.5)
+            emotion_counts[emotion] = emotion_counts.get(emotion, 0) + confidence
+            
+        # Convert to percentages
+        total_weight = sum(emotion_counts.values())
+        emotional_profile = {}
+        
+        for emotion, weight in emotion_counts.items():
+            percentage = (weight / total_weight) * 100 if total_weight > 0 else 0
+            emotional_profile[emotion] = round(percentage, 2)
+            
+        return emotional_profile
 
 # ==================== SERVICE INSTANCE ====================
 

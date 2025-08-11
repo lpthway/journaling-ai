@@ -14,6 +14,7 @@ from app.services.ai_emotion_service import ai_emotion_service
 from app.services.ai_intervention_service import ai_intervention_service  
 from app.services.llm_service import llm_service
 from app.services.entry_analytics_processor import entry_analytics_processor
+from app.services.personality_analytics_processor import personality_analytics_processor
 from app.decorators.cache_decorators import cached, cache_invalidate, timed_operation, CachePatterns
 from app.core.performance_monitor import performance_monitor
 
@@ -254,15 +255,15 @@ async def create_entry(entry: EntryCreate, request: Request):
         except Exception as e:
             logger.warning(f"Vector database update failed: {e}")
         
-        # Invalidate analytics cache for fresh data
+        # Invalidate analytics and personality caches for fresh data
         try:
-            await entry_analytics_processor.invalidate_analytics_cache(
-                entry.user_id or "default_user"
-            )
-            logger.debug(f"Invalidated analytics cache for new entry {db_entry.id}")
+            user_id = entry.user_id or "default_user"
+            await entry_analytics_processor.invalidate_analytics_cache(user_id)
+            await personality_analytics_processor.invalidate_personality_cache(user_id)
+            logger.debug(f"Invalidated analytics and personality caches for new entry {db_entry.id}")
         except Exception as e:
             # Don't let cache invalidation errors break entry creation
-            logger.warning(f"Failed to invalidate analytics cache: {e}")
+            logger.warning(f"Failed to invalidate caches: {e}")
         
         return EntryResponse.model_validate(_convert_entry_to_response(db_entry))
         
@@ -484,15 +485,15 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
         except Exception as e:
             logger.warning(f"Vector database update failed: {e}")
         
-        # Invalidate analytics cache after entry update
+        # Invalidate analytics and personality caches after entry update
         try:
-            await entry_analytics_processor.invalidate_analytics_cache(
-                str(existing_entry.user_id) if existing_entry.user_id else "default_user"
-            )
-            logger.debug(f"Invalidated analytics cache for updated entry {entry_id}")
+            user_id = str(existing_entry.user_id) if existing_entry.user_id else "default_user"
+            await entry_analytics_processor.invalidate_analytics_cache(user_id)
+            await personality_analytics_processor.invalidate_personality_cache(user_id)
+            logger.debug(f"Invalidated analytics and personality caches for updated entry {entry_id}")
         except Exception as e:
             # Don't let cache invalidation errors break entry update
-            logger.warning(f"Failed to invalidate analytics cache: {e}")
+            logger.warning(f"Failed to invalidate caches: {e}")
         
         return EntryResponse.model_validate(updated_entry)
         
