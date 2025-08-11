@@ -1,18 +1,77 @@
 #!/usr/bin/env python3
 """
-Database Cleanup Script for Journaling AI
+Comprehensive Database Cleanup Script for Journaling AI
 
-This script cleans all user data from the database for testing purposes.
+This script cleans ALL data from:
+- PostgreSQL database (journal entries, chat sessions, topics, users)
+- Redis cache (all cached data)
+- Vector database (ChromaDB collections)
 """
 
 import asyncio
 import aiohttp
 import sys
+import os
 
-class DatabaseCleaner:
+class ComprehensiveDatabaseCleaner:
     def __init__(self):
         self.api_base = "http://localhost:8000/api/v1"
         self.test_user_id = "00000000-0000-0000-0000-000000000001"
+    
+    async def clear_redis_cache(self) -> bool:
+        """Clear Redis cache using admin API"""
+        try:
+            print("🔄 Clearing Redis cache...")
+            
+            # Make API call to admin endpoint
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.api_base}/admin/cache/flush"
+                async with session.post(url) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if result.get("success"):
+                            print("✅ Redis cache cleared successfully")
+                            return True
+                        else:
+                            print(f"❌ Redis cache clear failed: {result.get('message', 'Unknown error')}")
+                            return False
+                    else:
+                        error_text = await response.text()
+                        print(f"❌ Redis cache clear failed with status {response.status}: {error_text}")
+                        return False
+                        
+        except Exception as e:
+            print(f"❌ Error clearing Redis cache: {e}")
+            return False
+    
+    async def clear_vector_database(self) -> bool:
+        """Clear vector database using admin API"""
+        try:
+            print("🔄 Clearing vector database...")
+            
+            # Make API call to admin endpoint
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.api_base}/admin/vector/clear"
+                async with session.post(url) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if result.get("success"):
+                            print("✅ Vector database cleared successfully")
+                            collections_reset = result.get("collections_reset", [])
+                            if collections_reset:
+                                print(f"📋 Collections reset: {', '.join(collections_reset)}")
+                            return True
+                        else:
+                            print(f"❌ Vector database clear failed: {result.get('message', 'Unknown error')}")
+                            return False
+                    else:
+                        error_text = await response.text()
+                        print(f"❌ Vector database clear failed with status {response.status}: {error_text}")
+                        return False
+                        
+        except Exception as e:
+            print(f"❌ Error clearing vector database: {e}")
+            return False
     
     async def get_all_entries(self):
         """Get all journal entries for the test user"""
@@ -145,15 +204,39 @@ class DatabaseCleaner:
                 await asyncio.sleep(0.1)
             print(f"✅ Deleted {deleted_topics}/{len(topics)} topics")
         
+    async def comprehensive_cleanup(self):
+        """Perform comprehensive cleanup of all data stores"""
+        print("🧹 Comprehensive Database Cleanup Starting...")
+        print("=" * 60)
         print()
-        print("🎯 Database cleanup complete!")
+        
+        # Step 1: Clear Redis cache
+        print("🗄️  Step 1: Clearing Redis cache...")
+        await self.clear_redis_cache()
+        print()
+        
+        # Step 2: Clear Vector database  
+        print("🔍 Step 2: Clearing vector database...")
+        await self.clear_vector_database()
+        print()
+        
+        # Step 3: Clear PostgreSQL data
+        print("🗃️  Step 3: Clearing PostgreSQL data...")
+        await self.cleanup_database()
+        
+        print()
+        print("🎯 Comprehensive cleanup complete!")
+        print("✨ All data stores have been cleared!")
         print("Ready for fresh data population.")
         print()
 
 async def main():
     """Main cleanup function"""
-    print("🤖 Journaling AI Database Cleanup Tool")
-    print("⚠️  This will delete ALL data from the database!")
+    print("🤖 Journaling AI Comprehensive Database Cleanup Tool")
+    print("⚠️  This will delete ALL data from:")
+    print("   • PostgreSQL Database (entries, sessions, topics)")
+    print("   • Redis Cache (all cached data)")  
+    print("   • Vector Database (ChromaDB collections)")
     print()
     
     # Safety confirmation
@@ -166,8 +249,8 @@ async def main():
         print("\n❌ Cleanup cancelled.")
         return
     
-    cleaner = DatabaseCleaner()
-    await cleaner.cleanup_database()
+    cleaner = ComprehensiveDatabaseCleaner()
+    await cleaner.comprehensive_cleanup()
 
 if __name__ == "__main__":
     try:

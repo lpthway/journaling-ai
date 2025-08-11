@@ -203,6 +203,39 @@ class SimpleRedisService(CacheStrategy):
             logger.warning(f"Redis DELETE error for key {key}: {e}")
             return False
 
+    async def flush_db(self) -> bool:
+        """
+        Flush all data from the current database
+        ⚠️ WARNING: This will delete ALL cached data!
+        """
+        if not self._initialized:
+            return False
+            
+        try:
+            logger.warning("🗑️ Flushing Redis database - ALL data will be deleted!")
+            result = await self.redis_client.flushdb()
+            self._metrics.operations += 1
+            logger.info("✅ Redis database flushed successfully")
+            return bool(result)
+        except Exception as e:
+            self._metrics.errors += 1
+            logger.error(f"Redis FLUSHDB error: {e}")
+            return False
+
+    async def ping(self) -> bool:
+        """
+        Ping Redis server to check connectivity
+        """
+        if not self._initialized:
+            return False
+            
+        try:
+            result = await self.redis_client.ping()
+            return bool(result)
+        except Exception as e:
+            logger.error(f"Redis PING error: {e}")
+            return False
+
     async def invalidate_pattern(self, pattern: str) -> int:
         """Invalidate keys matching pattern"""
         if not self._initialized:

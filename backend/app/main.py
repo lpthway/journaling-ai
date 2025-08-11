@@ -40,6 +40,8 @@ from app.api import performance_optimized
 # Advanced AI API routers
 from app.api import advanced_ai, enhanced_chat
 from app.api import sessions
+# Admin API router
+from app.api import admin
 
 # Authentication router
 from app.auth import auth_router
@@ -234,6 +236,10 @@ app = FastAPI(
         {
             "name": "enhanced-chat",
             "description": "Sophisticated conversational AI with therapeutic capabilities"
+        },
+        {
+            "name": "admin",
+            "description": "Administrative functions for database and cache management"
         }
     ],
     contact={
@@ -335,6 +341,9 @@ app.include_router(enhanced_chat.router, prefix=f"{settings.API_V1_STR}/chat", t
 # Monitoring and health endpoints
 app.include_router(health.router, prefix=f"{settings.API_V1_STR}/health", tags=["health"])
 app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}", tags=["monitoring"])
+
+# Admin endpoints (for database management)
+app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["admin"])
 
 # Enhanced health check endpoints
 @app.get("/health")
