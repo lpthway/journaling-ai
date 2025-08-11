@@ -33,19 +33,20 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
           return 'Needs Focus';
         };
 
-        // Calculate positive trend percentage
-        const getPositiveTrend = (sentiment) => {
-          if (sentiment > 0.5) return '+15%';
-          if (sentiment > 0.2) return '+12%';
-          if (sentiment > 0) return '+8%';
-          if (sentiment > -0.2) return '+3%';
-          return '-2%';
+        // Calculate sentiment level (not a real trend - would need historical data)
+        const getSentimentLevel = (sentiment) => {
+          if (sentiment > 0.6) return 'Very Positive';
+          if (sentiment > 0.5) return 'Positive'; 
+          if (sentiment > 0.4) return 'Neutral+';
+          if (sentiment > 0.3) return 'Neutral';
+          return 'Needs Attention';
         };
 
         // Calculate resilience score out of 10
         const getResilienceScore = (sentiment, consistency) => {
-          const baseScore = Math.max(0, (sentiment + 1) * 5); // Convert -1,1 to 0-10
-          const consistencyBonus = (consistency / 100) * 2;
+          // API sentiment is 0-1, so convert to 0-10 scale properly
+          const baseScore = sentiment * 10; // Convert 0-1 to 0-10
+          const consistencyBonus = (consistency / 100) * 2; // Max 2 bonus points
           return Math.min(10, Math.round((baseScore + consistencyBonus) * 10) / 10);
         };
 
@@ -88,7 +89,7 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
 
         setData({
           emotionalStability: getStabilityLevel(stats.consistency_percentage),
-          positiveTrend: getPositiveTrend(stats.overall_sentiment),
+          positiveTrend: getSentimentLevel(stats.overall_sentiment),
           resilienceScore: getResilienceScore(stats.overall_sentiment, stats.consistency_percentage),
           growthAreas: calculateGrowthAreas(),
           moodVariance: calculateMoodStability() / 100, // Convert to 0-1 for percentage display
@@ -175,8 +176,8 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
           </span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">Positive trend</span>
-          <span className="font-medium text-green-600">↗ {data.positiveTrend}</span>
+          <span className="text-sm text-gray-600">Overall sentiment</span>
+          <span className="font-medium text-gray-600">{data.positiveTrend}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-sm text-gray-600">Resilience score</span>
