@@ -52,19 +52,20 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
         // Calculate actual positive percentage from mood distribution
         const actualPositivePercentage = moodDist.positive ? Math.round(moodDist.positive.percentage) : 0;
         
-        // Calculate real mood variance from distribution data
-        const calculateMoodVariance = () => {
+        // Calculate mood stability score (more meaningful than variance)
+        const calculateMoodStability = () => {
           if (!moodDist.positive || !moodDist.negative || !moodDist.neutral) return 0;
           
-          const positive = moodDist.positive.percentage / 100;
-          const negative = moodDist.negative.percentage / 100;
-          const neutral = moodDist.neutral.percentage / 100;
+          const positive = moodDist.positive.percentage;
+          const negative = moodDist.negative.percentage;
+          const neutral = moodDist.neutral.percentage;
           
-          // Calculate variance: measure how spread out the mood distribution is
-          const mean = (positive + negative + neutral) / 3;
-          const variance = ((positive - mean) ** 2 + (negative - mean) ** 2 + (neutral - mean) ** 2) / 3;
+          // Higher stability = less extreme moods, more balanced
+          // Score based on how balanced the distribution is vs extreme concentration
+          const extremeConcentration = Math.max(positive, negative, neutral);
+          const stabilityScore = 100 - extremeConcentration;
           
-          return variance;
+          return Math.max(0, Math.min(100, stabilityScore));
         };
         
         // Count growth areas based on actual data
@@ -90,7 +91,7 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
           positiveTrend: getPositiveTrend(stats.overall_sentiment),
           resilienceScore: getResilienceScore(stats.overall_sentiment, stats.consistency_percentage),
           growthAreas: calculateGrowthAreas(),
-          moodVariance: calculateMoodVariance(),
+          moodVariance: calculateMoodStability() / 100, // Convert to 0-1 for percentage display
           positivePercentage: actualPositivePercentage, // Use actual percentage from API
           stabilityTrend: stats.consistency_percentage >= 70 ? 'Improving' : 'Fluctuating',
           emotionalRange: calculateEmotionalRange()
@@ -208,7 +209,7 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
             <p className="text-2xl font-bold text-blue-600">
               {Math.round(data.moodVariance * 100)}%
             </p>
-            <p className="text-sm text-gray-500">Variance</p>
+            <p className="text-sm text-gray-500">Mood Balance</p>
           </div>
         </div>
       </div>
