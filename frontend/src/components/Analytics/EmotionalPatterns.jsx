@@ -52,6 +52,21 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
         // Calculate actual positive percentage from mood distribution
         const actualPositivePercentage = moodDist.positive ? Math.round(moodDist.positive.percentage) : 0;
         
+        // Calculate real mood variance from distribution data
+        const calculateMoodVariance = () => {
+          if (!moodDist.positive || !moodDist.negative || !moodDist.neutral) return 0;
+          
+          const positive = moodDist.positive.percentage / 100;
+          const negative = moodDist.negative.percentage / 100;
+          const neutral = moodDist.neutral.percentage / 100;
+          
+          // Calculate variance: measure how spread out the mood distribution is
+          const mean = (positive + negative + neutral) / 3;
+          const variance = ((positive - mean) ** 2 + (negative - mean) ** 2 + (neutral - mean) ** 2) / 3;
+          
+          return variance;
+        };
+        
         // Count growth areas based on actual data
         const calculateGrowthAreas = () => {
           let areas = 0;
@@ -75,7 +90,7 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
           positiveTrend: getPositiveTrend(stats.overall_sentiment),
           resilienceScore: getResilienceScore(stats.overall_sentiment, stats.consistency_percentage),
           growthAreas: calculateGrowthAreas(),
-          moodVariance: stats.mood_variance || 0.3,
+          moodVariance: calculateMoodVariance(),
           positivePercentage: actualPositivePercentage, // Use actual percentage from API
           stabilityTrend: stats.consistency_percentage >= 70 ? 'Improving' : 'Fluctuating',
           emotionalRange: calculateEmotionalRange()
