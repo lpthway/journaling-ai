@@ -174,7 +174,8 @@ async def create_entry(entry: EntryCreate, request: Request):
                 topic_id=entry.topic_id,
                 mood=mood if mood else None,
                 sentiment_score=sentiment_score,
-                tags=final_tags
+                tags=final_tags,
+                created_at=entry.created_at  # Support custom creation timestamp for historical data
             )
         
         # Store detailed AI analysis results if available

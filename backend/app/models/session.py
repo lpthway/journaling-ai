@@ -34,6 +34,7 @@ class MessageCreate(BaseModel):
     content: str
     role: MessageRole = MessageRole.USER
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    timestamp: Optional[datetime] = None  # Support custom timestamp for historical data
 
 
 class Message(BaseModel):
@@ -65,6 +66,7 @@ class SessionCreate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    created_at: Optional[datetime] = None  # Support custom creation timestamp for historical data
 
 
 class SessionUpdate(BaseModel):

@@ -619,6 +619,7 @@ Schreibe nur die Nachricht, nichts anderes:"""
                             "context_metadata": {
                                 "theme": theme_data['theme'],
                                 "language": theme_data['language'],
+                                "historical_timestamp": message["timestamp"],  # Pass timestamp for historical data
                                 "timestamp": message["timestamp"]
                             }
                         }

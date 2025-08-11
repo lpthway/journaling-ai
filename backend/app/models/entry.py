@@ -26,6 +26,7 @@ class EntryBase(BaseModel):
 
 class EntryCreate(EntryBase):
     user_id: Optional[str] = None  # Allow user_id to be provided during creation
+    created_at: Optional[datetime] = None  # Allow custom creation timestamp for historical data
 
 class Entry(EntryBase):
     id: str

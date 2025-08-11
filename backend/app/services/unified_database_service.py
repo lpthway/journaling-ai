@@ -97,7 +97,8 @@ class UnifiedDatabaseService:
         topic_id: Optional[str] = None,
         mood: Optional[str] = None,
         sentiment_score: Optional[float] = None,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        created_at: Optional[datetime] = None  # Support custom creation timestamp
     ) -> Entry:
         """Create entry with automatic caching and analytics"""
         async with self.get_session() as session:
@@ -118,6 +119,11 @@ class UnifiedDatabaseService:
                     "word_count": len(content.split()),
                     "reading_time_minutes": max(1, len(content.split()) // 200)
                 }
+                
+                # Add custom timestamp if provided (for historical data)
+                if created_at:
+                    entry_data["created_at"] = created_at
+                    entry_data["updated_at"] = created_at
                 
                 # Create entry with caching
                 entry = await entry_repo.create(entry_data, invalidate_cache=True)
