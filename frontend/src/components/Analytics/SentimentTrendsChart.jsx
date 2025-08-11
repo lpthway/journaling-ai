@@ -32,10 +32,16 @@ const SentimentTrendsChart = ({ days = 30, className = "" }) => {
         }));
 
         setData(chartData);
+        // Calculate actual positive days from daily trends
+        const positiveDaysCount = sentimentData.daily_trends.filter(day => 
+          day.avg_sentiment > 0.5 // Days with sentiment above neutral
+        ).length;
+        const positiveDaysPercentage = Math.round((positiveDaysCount / sentimentData.daily_trends.length) * 100);
+
         setStats({
           totalEntries: sentimentData.statistics.total_entries,
           avgSentiment: sentimentData.statistics.overall_sentiment,
-          positiveDays: Math.round(sentimentData.statistics.consistency_percentage),
+          positiveDays: positiveDaysPercentage, // Now shows actual positive days percentage
           highestScore: Math.max(...chartData.map(d => d.sentiment))
         });
       } else {
