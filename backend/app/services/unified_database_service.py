@@ -122,6 +122,10 @@ class UnifiedDatabaseService:
                 
                 # Add custom timestamp if provided (for historical data)
                 if created_at:
+                    # Convert string to datetime if needed
+                    if isinstance(created_at, str):
+                        from datetime import datetime
+                        created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
                     entry_data["created_at"] = created_at
                     entry_data["updated_at"] = created_at
                 

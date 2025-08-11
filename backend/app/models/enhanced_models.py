@@ -32,13 +32,13 @@ class Base(AsyncAttrs, DeclarativeBase):
     # Common audit fields
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
-        server_default=func.now(),
+        default=func.now(),  # Use default instead of server_default to allow override
         nullable=False,
         index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
-        server_default=func.now(),
+        default=func.now(),  # Use default instead of server_default to allow override
         onupdate=func.now(),
         nullable=False
     )
