@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarIcon, ArrowPathIcon, FireIcon } from '@heroicons/react/24/outline';
 import { entryAPI } from '../../services/api';
+import { DEFAULT_USER_ID } from '../../config/user';
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const WritingActivityHeatmap = ({ className = "" }) => {
@@ -21,8 +22,11 @@ const WritingActivityHeatmap = ({ className = "" }) => {
       setLoading(true);
       setError(null);
 
-      // Get entries from the last 365 days
-      const response = await entryAPI.getAll({ limit: 1000 });
+      // Get entries from the last 365 days for the correct user
+      const response = await entryAPI.getAll({ 
+        limit: 1000,
+        user_id: DEFAULT_USER_ID 
+      });
       const entries = response.data || [];
 
       // Group entries by date
@@ -44,7 +48,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
         
         maxCount = Math.max(maxCount, activityMap[date].count);
       });
-
+      
       setData(activityMap);
       setMaxEntries(maxCount);
 
@@ -61,36 +65,95 @@ const WritingActivityHeatmap = ({ className = "" }) => {
     }
   };
 
-  // Generate calendar grid for the last 12 weeks (84 days)
-  const generateCalendarGrid = () => {
-    const grid = [];
+  // Generate monthly grids for the last 4 months
+  const generateMonthlyGrids = () => {
     const today = new Date();
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 83); // 12 weeks back
+    const monthlyGrids = [];
+    
 
-    // Find the start of the week (Sunday)
-    const startOfWeek = new Date(startDate);
-    startOfWeek.setDate(startDate.getDate() - startDate.getDay());
-
-    for (let week = 0; week < 12; week++) {
-      const weekData = [];
-      for (let day = 0; day < 7; day++) {
-        const currentDate = new Date(startOfWeek);
-        currentDate.setDate(startOfWeek.getDate() + (week * 7) + day);
-        const dateStr = currentDate.toISOString().split('T')[0];
-        
-        weekData.push({
-          date: currentDate,
-          dateStr,
-          activity: data[dateStr] || null,
-          isToday: dateStr === today.toISOString().split('T')[0],
-          isFuture: currentDate > today
-        });
+    // Generate last 4 months (including current month)
+    for (let monthsBack = 3; monthsBack >= 0; monthsBack--) {
+      const monthDate = new Date(today.getFullYear(), today.getMonth() - monthsBack, 1);
+      const monthName = monthDate.toLocaleDateString('en-US', { month: 'long' });
+      const monthShort = monthDate.toLocaleDateString('en-US', { month: 'short' });
+      const year = monthDate.getFullYear();
+      
+      
+      // Get first and last day of month properly
+      const firstDay = new Date(year, monthDate.getMonth(), 1);
+      const lastDay = new Date(year, monthDate.getMonth() + 1, 0);
+      
+      // Fix potential timezone issues by ensuring we work in local timezone
+      firstDay.setHours(12, 0, 0, 0); // Set to noon to avoid midnight timezone issues
+      lastDay.setHours(12, 0, 0, 0);
+      
+      // Start from Sunday of the first week containing the first day
+      const startOfGrid = new Date(firstDay);
+      startOfGrid.setDate(firstDay.getDate() - firstDay.getDay());
+      
+      // Generate weeks for this month
+      const weeks = [];
+      let currentWeekStart = new Date(startOfGrid);
+      
+      if (monthName === 'August') {
+        console.log(`August grid generation:`);
+        console.log(`First day of month: ${firstDay.toISOString().split('T')[0]} (${firstDay.toLocaleDateString('en-US', { weekday: 'long' })})`);
+        console.log(`Start of grid (Sunday): ${startOfGrid.toISOString().split('T')[0]}`);
       }
-      grid.push(weekData);
+      
+      while (currentWeekStart <= lastDay) {
+        const week = [];
+        
+        for (let day = 0; day < 7; day++) {
+          // Create a proper local date object for each day
+          const currentDate = new Date(currentWeekStart);
+          currentDate.setDate(currentWeekStart.getDate() + day);
+          currentDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+          
+          // Use local date formatting instead of ISO string
+          const year = currentDate.getFullYear();
+          const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+          const dayStr = String(currentDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${dayStr}`;
+          
+          const activity = data[dateStr] || null;
+          const isCurrentMonth = currentDate.getMonth() === monthDate.getMonth();
+          
+          const isToday = dateStr === today.toISOString().split('T')[0];
+          
+          if (monthName === 'August' && (dateStr === '2025-08-10' || dateStr === '2025-08-11')) {
+            console.log(`${dateStr}: day=${day} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day]}), isToday=${isToday}`);
+            console.log(`  currentDate: ${currentDate.toISOString()} (${currentDate.toLocaleDateString('en-US', { weekday: 'long' })})`);
+          }
+          
+          week.push({
+            date: currentDate,
+            dateStr,
+            activity,
+            isToday,
+            isFuture: currentDate > today,
+            isCurrentMonth
+          });
+        }
+        
+        weeks.push(week);
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        
+        // Stop if we've gone too far past the month
+        if (currentWeekStart.getDate() > 7 && currentWeekStart.getMonth() !== monthDate.getMonth()) {
+          break;
+        }
+      }
+      
+      monthlyGrids.push({
+        monthName,
+        monthShort,
+        year,
+        weeks
+      });
     }
 
-    return grid;
+    return monthlyGrids;
   };
 
   const getIntensityClass = (count) => {
@@ -104,16 +167,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
     return 'bg-green-500';
   };
 
-  const getDayName = (dayIndex) => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return days[dayIndex];
-  };
-
-  const getMonthName = (date) => {
-    return date.toLocaleDateString('en-US', { month: 'short' });
-  };
-
-  const calendarGrid = generateCalendarGrid();
+  const monthlyGrids = React.useMemo(() => generateMonthlyGrids(), [data]);
 
   if (loading) {
     return (
@@ -151,7 +205,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Writing Activity</h3>
             <p className="text-sm text-gray-500">
-              Daily journaling patterns over the last 12 weeks
+              Daily journaling patterns over the last 4 months
             </p>
           </div>
         </div>
@@ -164,71 +218,65 @@ const WritingActivityHeatmap = ({ className = "" }) => {
         </button>
       </div>
 
-      {/* Calendar Heatmap */}
+      {/* Monthly Heatmaps - Horizontal Layout */}
       <div className="mb-6 overflow-x-auto">
-        <div className="min-w-full">
-          {/* Month labels */}
-          <div className="flex mb-2">
-            <div className="w-8"></div> {/* Space for day labels */}
-            {calendarGrid.map((week, weekIndex) => {
-              const firstDay = week[0];
-              const showMonth = firstDay.date.getDate() <= 7;
-              return (
-                <div key={weekIndex} className="flex-1 text-center">
-                  {showMonth && (
-                    <span className="text-xs text-gray-500 font-medium">
-                      {getMonthName(firstDay.date)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Day labels and heatmap */}
-          <div className="flex">
-            {/* Day labels */}
-            <div className="flex flex-col space-y-1 mr-2">
-              <div className="h-3"></div> {/* Spacer */}
-              {['Mon', 'Wed', 'Fri'].map((day, index) => (
-                <div key={day} className="h-3 flex items-center">
-                  <span className="text-xs text-gray-500 font-medium w-6">
-                    {index === 0 ? 'Mon' : index === 1 ? 'Wed' : 'Fri'}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Heatmap grid */}
-            <div className="flex space-x-1">
-              {calendarGrid.map((week, weekIndex) => (
-                <div key={weekIndex} className="flex flex-col space-y-1">
-                  {week.map((day, dayIndex) => (
-                    <div
-                      key={`${weekIndex}-${dayIndex}`}
-                      className={`w-3 h-3 rounded-sm cursor-pointer border transition-all duration-200 ${
-                        day.isFuture 
-                          ? 'bg-gray-50 border-gray-200 cursor-not-allowed' 
-                          : `${getIntensityClass(day.activity?.count)} border-gray-200 hover:ring-2 hover:ring-green-300`
-                      } ${
-                        day.isToday ? 'ring-2 ring-blue-400' : ''
-                      } ${
-                        hoveredDate === day.dateStr ? 'ring-2 ring-green-400' : ''
-                      }`}
-                      title={
-                        day.isFuture 
-                          ? `${day.date.toLocaleDateString()} (future)`
-                          : `${day.date.toLocaleDateString()}: ${day.activity?.count || 0} entries`
-                      }
-                      onMouseEnter={() => !day.isFuture && setHoveredDate(day.dateStr)}
-                      onMouseLeave={() => setHoveredDate(null)}
-                      onClick={() => !day.isFuture && setSelectedDate(day)}
-                    />
+        <div className="flex space-x-8 min-w-max">
+          {monthlyGrids.map((month, monthIndex) => (
+            <div key={monthIndex} className="flex-shrink-0">
+              {/* Month title */}
+              <div className="mb-3 text-center">
+                <h4 className="text-sm font-medium text-gray-700">
+                  {month.monthShort} {month.year}
+                </h4>
+              </div>
+              
+              {/* Day headers */}
+              <div className="flex justify-center mb-2">
+                <div className="flex space-x-1">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                    <div key={index} className="w-3 h-3 flex items-center justify-center">
+                      <span className="text-xs text-gray-400 font-medium">{day}</span>
+                    </div>
                   ))}
                 </div>
-              ))}
+              </div>
+              
+              {/* Monthly grid */}
+              <div className="space-y-1">
+                {month.weeks.map((week, weekIndex) => (
+                  <div key={weekIndex} className="flex space-x-1">
+                    {week.map((day, dayIndex) => (
+                      <div
+                        key={`${monthIndex}-${weekIndex}-${dayIndex}`}
+                        className={`w-3 h-3 rounded-sm cursor-pointer transition-all duration-200 ${
+                          !day.isCurrentMonth 
+                            ? 'bg-transparent' // Hide days from other months
+                            : day.isFuture 
+                            ? 'bg-gray-50 border border-gray-200 cursor-not-allowed' 
+                            : `${getIntensityClass(day.activity?.count)} hover:ring-2 hover:ring-green-400`
+                        } ${
+                          day.isCurrentMonth && !day.isFuture ? 'border border-gray-300' : ''
+                        } ${
+                          day.isToday ? 'ring-2 ring-blue-500' : ''
+                        } ${
+                          hoveredDate === day.dateStr ? 'ring-2 ring-green-500' : ''
+                        }`}
+                        title={
+                          !day.isCurrentMonth ? '' :
+                          day.isFuture 
+                            ? `${day.date.toLocaleDateString()} (future)`
+                            : `${day.date.toLocaleDateString()}: ${day.activity?.count || 0} entries${day.isToday ? ' (today)' : ''}`
+                        }
+                        onMouseEnter={() => day.isCurrentMonth && !day.isFuture && setHoveredDate(day.dateStr)}
+                        onMouseLeave={() => setHoveredDate(null)}
+                        onClick={() => day.isCurrentMonth && !day.isFuture && setSelectedDate(day)}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -333,7 +381,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
         </div>
         <div>
           <p className="text-2xl font-bold text-purple-600">
-            {Math.round((Object.keys(data).length / 84) * 100) || 0}%
+            {Math.round((Object.keys(data).length / 112) * 100) || 0}%
           </p>
           <p className="text-sm text-gray-500">Consistency</p>
         </div>

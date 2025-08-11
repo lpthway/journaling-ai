@@ -1,23 +1,23 @@
 // frontend/src/components/Analytics/MoodDistributionChart.jsx
 import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
 import { ChartPieIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
-import { insightsAPI } from '../../services/api';
+import { analyticsApi } from '../../services/analyticsApi';
+import { DEFAULT_USER_ID } from '../../config/user';
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const MoodDistributionChart = ({ days = 30, className = "" }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [totalEntries, setTotalEntries] = useState(0);
+  const [stats, setStats] = useState(null);
 
-  // Mood colors for the chart
+  // Mood colors matching the screenshot exactly
   const MOOD_COLORS = {
     positive: '#10B981', // Green
+    neutral: '#6B7280',  // Gray 
     negative: '#EF4444', // Red
-    neutral: '#6B7280',  // Gray
-    mixed: '#F59E0B',    // Yellow
-    unknown: '#9CA3AF'   // Light gray
+    mixed: '#F59E0B'     // Orange/Yellow
   };
 
   useEffect(() => {
@@ -29,24 +29,22 @@ const MoodDistributionChart = ({ days = 30, className = "" }) => {
       setLoading(true);
       setError(null);
 
-      const response = await insightsAPI.getMoodTrends(days);
-      const moodStats = response.data;
+      const moodStats = await analyticsApi.getEmotionalPatterns(days, DEFAULT_USER_ID);
 
-      // Transform the data for the pie chart
+      // Transform data to match screenshot format
       if (moodStats.mood_distribution && Object.keys(moodStats.mood_distribution).length > 0) {
-        const chartData = Object.entries(moodStats.mood_distribution).map(([mood, count]) => ({
+        const chartData = Object.entries(moodStats.mood_distribution).map(([mood, data]) => ({
           name: mood.charAt(0).toUpperCase() + mood.slice(1),
-          value: count,
-          percentage: moodStats.total_entries > 0 ? Math.round((count / moodStats.total_entries) * 100) : 0,
-          color: MOOD_COLORS[mood] || MOOD_COLORS.unknown
+          value: data.count,
+          percentage: Math.round(data.percentage),
+          color: MOOD_COLORS[mood] || MOOD_COLORS.neutral
         }));
 
         setData(chartData);
-        setTotalEntries(moodStats.total_entries || 0);
+        setStats(moodStats.statistics);
       } else {
-        // No data available - show empty state
         setData([]);
-        setTotalEntries(0);
+        setStats(null);
       }
     } catch (err) {
       console.error('Error loading mood data:', err);
@@ -56,38 +54,7 @@ const MoodDistributionChart = ({ days = 30, className = "" }) => {
     }
   };
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-medium text-gray-900">{data.name}</p>
-          <p className="text-sm text-gray-600">
-            {data.value} entries ({data.percentage}%)
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const CustomLegend = ({ payload }) => {
-    return (
-      <div className="flex flex-wrap justify-center gap-4 mt-4">
-        {payload.map((entry, index) => (
-          <div key={index} className="flex items-center space-x-2">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-sm text-gray-600">
-              {entry.value} ({entry.payload.percentage}%)
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  };
+  const CustomCell = ({ fill }) => <Cell fill={fill} />;
 
   if (loading) {
     return (
@@ -99,18 +66,23 @@ const MoodDistributionChart = ({ days = 30, className = "" }) => {
     );
   }
 
-  if (error) {
+  if (error || data.length === 0) {
     return (
       <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 ${className}`}>
-        <div className="text-center text-gray-500">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-2">
+            <ChartPieIcon className="h-6 w-6 text-blue-600" />
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Mood Distribution</h3>
+              <p className="text-sm text-gray-500">Last {days} days • 0 entries</p>
+            </div>
+          </div>
+          <ArrowPathIcon className="h-4 w-4 text-gray-400" />
+        </div>
+        <div className="text-center text-gray-500 py-12">
           <ChartPieIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <p className="mb-2">{error}</p>
-          <button 
-            onClick={loadMoodData}
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-          >
-            Try again
-          </button>
+          <p>No mood data available</p>
+          <p className="text-sm">Start journaling to see your mood patterns</p>
         </div>
       </div>
     );
@@ -118,15 +90,13 @@ const MoodDistributionChart = ({ days = 30, className = "" }) => {
 
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 ${className}`}>
-      {/* Header */}
+      {/* Header matching screenshot */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <ChartPieIcon className="h-6 w-6 text-blue-600" />
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Mood Distribution</h3>
-            <p className="text-sm text-gray-500">
-              Last {days} days • {totalEntries} entries
-            </p>
+            <p className="text-sm text-gray-500">Last {days} days • {stats?.total_entries || 0} entries</p>
           </div>
         </div>
         <button
@@ -139,72 +109,66 @@ const MoodDistributionChart = ({ days = 30, className = "" }) => {
       </div>
 
       {/* Chart */}
-      {data.length > 0 ? (
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={40}
-                outerRadius={100}
-                paddingAngle={2}
-                dataKey="value"
-                animationBegin={0}
-                animationDuration={800}
-              >
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={entry.color}
-                    stroke="#ffffff"
-                    strokeWidth={2}
-                  />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend content={<CustomLegend />} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div className="text-center py-12 text-gray-500">
-          <ChartPieIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <p className="text-sm">No mood data available</p>
-          <p className="text-xs text-gray-400 mt-1">Start journaling to see your mood patterns</p>
-        </div>
-      )}
+      <div className="h-64 mb-6">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={100}
+              dataKey="value"
+              stroke="none"
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
 
-      {/* Summary Stats */}
-      {data.length > 0 && (
-        <div className="mt-6 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{totalEntries}</p>
-              <p className="text-sm text-gray-500">Total Entries</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-green-600">
-                {data.find(d => d.name === 'Positive')?.percentage || 0}%
-              </p>
-              <p className="text-sm text-gray-500">Positive</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-600">
-                {data.find(d => d.name === 'Neutral')?.percentage || 0}%
-              </p>
-              <p className="text-sm text-gray-500">Neutral</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-red-600">
-                {data.find(d => d.name === 'Negative')?.percentage || 0}%
-              </p>
-              <p className="text-sm text-gray-500">Negative</p>
-            </div>
+      {/* Legend matching screenshot exactly */}
+      <div className="flex flex-wrap justify-center gap-6 mb-6">
+        {data.map((entry, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <div 
+              className="w-3 h-3 rounded-full" 
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-sm text-gray-600">
+              {entry.name} ({entry.percentage}%)
+            </span>
           </div>
+        ))}
+      </div>
+
+      {/* Statistics row matching screenshot */}
+      <div className="grid grid-cols-4 gap-4 text-center">
+        <div>
+          <div className="text-2xl font-bold text-gray-900">{stats?.total_entries || 0}</div>
+          <div className="text-sm text-gray-500">Total Entries</div>
         </div>
-      )}
+        <div>
+          <div className="text-2xl font-bold text-green-600">
+            {data.find(d => d.name === 'Positive')?.percentage || 0}%
+          </div>
+          <div className="text-sm text-gray-500">Positive</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-gray-600">
+            {data.find(d => d.name === 'Neutral')?.percentage || 0}%
+          </div>
+          <div className="text-sm text-gray-500">Neutral</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-red-600">
+            {data.find(d => d.name === 'Negative')?.percentage || 0}%
+          </div>
+          <div className="text-sm text-gray-500">Negative</div>
+        </div>
+      </div>
     </div>
   );
 };

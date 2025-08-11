@@ -1,14 +1,14 @@
 // frontend/src/pages/Analytics.jsx
 import React, { useState, useEffect } from 'react';
 import { 
-  ChartBarIcon, 
-  ChartPieIcon, 
-  CalendarDaysIcon,
   ArrowTrendingUpIcon 
 } from '@heroicons/react/24/outline';
 import MoodDistributionChart from '../components/Analytics/MoodDistributionChart';
 import SentimentTrendsChart from '../components/Analytics/SentimentTrendsChart';
 import WritingActivityHeatmap from '../components/Analytics/WritingActivityHeatmap';
+import WritingInsights from '../components/Analytics/WritingInsights';
+import EmotionalPatterns from '../components/Analytics/EmotionalPatterns';
+import ProgressTracking from '../components/Analytics/ProgressTracking';
 import PersonalityProfile from '../components/Dashboard/PersonalityProfile';
 import { analyticsApi } from '../services/analyticsApi';
 import { DEFAULT_USER_ID } from '../config/user';
@@ -52,12 +52,9 @@ const Analytics = () => {
           </div>
         </div>
 
-        {/* Analytics Grid */}
+        {/* Main Analytics Grid - Top Row (Charts) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Mood Distribution Chart */}
           <MoodDistributionChart className="lg:col-span-1" />
-
-          {/* Sentiment Trends Chart */}
           <SentimentTrendsChart className="lg:col-span-1" />
         </div>
 
@@ -66,96 +63,17 @@ const Analytics = () => {
           <WritingActivityHeatmap className="w-full" />
         </div>
 
+        {/* Insights Grid - Three Column Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <WritingInsights className="lg:col-span-1" />
+          <EmotionalPatterns className="lg:col-span-1" />
+          <ProgressTracking className="lg:col-span-1" />
+        </div>
+
         {/* Personality Profile - Full Width */}
         <div className="mb-8">
           <PersonalityProfile userId={DEFAULT_USER_ID} />
         </div>
-
-        {/* Additional Analytics Cards - Populated with real data */}
-        {analyticsData && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {/* Quick Stats Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <ChartBarIcon className="h-6 w-6 text-indigo-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Writing Insights</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Most active day</span>
-                  <span className="font-medium text-gray-900">{analyticsData.writingInsights.mostActiveDay}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Avg words per entry</span>
-                  <span className="font-medium text-gray-900">{Math.round(analyticsData.writingInsights.avgWordsPerEntry)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Longest streak</span>
-                  <span className="font-medium text-gray-900">{analyticsData.writingInsights.longestStreak} days</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Favorite time</span>
-                  <span className="font-medium text-gray-900">{analyticsData.writingInsights.favoriteTime}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Mood Insights Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <ChartPieIcon className="h-6 w-6 text-green-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Emotional Patterns</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Emotional stability</span>
-                  <span className="font-medium text-green-600">{analyticsData.emotionalPatterns.emotionalStability}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Positive trend</span>
-                  <span className="font-medium text-green-600">↗ {analyticsData.emotionalPatterns.positiveTrend}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Resilience score</span>
-                  <span className="font-medium text-gray-900">{analyticsData.emotionalPatterns.resilienceScore}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Growth areas</span>
-                  <span className="font-medium text-blue-600">{analyticsData.emotionalPatterns.growthAreas} identified</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Goals & Progress Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <CalendarDaysIcon className="h-6 w-6 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Progress Tracking</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Daily goal progress</span>
-                  <span className="font-medium text-purple-600">{analyticsData.progressTracking.dailyGoalProgress}%</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Weekly goal</span>
-                  <span className="font-medium text-green-600">
-                    {analyticsData.progressTracking.weeklyGoalStatus === 'Complete' ? '✓ ' : ''}
-                    {analyticsData.progressTracking.weeklyGoalStatus}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Monthly target</span>
-                  <span className="font-medium text-gray-900">{analyticsData.progressTracking.monthlyTarget}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Achievement level</span>
-                  <span className="font-medium text-yellow-600">{analyticsData.progressTracking.achievementLevel}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
         
         {/* Loading and Error States */}
         {loading && (

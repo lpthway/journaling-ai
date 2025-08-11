@@ -4,12 +4,12 @@ import { DEFAULT_USER_ID } from '../config/user';
 
 class AnalyticsAPI {
   // Get comprehensive writing statistics
-  async getWritingInsights(days = 30, userId = DEFAULT_USER_ID) {
+  async getWritingActivity(days = 30, userId = DEFAULT_USER_ID) {
     try {
       const response = await api.get(`/entries/analytics/writing?days=${days}&user_id=${userId}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching writing insights:', error);
+      console.error('Error fetching writing activity:', error);
       throw error;
     }
   }
@@ -29,7 +29,7 @@ class AnalyticsAPI {
   async getAnalyticsSummary(days = 30, userId = DEFAULT_USER_ID) {
     try {
       const [writingData, moodData] = await Promise.all([
-        this.getWritingInsights(days, userId),
+        this.getWritingActivity(days, userId),
         this.getEmotionalPatterns(days, userId)
       ]);
 
