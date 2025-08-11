@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 import uuid
 import secrets
 
-from .models import AuthUser, RefreshToken, LoginAttempt
+from .models import AuthUser, RefreshToken, LoginAttempt, UserRole
 from .schemas import UserCreate, LoginRequest, PasswordChange, PasswordReset, PasswordResetConfirm
 from .security import (
     password_validator, 
@@ -608,3 +608,214 @@ class AuthService:
         
         self.db.add(attempt)
         await self.db.commit()
+    
+    # Admin Management Methods
+    
+    async def create_user_admin(
+        self, 
+        user_data: UserCreate, 
+        role: UserRole = UserRole.USER,
+        admin_user_id: str = None
+    ) -> AuthUser:
+        """
+        Admin-only user creation with role assignment.
+        
+        Args:
+            user_data: User creation data
+            role: Role to assign to user
+            admin_user_id: ID of admin creating the user
+            
+        Returns:
+            AuthUser: Created user
+        """
+        # Validate password
+        is_valid, errors = password_validator.validate_password(user_data.password)
+        if not is_valid:
+            raise ValueError(f"Password validation failed: {', '.join(errors)}")
+        
+        # Check if user already exists
+        existing_user = await self._get_user_by_username_or_email(
+            user_data.username, user_data.email
+        )
+        if existing_user:
+            if existing_user.username == user_data.username:
+                raise UserExistsError("Username already exists")
+            else:
+                raise UserExistsError("Email already exists")
+        
+        # Create new user with specified role
+        password_hash = password_hasher.hash_password(user_data.password)
+        
+        new_user = AuthUser(
+            username=user_data.username.lower(),
+            email=user_data.email.lower(),
+            password_hash=password_hash,
+            display_name=user_data.display_name,
+            timezone=user_data.timezone,
+            language=user_data.language,
+            role=role,
+            is_verified=True,  # Admin-created users are pre-verified
+            password_changed_at=datetime.utcnow()
+        )
+        
+        try:
+            self.db.add(new_user)
+            await self.db.commit()
+            await self.db.refresh(new_user)
+            return new_user
+            
+        except IntegrityError as e:
+            await self.db.rollback()
+            if "username" in str(e):
+                raise UserExistsError("Username already exists")
+            elif "email" in str(e):
+                raise UserExistsError("Email already exists")
+            else:
+                raise AuthenticationError("User creation failed")
+    
+    async def update_user_admin(
+        self, 
+        user_id: str, 
+        updates: dict,
+        admin_user_id: str = None
+    ) -> Optional[AuthUser]:
+        """
+        Admin-only user updates including role changes.
+        
+        Args:
+            user_id: Target user ID
+            updates: Dictionary of fields to update
+            admin_user_id: ID of admin making changes
+            
+        Returns:
+            AuthUser or None: Updated user
+        """
+        user = await self._get_user_by_id(user_id)
+        if not user:
+            return None
+        
+        # Update allowed fields
+        allowed_fields = {
+            'username', 'email', 'display_name', 'timezone', 'language',
+            'is_active', 'is_verified', 'role'
+        }
+        
+        for field, value in updates.items():
+            if field in allowed_fields and hasattr(user, field):
+                setattr(user, field, value)
+        
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+    
+    async def list_users_admin(
+        self, 
+        skip: int = 0, 
+        limit: int = 100,
+        role_filter: Optional[UserRole] = None,
+        active_only: bool = False
+    ) -> List[AuthUser]:
+        """
+        Admin-only user listing with filtering.
+        
+        Args:
+            skip: Number of records to skip
+            limit: Maximum records to return
+            role_filter: Filter by specific role
+            active_only: Only return active users
+            
+        Returns:
+            List[AuthUser]: Filtered user list
+        """
+        stmt = select(AuthUser).offset(skip).limit(limit).order_by(AuthUser.created_at.desc())
+        
+        if role_filter:
+            stmt = stmt.where(AuthUser.role == role_filter)
+        if active_only:
+            stmt = stmt.where(AuthUser.is_active == True)
+        
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+    
+    async def get_user_sessions_admin(self, user_id: str) -> List[RefreshToken]:
+        """
+        Admin-only view of user's active sessions.
+        
+        Args:
+            user_id: Target user ID
+            
+        Returns:
+            List[RefreshToken]: Active refresh tokens for user
+        """
+        stmt = select(RefreshToken).where(
+            and_(
+                RefreshToken.user_id == user_id,
+                RefreshToken.is_revoked == False,
+                RefreshToken.expires_at > datetime.utcnow()
+            )
+        ).order_by(RefreshToken.created_at.desc())
+        
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+    
+    async def revoke_user_session_admin(self, session_id: str, admin_user_id: str) -> bool:
+        """
+        Admin-only forced session termination.
+        
+        Args:
+            session_id: Refresh token ID to revoke
+            admin_user_id: ID of admin performing action
+            
+        Returns:
+            bool: Success status
+        """
+        stmt = update(RefreshToken).where(
+            RefreshToken.id == session_id
+        ).values(is_revoked=True)
+        
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        
+        return result.rowcount > 0
+    
+    async def get_security_stats_admin(self) -> dict:
+        """
+        Admin-only security statistics.
+        
+        Returns:
+            dict: Security metrics and statistics
+        """
+        # Get user counts by role
+        role_stats = await self.db.execute(
+            select(AuthUser.role, func.count(AuthUser.id))
+            .group_by(AuthUser.role)
+        )
+        
+        # Get login attempt stats
+        failed_attempts_today = await self.db.scalar(
+            select(func.count(LoginAttempt.id))
+            .where(
+                and_(
+                    LoginAttempt.success == False,
+                    LoginAttempt.attempted_at > datetime.utcnow() - timedelta(days=1)
+                )
+            )
+        )
+        
+        # Get active session count
+        active_sessions = await self.db.scalar(
+            select(func.count(RefreshToken.id))
+            .where(
+                and_(
+                    RefreshToken.is_revoked == False,
+                    RefreshToken.expires_at > datetime.utcnow()
+                )
+            )
+        )
+        
+        return {
+            "user_counts_by_role": dict(role_stats.fetchall()),
+            "failed_attempts_today": failed_attempts_today or 0,
+            "active_sessions": active_sessions or 0,
+            "last_updated": datetime.utcnow()
+        }

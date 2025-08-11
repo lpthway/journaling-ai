@@ -1,7 +1,8 @@
 // frontend/src/components/Layout/Header.jsx - Updated with chat navigation
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   HomeIcon,
   BookOpenIcon, 
@@ -11,22 +12,32 @@ import {
   ChatBubbleLeftRightIcon,  // New import
   MagnifyingGlassIcon,
   Bars3Icon,
-  XMarkIcon 
+  XMarkIcon,
+  UserIcon,
+  Cog6ToothIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 const Header = ({ onSearch }) => {
   const location = useLocation();
+  const { user, logout, isAdmin } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: HomeIcon },
     { name: 'Journal', href: '/journal', icon: BookOpenIcon },
-    { name: 'AI Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },  // New chat link
+    { name: 'AI Chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
     { name: 'Topics', href: '/topics', icon: TagIcon },
     { name: 'Insights', href: '/insights', icon: ChartBarIcon },
-    { name: 'Analytics', href: '/analytics', icon: ArrowTrendingUpIcon },  // New analytics link
+    { name: 'Analytics', href: '/analytics', icon: ArrowTrendingUpIcon },
   ];
+
+  // Add admin navigation for admin users
+  if (isAdmin) {
+    navigation.push({ name: 'Admin', href: '/admin', icon: Cog6ToothIcon });
+  }
 
   const isActive = (path) => {
     if (path === '/') {
@@ -41,6 +52,19 @@ const Header = ({ onSearch }) => {
       onSearch(searchQuery.trim());
     }
   };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setIsUserMenuOpen(false);
+      setIsMenuOpen(false);
+    };
+    
+    if (isUserMenuOpen || isMenuOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isUserMenuOpen, isMenuOpen]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -91,6 +115,52 @@ const Header = ({ onSearch }) => {
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
             </form>
+          </div>
+
+          {/* User Menu */}
+          <div className="hidden md:block relative">
+            <button
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-2"
+            >
+              <UserIcon className="h-5 w-5" />
+              <span className="text-sm font-medium">{user?.display_name || user?.username}</span>
+              {isAdmin && (
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                  Admin
+                </span>
+              )}
+            </button>
+            
+            {isUserMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                <div className="py-1">
+                  <div className="px-4 py-2 text-sm text-gray-900 border-b">
+                    {user?.email}
+                  </div>
+                  {isAdmin && (
+                    <Link
+                      to="/admin"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <Cog6ToothIcon className="h-4 w-4 mr-2" />
+                      Admin Dashboard
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => {
+                      logout();
+                      setIsUserMenuOpen(false);
+                    }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                  >
+                    <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
+                    Logout
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Mobile menu button */}

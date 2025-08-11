@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional, List
 from datetime import datetime
 import uuid
+from .models import UserRole
 
 
 class UserBase(BaseModel):
@@ -128,6 +129,7 @@ class UserProfile(BaseModel):
     is_active: bool
     is_verified: bool
     is_superuser: bool
+    role: UserRole
     last_login: Optional[datetime]
     created_at: datetime
     updated_at: datetime
@@ -188,3 +190,44 @@ class AuthConfig(BaseModel):
     access_token_expire_minutes: int
     max_failed_login_attempts: int = 5
     lockout_duration_minutes: int = 30
+
+
+# Admin-specific schemas
+
+class AdminUserCreate(UserCreate):
+    """Schema for admin user creation with role assignment."""
+    role: UserRole = Field(default=UserRole.USER, description="User role")
+
+
+class AdminUserUpdate(BaseModel):
+    """Schema for admin user updates."""
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
+    display_name: Optional[str] = Field(None, max_length=100)
+    timezone: Optional[str] = Field(None, max_length=50)
+    language: Optional[str] = Field(None, max_length=10)
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
+    role: Optional[UserRole] = None
+
+
+class SessionInfo(BaseModel):
+    """Schema for session information."""
+    id: uuid.UUID
+    user_id: uuid.UUID
+    created_ip: Optional[str]
+    user_agent: Optional[str]
+    expires_at: datetime
+    created_at: datetime
+    is_current: bool = False
+    
+    class Config:
+        from_attributes = True
+
+
+class SecurityStats(BaseModel):
+    """Schema for security statistics."""
+    user_counts_by_role: dict
+    failed_attempts_today: int
+    active_sessions: int
+    last_updated: datetime

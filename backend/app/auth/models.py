@@ -3,15 +3,23 @@
 Authentication-specific models and extensions to the base User model.
 """
 
-from sqlalchemy import String, Boolean, DateTime, func, Index, ForeignKey
+from sqlalchemy import String, Boolean, DateTime, func, Index, ForeignKey, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import expression
 from datetime import datetime, timedelta
 from typing import Optional, List
+from enum import Enum as PyEnum
 import uuid
 
 from ..models.enhanced_models import Base
+
+
+class UserRole(PyEnum):
+    """User role enumeration for role-based access control."""
+    USER = "user"
+    ADMIN = "admin"
+    SUPERUSER = "superuser"
 
 
 class AuthUser(Base):
@@ -51,6 +59,14 @@ class AuthUser(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Role-based access control
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role_enum"),
+        nullable=False,
+        default=UserRole.USER,
+        index=True
+    )
     
     # Password security
     password_changed_at: Mapped[Optional[datetime]] = mapped_column(
@@ -121,6 +137,22 @@ class AuthUser(Base):
         if not self.reset_token or not self.reset_token_expires:
             return False
         return datetime.utcnow() < self.reset_token_expires
+    
+    @property
+    def is_admin(self) -> bool:
+        """Check if user has admin privileges."""
+        return self.role in [UserRole.ADMIN, UserRole.SUPERUSER] or self.is_superuser
+    
+    def has_role(self, required_role: UserRole) -> bool:
+        """Check if user has the required role or higher."""
+        role_hierarchy = {
+            UserRole.USER: 1,
+            UserRole.ADMIN: 2,
+            UserRole.SUPERUSER: 3
+        }
+        user_level = role_hierarchy.get(self.role, 0)
+        required_level = role_hierarchy.get(required_role, 999)
+        return user_level >= required_level or self.is_superuser
 
 
 class RefreshToken(Base):
@@ -138,7 +170,7 @@ class RefreshToken(Base):
     )
     
     # Token information
-    token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(512), unique=True, nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("auth_users.id", ondelete="CASCADE"),

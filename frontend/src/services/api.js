@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { DEFAULT_USER_ID } from '../config/user';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
@@ -11,10 +10,14 @@ const api = axios.create({
   },
 });
 
-// Request interceptor for debugging
+// Request interceptor for auth token and debugging
 api.interceptors.request.use(
   (config) => {
-    // Debug: API Request logging disabled in production
+    // Add auth token
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
@@ -45,7 +48,7 @@ export const entryAPI = {
       params: { query, limit, topic_id: topicId } 
     }),
   advancedSearch: (filters) => api.post('/entries/search/advanced', filters),
-  getMoodStats: (days = 30) => api.get('/insights/mood-stats', { params: { days } }),
+  getMoodStats: (days = 30) => api.get('/entries/analytics/mood', { params: { days } }),
   
   // Favorites
   toggleFavorite: (id) => api.patch(`/entries/${id}/favorite`),
@@ -323,6 +326,30 @@ export const dashboardAPI = {
       console.error('Error fetching dashboard data:', error);
       throw error;
     }
+  }
+};
+
+// Authentication API
+export const authAPI = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  register: (userData) => api.post('/auth/register', userData),
+  logout: (refreshToken) => api.post('/auth/logout', { refresh_token: refreshToken }),
+  refreshToken: (refreshToken) => api.post('/auth/refresh', { refresh_token: refreshToken }),
+  getProfile: () => api.get('/auth/me'),
+  updateProfile: (userData) => api.put('/auth/me', userData),
+  changePassword: (passwordData) => api.post('/auth/change-password', passwordData),
+  getAuthStatus: () => api.get('/auth/status'),
+  
+  // Admin endpoints
+  admin: {
+    getUsers: (params = {}) => api.get('/auth/admin/users', { params }),
+    createUser: (userData) => api.post('/auth/admin/users/create', userData),
+    updateUser: (userId, userData) => api.put(`/auth/admin/users/${userId}`, userData),
+    getUserSessions: (userId) => api.get(`/auth/admin/users/${userId}/sessions`),
+    revokeSession: (sessionId) => api.delete(`/auth/admin/sessions/${sessionId}`),
+    getSecurityStats: () => api.get('/auth/admin/security/stats'),
+    getLoginAttempts: (params = {}) => api.get('/auth/admin/login-attempts', { params }),
+    cleanupTokens: () => api.post('/auth/admin/cleanup-tokens')
   }
 };
 

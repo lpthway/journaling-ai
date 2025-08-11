@@ -13,12 +13,14 @@ from .schemas import (
     LoginRequest, TokenResponse, RefreshTokenRequest,
     PasswordChange, PasswordReset, PasswordResetConfirm,
     EmailVerification, AuthStatus, SecurityInfo,
-    LoginAttemptResponse, AuthConfig, ApiError
+    LoginAttemptResponse, AuthConfig, ApiError,
+    AdminUserCreate, AdminUserUpdate, SessionInfo, SecurityStats
 )
 from .service import (
     AuthService, UserExistsError, InvalidCredentialsError, 
     AccountLockedError, TokenExpiredError
 )
+from .models import UserRole
 from .dependencies import (
     get_auth_service, get_current_user, get_current_user_optional,
     get_current_verified_user, get_current_superuser,
@@ -554,6 +556,159 @@ async def cleanup_expired_tokens(
     cleaned_count = await auth_service.cleanup_expired_tokens()
     
     return {"message": f"Cleaned up {cleaned_count} expired records"}
+
+
+@admin_router.post(
+    "/users/create",
+    response_model=UserProfile,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ApiError, "description": "User creation validation failed"},
+        401: {"model": ApiError, "description": "Not authenticated"},
+        403: {"model": ApiError, "description": "Admin privileges required"},
+        409: {"model": ApiError, "description": "User already exists"}
+    }
+)
+async def admin_create_user(
+    user_data: AdminUserCreate,
+    current_superuser: CurrentSuperuser,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Create new user with role assignment (admin only).
+    """
+    try:
+        user = await auth_service.create_user_admin(
+            user_data, 
+            role=user_data.role,
+            admin_user_id=str(current_superuser.id)
+        )
+        return UserProfile.from_orm(user)
+        
+    except UserExistsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@admin_router.put(
+    "/users/{user_id}",
+    response_model=UserProfile,
+    responses={
+        401: {"model": ApiError, "description": "Not authenticated"},
+        403: {"model": ApiError, "description": "Admin privileges required"},
+        404: {"model": ApiError, "description": "User not found"}
+    }
+)
+async def admin_update_user(
+    user_id: str,
+    user_updates: AdminUserUpdate,
+    current_superuser: CurrentSuperuser,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Update user information and role (admin only).
+    """
+    updates = user_updates.dict(exclude_unset=True)
+    
+    user = await auth_service.update_user_admin(
+        user_id, 
+        updates,
+        admin_user_id=str(current_superuser.id)
+    )
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return UserProfile.from_orm(user)
+
+
+@admin_router.get(
+    "/users/{user_id}/sessions",
+    response_model=List[SessionInfo],
+    responses={
+        401: {"model": ApiError, "description": "Not authenticated"},
+        403: {"model": ApiError, "description": "Admin privileges required"}
+    }
+)
+async def admin_get_user_sessions(
+    user_id: str,
+    current_superuser: CurrentSuperuser,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Get all active sessions for a user (admin only).
+    """
+    sessions = await auth_service.get_user_sessions_admin(user_id)
+    
+    return [
+        SessionInfo(
+            id=session.id,
+            user_id=session.user_id,
+            created_ip=session.created_ip,
+            user_agent=session.user_agent,
+            expires_at=session.expires_at,
+            created_at=session.created_at
+        )
+        for session in sessions
+    ]
+
+
+@admin_router.delete(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"model": ApiError, "description": "Not authenticated"},
+        403: {"model": ApiError, "description": "Admin privileges required"},
+        404: {"model": ApiError, "description": "Session not found"}
+    }
+)
+async def admin_revoke_session(
+    session_id: str,
+    current_superuser: CurrentSuperuser,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Force logout a specific user session (admin only).
+    """
+    success = await auth_service.revoke_user_session_admin(
+        session_id, 
+        str(current_superuser.id)
+    )
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found or already revoked"
+        )
+
+
+@admin_router.get(
+    "/security/stats",
+    response_model=SecurityStats,
+    responses={
+        401: {"model": ApiError, "description": "Not authenticated"},
+        403: {"model": ApiError, "description": "Admin privileges required"}
+    }
+)
+async def admin_get_security_stats(
+    current_superuser: CurrentSuperuser,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Get security statistics and metrics (admin only).
+    """
+    stats = await auth_service.get_security_stats_admin()
+    return SecurityStats(**stats)
 
 
 # Include admin routes in main router

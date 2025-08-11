@@ -210,8 +210,8 @@ class RateLimitDependency:
         client_ip = self._get_client_ip(request)
         
         # Get recent login attempts from this IP
-        from datetime import datetime, timedelta
-        since_time = datetime.utcnow() - timedelta(minutes=self.window_minutes)
+        from datetime import datetime, timedelta, timezone
+        since_time = datetime.now(timezone.utc) - timedelta(minutes=self.window_minutes)
         
         attempts = await auth_service.get_login_attempts(
             ip_address=client_ip,

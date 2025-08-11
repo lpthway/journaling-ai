@@ -9,6 +9,7 @@ import logging
 from app.core.exceptions import ValidationException, NotFoundException, DatabaseException
 from app.models.entry import Entry, EntryCreate, EntryUpdate, EntryResponse, MoodType
 from app.services.unified_database_service import unified_db_service
+from app.auth.dependencies import CurrentUser, CurrentUserOptional
 from app.services.vector_service import vector_service
 from app.services.ai_emotion_service import ai_emotion_service
 from app.services.ai_intervention_service import ai_intervention_service  
@@ -86,7 +87,11 @@ def _convert_entry_to_response(db_entry) -> Dict[str, Any]:
 
 @router.post("/", response_model=EntryResponse)
 @timed_operation("create_entry_api", track_errors=True)
-async def create_entry(entry: EntryCreate, request: Request):
+async def create_entry(
+    entry: EntryCreate, 
+    request: Request,
+    current_user: CurrentUser
+):
     """Create a new journal entry with unified service and caching"""
     correlation_id = getattr(request.state, 'correlation_id', None)
     
@@ -167,11 +172,11 @@ async def create_entry(entry: EntryCreate, request: Request):
         final_tags = all_tags[:8]  # Limit to 8 tags
         
         # Create entry using unified service
-        async with performance_monitor.timed_operation("unified_create_entry", {"user_id": entry.user_id or "default"}):
+        async with performance_monitor.timed_operation("unified_create_entry", {"user_id": str(current_user.id)}):
             db_entry = await unified_db_service.create_entry(
                 title=entry.title,
                 content=entry.content,
-                user_id=entry.user_id or "default_user",  # Use user_id from request or default
+                user_id=str(current_user.id),  # Use authenticated user ID
                 topic_id=entry.topic_id,
                 mood=mood if mood else None,
                 sentiment_score=sentiment_score,
@@ -257,7 +262,7 @@ async def create_entry(entry: EntryCreate, request: Request):
         
         # Invalidate analytics and personality caches for fresh data
         try:
-            user_id = entry.user_id or "default_user"
+            user_id = str(current_user.id)
             await entry_analytics_processor.invalidate_analytics_cache(user_id)
             await personality_analytics_processor.invalidate_personality_cache(user_id)
             logger.debug(f"Invalidated analytics and personality caches for new entry {db_entry.id}")
@@ -276,13 +281,13 @@ async def create_entry(entry: EntryCreate, request: Request):
 @router.get("/", response_model=List[EntryResponse])
 @CachePatterns.ENTRY_READ
 async def get_entries(
+    current_user: CurrentUser,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     topic_id: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    mood_filter: Optional[str] = Query(None),
-    user_id: Optional[str] = Query(None)
+    mood_filter: Optional[str] = Query(None)
 ):
     """Get journal entries with unified service caching"""
     try:
@@ -292,7 +297,7 @@ async def get_entries(
         
         async with performance_monitor.timed_operation("unified_get_entries", {"limit": limit}):
             entries = await unified_db_service.get_entries(
-                user_id=user_id or "default_user",
+                user_id=str(current_user.id),
                 skip=skip,
                 limit=limit,
                 topic_id=topic_id,
@@ -411,7 +416,11 @@ async def get_entry(entry_id: str):
 @router.put("/{entry_id}", response_model=EntryResponse)
 @CachePatterns.INVALIDATE_ENTRIES
 @timed_operation("update_entry_api", track_errors=True)
-async def update_entry(entry_id: str, entry_update: EntryUpdate):
+async def update_entry(
+    entry_id: str, 
+    entry_update: EntryUpdate,
+    current_user: CurrentUser
+):
     """Update a journal entry with unified service and cache invalidation"""
     try:
         # Check if entry exists
@@ -487,7 +496,7 @@ async def update_entry(entry_id: str, entry_update: EntryUpdate):
         
         # Invalidate analytics and personality caches after entry update
         try:
-            user_id = str(existing_entry.user_id) if existing_entry.user_id else "default_user"
+            user_id = str(current_user.id)
             await entry_analytics_processor.invalidate_analytics_cache(user_id)
             await personality_analytics_processor.invalidate_personality_cache(user_id)
             logger.debug(f"Invalidated analytics and personality caches for updated entry {entry_id}")
@@ -563,12 +572,15 @@ async def toggle_favorite(entry_id: str):
 
 @router.get("/analytics/mood")
 @cached(ttl=1800, key_prefix="mood_analytics", monitor_performance=True)
-async def get_mood_analytics(days: int = Query(30, ge=7, le=365), user_id: str = Query(..., description="User ID for analytics")):
+async def get_mood_analytics(
+    current_user: CurrentUser,
+    days: int = Query(30, ge=7, le=365)
+):
     """Get mood analytics with unified service caching"""
     try:
         async with performance_monitor.timed_operation("mood_analytics", {"days": days}):
             analytics = await unified_db_service.get_mood_statistics(
-                user_id=user_id,
+                user_id=str(current_user.id),
                 days=days,
                 use_cache=True
             )
@@ -581,12 +593,15 @@ async def get_mood_analytics(days: int = Query(30, ge=7, le=365), user_id: str =
 
 @router.get("/analytics/writing")
 @cached(ttl=1800, key_prefix="writing_analytics", monitor_performance=True) 
-async def get_writing_analytics(days: int = Query(30, ge=7, le=365), user_id: str = Query(..., description="User ID for analytics")):
+async def get_writing_analytics(
+    current_user: CurrentUser,
+    days: int = Query(30, ge=7, le=365)
+):
     """Get writing statistics with unified service caching"""
     try:
         async with performance_monitor.timed_operation("writing_analytics", {"days": days}):
             analytics = await unified_db_service.get_writing_statistics(
-                user_id=user_id,
+                user_id=str(current_user.id),
                 days=days,
                 use_cache=True
             )
