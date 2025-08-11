@@ -250,7 +250,7 @@ export const sessionAPI = {
   },
   
   // Enhanced chat modes (replaces session types)
-  getAvailableTypes: () => api.get('/chat/modes'),
+  getAvailableTypes: () => api.get('/sessions/types/available'),
 };
 
 // Health check and performance

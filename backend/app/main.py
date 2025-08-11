@@ -262,6 +262,31 @@ async def journaling_ai_exception_handler(request: Request, exc: JournalingAIExc
         content=exc.to_dict()
     )
 
+# Pydantic validation error handler
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors with detailed information."""
+    logger.error(f"Validation error on {request.method} {request.url}: {exc}")
+    logger.error(f"Validation error details: {exc.errors()}")
+    
+    # Log the actual request body to see what was sent
+    try:
+        request_body = await request.body()
+        logger.error(f"Request body that failed validation: {request_body.decode()}")
+    except:
+        logger.error("Could not read request body")
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Validation failed",
+            "details": exc.errors(),
+            "body": exc.body if hasattr(exc, 'body') else None
+        }
+    )
+
 # Global exception handler for unexpected errors
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

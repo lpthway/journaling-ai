@@ -32,54 +32,54 @@ const SessionTypeSelector = ({ onSelectType, onCancel, isLoading = false }) => {
   const loadSessionTypes = async () => {
     try {
       const response = await sessionAPI.getAvailableTypes();
-      // Enhanced chat API returns {available_modes: {...}} format
-      const modes = response.data.available_modes || {};
-      const typesArray = Object.entries(modes).map(([key, value]) => ({
-        type: key,
-        name: value.name,
-        description: value.description,
-        icon: getIconForMode(key),
-        tags: value.suitable_for || []
+      // Session API returns {session_types: [...]} format
+      const sessionTypesData = response.data.session_types || [];
+      const typesArray = sessionTypesData.map((typeData) => ({
+        type: typeData.type,
+        name: typeData.name,
+        description: typeData.description,
+        icon: typeData.icon,
+        tags: typeData.tags || []
       }));
       setSessionTypes(typesArray);
     } catch (error) {
       console.error('Error loading session types:', error);
-      // Fallback session types (using enhanced chat modes)
+      // Fallback session types (current valid types)
       setSessionTypes([
         {
-          type: 'supportive_listening',
-          name: 'Supportive Listening',
-          description: 'Active listening with validation and empathy',
+          type: 'reflection_buddy',
+          name: 'Reflection Buddy',
+          description: 'Chat with a curious friend who asks thoughtful questions',
           icon: '💭',
-          tags: ['emotional distress', 'validation', 'empathy']
+          tags: ['casual', 'friendly', 'exploration']
         },
         {
-          type: 'therapeutic_guidance',
-          name: 'Therapeutic Guidance',
-          description: 'Structured therapeutic conversation with professional techniques',
+          type: 'inner_voice',
+          name: 'Inner Voice Assistant',
+          description: 'Explore different perspectives on situations and decisions',
           icon: '🧠',
-          tags: ['problem-solving', 'skill building', 'guidance']
+          tags: ['perspective', 'wisdom', 'insight']
         },
         {
-          type: 'cognitive_reframing',
-          name: 'Cognitive Reframing',
-          description: 'Focus on identifying and challenging negative thought patterns',
-          icon: '🔄',
-          tags: ['negative thinking', 'perspective', 'reframing']
+          type: 'growth_challenge',
+          name: 'Growth Challenge',
+          description: 'Take on challenges designed to promote personal growth',
+          icon: '🌱',
+          tags: ['growth', 'challenge', 'development']
         },
         {
-          type: 'mindfulness_coaching',
-          name: 'Mindfulness Coaching',
-          description: 'Present-moment awareness and mindfulness practices',
-          icon: '🧘',
-          tags: ['anxiety', 'stress', 'mindfulness']
+          type: 'pattern_detective',
+          name: 'Pattern Detective',
+          description: 'Discover patterns in your thoughts and behaviors',
+          icon: '🔍',
+          tags: ['patterns', 'analysis', 'insights']
         },
         {
-          type: 'goal_setting',
-          name: 'Goal Setting',
-          description: 'Collaborative goal setting and action planning',
-          icon: '🎯',
-          tags: ['personal growth', 'planning', 'motivation']
+          type: 'free_chat',
+          name: 'Free Chat',
+          description: 'Open conversation about anything on your mind',
+          icon: '💬',
+          tags: ['open', 'flexible', 'general']
         }
       ]);
     } finally {

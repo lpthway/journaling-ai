@@ -17,13 +17,11 @@ class ConversationService:
         """Generate an opening message for a new conversation session"""
         try:
             session_type_prompts = {
-                SessionType.COACHING: "Hello! I'm here to help you with personal growth and coaching. What would you like to explore today?",
-                SessionType.THERAPY: "Hi there. I'm here to provide a supportive space for you to talk through whatever is on your mind. How are you feeling today?",
-                SessionType.MENTORSHIP: "Welcome! I'm excited to help guide you on your journey. What area would you like to focus on or learn about?",
-                SessionType.CASUAL: "Hey! I'm here for a friendly chat. What's on your mind today?",
-                SessionType.REFLECTION: "Hi! I'm here to help you reflect on your thoughts and experiences. What would you like to think through together?",
-                SessionType.GOAL_SETTING: "Hello! I'm here to help you set and work towards your goals. What would you like to achieve?",
-                SessionType.CREATIVE: "Hi there! I'm here to explore creative ideas with you. What are you curious about or want to create?",
+                SessionType.REFLECTION_BUDDY: "Hi there! I'm excited to chat with you. What's on your mind today?",
+                SessionType.INNER_VOICE: "Let's explore what's happening in your inner world. What situation or decision would you like to examine together?",
+                SessionType.GROWTH_CHALLENGE: "Ready for some growth? I'd love to understand what areas you're looking to develop, so I can suggest some meaningful challenges.",
+                SessionType.PATTERN_DETECTIVE: "Let's put on our detective hats! I'm here to help you spot patterns in your thoughts, feelings, or behaviors. What area of your life would you like to investigate?",
+                SessionType.FREE_CHAT: "Hi! I'm here to chat about whatever's on your mind. What would you like to talk about?",
             }
             
             base_message = session_type_prompts.get(
@@ -60,7 +58,7 @@ Recent conversation context: {len(conversation_history)} messages exchanged
 
 Previous messages:
 """ + "\n".join([
-                f"- {msg.get('role', 'unknown')}: {msg.get('content', '')[:100]}..."
+                f"- {msg.role.value}: {msg.content[:100]}..."
                 for msg in conversation_history[-3:] if conversation_history
             ])
             
@@ -91,7 +89,7 @@ Previous messages:
             
             # Build conversation summary
             conversation_text = "\n".join([
-                f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+                f"{msg.role.value}: {msg.content}"
                 for msg in recent_messages
             ])
             
@@ -146,40 +144,30 @@ Format as a simple list, one question per line.
     def _get_default_follow_ups(self, session_type: SessionType) -> List[str]:
         """Get default follow-up questions based on session type"""
         default_suggestions = {
-            SessionType.COACHING: [
-                "What specific goals would you like to work towards?",
-                "How do you typically handle challenging situations?",
-                "What strengths do you feel you bring to this area?"
-            ],
-            SessionType.THERAPY: [
-                "How are you feeling about what we've discussed?",
-                "Is there anything else on your mind you'd like to explore?",
-                "What support do you feel you need right now?"
-            ],
-            SessionType.MENTORSHIP: [
-                "What skills would you like to develop further?",
-                "Are there any specific challenges you're facing?",
-                "What does success look like to you in this area?"
-            ],
-            SessionType.CASUAL: [
-                "What's been the highlight of your day?",
-                "Is there anything interesting you've been thinking about?",
-                "How have you been spending your free time lately?"
-            ],
-            SessionType.REFLECTION: [
-                "What insights have you gained from this reflection?",
-                "How does this connect to your broader life experience?",
+            SessionType.REFLECTION_BUDDY: [
+                "What's been the most interesting thing you've thought about lately?",
+                "How do you feel about what we've been discussing?",
                 "What would you like to explore more deeply?"
             ],
-            SessionType.GOAL_SETTING: [
-                "What steps could you take to move closer to this goal?",
-                "What obstacles might you encounter, and how could you overcome them?",
-                "How will you know when you've achieved what you're aiming for?"
+            SessionType.INNER_VOICE: [
+                "What different perspectives could you consider here?",
+                "How does this situation connect to your values?",
+                "What would your wisest self advise in this moment?"
             ],
-            SessionType.CREATIVE: [
-                "What creative ideas are you most excited about?",
-                "How could you build on this concept further?",
-                "What inspires your creative process?"
+            SessionType.GROWTH_CHALLENGE: [
+                "What specific skills would you like to develop?",
+                "What small step could you take today toward this goal?",
+                "How do you typically overcome obstacles when they arise?"
+            ],
+            SessionType.PATTERN_DETECTIVE: [
+                "What patterns are you noticing in your thoughts or behavior?",
+                "How does this pattern serve you, or hold you back?",
+                "When did you first notice this pattern emerging?"
+            ],
+            SessionType.FREE_CHAT: [
+                "What's been on your mind lately?",
+                "Is there anything you'd like to talk through?",
+                "What's been the highlight of your day so far?"
             ]
         }
         

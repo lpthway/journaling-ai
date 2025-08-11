@@ -65,6 +65,9 @@ async def auto_tag_conversation(session_id: str):
 async def create_session(session_data: SessionCreate):
     """Create a new conversation session"""
     try:
+        logger.info(f"Creating session with data: {session_data}")
+        logger.info(f"Session type: {session_data.session_type}")
+        
         # Create the session
         session = await session_service.create_session(session_data)
         
@@ -90,6 +93,8 @@ async def create_session(session_data: SessionCreate):
         
     except Exception as e:
         logger.error(f"Error creating session: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Failed to create session")
 
 @router.get("/", response_model=List[SessionResponse])
@@ -264,8 +269,8 @@ async def send_message(session_id: str, message_data: MessageCreate):
         
         # Generate AI response - FIXED: Only expect string response
         ai_response_text = await conversation_service.generate_response(
-            session.session_type,
             message_data.content,
+            session.session_type,
             conversation_history,  # Now uses recent messages instead of full history
             session.metadata
         )
@@ -373,8 +378,8 @@ async def get_follow_up_suggestions(session_id: str):
         # Generate suggestions with enhanced error handling
         try:
             suggestions = await conversation_service.suggest_follow_up_questions(
-                session.session_type,
-                recent_messages
+                recent_messages,
+                session.session_type
             )
             
             logger.info(f"Generated {len(suggestions)} suggestions")
