@@ -415,7 +415,7 @@ class UnifiedDatabaseService:
                 
                 # Cache results using standardized TTL
                 if use_cache:
-                    await simple_redis_service.set(cache_key, stats, ttl=CacheTTL.ANALYTICS_DEFAULT)
+                    await simple_redis_service.set(cache_key, stats, ttl=CacheTTL.SHORT)  # 5 minutes for fresher analytics
                 
                 return stats
                 
@@ -448,7 +448,7 @@ class UnifiedDatabaseService:
                 
                 # Cache results using standardized TTL
                 if use_cache:
-                    await simple_redis_service.set(cache_key, stats, ttl=CacheTTL.MEDIUM_SHORT)  # 15 minutes
+                    await simple_redis_service.set(cache_key, stats, ttl=CacheTTL.SHORT)  # 5 minutes for fresher analytics
                 
                 return stats
                 
