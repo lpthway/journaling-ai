@@ -102,6 +102,15 @@ const PersonalityProfile = ({ userId = DEFAULT_USER_ID }) => {
   };
 
   const formatPercentage = (value) => Math.round(value * 100);
+  
+  // Convert neuroticism to emotional stability for display
+  const getDisplayValue = (dimension, value) => {
+    if (dimension === 'neuroticism') {
+      // High neuroticism = low emotional stability, so invert
+      return 1 - value;
+    }
+    return value;
+  };
 
   if (loading) {
     return (
@@ -171,8 +180,9 @@ const PersonalityProfile = ({ userId = DEFAULT_USER_ID }) => {
         <h4 className="text-md font-medium text-gray-900 mb-4">Big Five Personality Dimensions</h4>
         <div className="space-y-3">
           {Object.entries(profile.dimensions).map(([dimension, value]) => {
+            const displayValue = getDisplayValue(dimension, value);
             const Icon = getDimensionIcon(dimension);
-            const colorClass = getDimensionColor(value);
+            const colorClass = getDimensionColor(displayValue);
             
             return (
               <div key={dimension} className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
@@ -185,20 +195,20 @@ const PersonalityProfile = ({ userId = DEFAULT_USER_ID }) => {
                       {getDimensionLabel(dimension)}
                     </p>
                     <span className="text-sm font-semibold text-gray-700">
-                      {formatPercentage(value)}%
+                      {formatPercentage(displayValue)}%
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
                     <div 
                       className={`h-1.5 rounded-full transition-all duration-500 ${
-                        value >= 0.7 ? 'bg-green-500' : 
-                        value >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'
+                        displayValue >= 0.7 ? 'bg-green-500' : 
+                        displayValue >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'
                       }`}
-                      style={{ width: `${formatPercentage(value)}%` }}
+                      style={{ width: `${formatPercentage(displayValue)}%` }}
                     />
                   </div>
                   <p className="text-xs text-gray-600">
-                    {getDimensionDescription(dimension, value)}
+                    {getDimensionDescription(dimension, displayValue)}
                   </p>
                 </div>
               </div>
