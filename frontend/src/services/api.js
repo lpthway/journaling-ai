@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { DEFAULT_USER_ID } from '../config/user';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
@@ -34,8 +35,8 @@ api.interceptors.response.use(
 // Entry API
 export const entryAPI = {
   create: (entryData) => api.post('/entries/', entryData),
-  getAll: (params = {}) => api.get('/entries/', { params }),
-  getById: (id) => api.get(`/entries/${id}`),
+  getAll: (params = {}) => api.get('/entries/', { params: { ...params, _t: Date.now() } }),
+  getById: (id) => api.get(`/entries/${id}?_t=${Date.now()}`),
   getByTopic: (topicId, params = {}) => api.get(`/topics/${topicId}/entries`, { params }),
   update: (id, entryData) => api.put(`/entries/${id}`, entryData),
   delete: (id) => api.delete(`/entries/${id}`),
@@ -92,7 +93,7 @@ export const sessionAPI = {
   createSession: (sessionData) => {
     // Convert frontend session data to enhanced chat format
     const enhancedData = {
-      user_id: sessionData.user_id || '1e05fb66-160a-4305-b84a-805c2f0c6910',
+      user_id: sessionData.user_id || DEFAULT_USER_ID,
       conversation_mode: sessionData.session_type || 'supportive_listening',
       initial_context: {
         title: sessionData.title || 'Enhanced Chat Session',
@@ -145,6 +146,17 @@ export const sessionAPI = {
       return Promise.resolve({ data: [] });
     }
   },
+
+  // Clear all chat data (for cleanup)
+  clearAllSessions: () => {
+    try {
+      localStorage.removeItem('chatSessions');
+      return Promise.resolve({ success: true });
+    } catch (error) {
+      console.error('Error clearing chat sessions:', error);
+      return Promise.resolve({ success: false });
+    }
+  },
   
   updateSession: (sessionId, updateData) => {
     // Enhanced chat handles session updates differently
@@ -175,7 +187,7 @@ export const sessionAPI = {
   // Enhanced messages
   sendMessage: (sessionId, messageData) => {
     const enhancedMessageData = {
-      user_id: '1e05fb66-160a-4305-b84a-805c2f0c6910',
+      user_id: DEFAULT_USER_ID,
       session_id: sessionId,
       message: messageData.content,
       conversation_mode: 'supportive_listening',
@@ -252,17 +264,17 @@ export const performanceAPI = {
 // Advanced AI API
 export const advancedAI = {
   // Personality Analysis
-  getPersonalityProfile: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910') => 
+  getPersonalityProfile: (userId = DEFAULT_USER_ID) => 
     api.post('/ai/advanced/analysis/personality', {
       user_id: userId,
       include_detailed_traits: true
     }),
   
-  getPersonalityDimensions: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910') => 
+  getPersonalityDimensions: (userId = DEFAULT_USER_ID) => 
     api.get('/ai/advanced/personality/dimensions', { params: { user_id: userId } }),
   
   // Pattern Analysis & Insights
-  getComprehensiveAnalysis: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910', options = {}) =>
+  getComprehensiveAnalysis: (userId = DEFAULT_USER_ID, options = {}) =>
     api.post('/ai/advanced/analysis/comprehensive', {
       user_id: userId,
       timeframe: options.timeframe || 'monthly',
@@ -271,7 +283,7 @@ export const advancedAI = {
       max_entries: options.max_entries || 100
     }),
   
-  getTemporalInsights: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910', options = {}) => {
+  getTemporalInsights: (userId = DEFAULT_USER_ID, options = {}) => {
     const params = { user_id: userId };
     if (options.timeframe) params.timeframe = options.timeframe;
     if (options.max_entries) params.max_entries = options.max_entries;
@@ -280,7 +292,7 @@ export const advancedAI = {
     return api.get('/ai/advanced/insights/temporal', { params });
   },
   
-  getPredictiveAnalysis: (userId = '1e05fb66-160a-4305-b84a-805c2f0c6910', options = {}) =>
+  getPredictiveAnalysis: (userId = DEFAULT_USER_ID, options = {}) =>
     api.post('/ai/advanced/analysis/predictive', {
       user_id: userId,
       prediction_horizon: options.prediction_horizon || 7,

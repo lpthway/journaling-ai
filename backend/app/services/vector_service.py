@@ -26,6 +26,15 @@ class VectorService:
         )
         logger.info("🔧 Vector service initialized (embedding model will load on demand)")
         
+        # Force reload of embedding model due to dimension mismatch fix
+        self._force_model_reload()
+    
+    def _force_model_reload(self):
+        """Force reload of embedding model"""
+        self.embedding_model = None
+        self.model_loaded = False
+        logger.info("🔄 Forced model reload to fix dimension mismatch")
+        
     async def _ensure_model_loaded(self):
         """Load embedding model on first use"""
         if self.model_loaded:
@@ -47,8 +56,12 @@ class VectorService:
             
             # Move to GPU if available and recommended
             if use_gpu and torch.cuda.is_available():
-                self.embedding_model = self.embedding_model.to('cuda')
-                logger.info("🚀 Embedding model moved to GPU")
+                try:
+                    self.embedding_model = self.embedding_model.to('cuda')
+                    logger.info("🚀 Embedding model moved to GPU")
+                except Exception as cuda_error:
+                    logger.warning(f"Failed to move model to GPU: {cuda_error}")
+                    logger.info("🔄 Keeping model on CPU")
             
             self.model_loaded = True
             logger.info("✅ Loaded embedding model on demand")
@@ -171,13 +184,37 @@ class VectorService:
             clean_metadata = self._prepare_metadata(metadata)
             
             # Add to collection
-            self.collection.add(
-                ids=[entry_id],
-                embeddings=[embedding],
-                documents=[content],
-                metadatas=[clean_metadata]
-            )
-            logger.info(f"Added entry {entry_id} to vector database")
+            try:
+                self.collection.add(
+                    ids=[entry_id],
+                    embeddings=[embedding],
+                    documents=[content],
+                    metadatas=[clean_metadata]
+                )
+                logger.info(f"Added entry {entry_id} to vector database")
+            except Exception as dimension_error:
+                if "dimension" in str(dimension_error):
+                    logger.warning(f"Dimension mismatch detected: {dimension_error}")
+                    logger.info("🔄 Recreating collection with correct dimensions...")
+                    
+                    # Delete and recreate collection
+                    self.client.delete_collection("journal_entries")
+                    self.collection = self.client.get_or_create_collection(
+                        name="journal_entries",
+                        metadata={"hnsw:space": "cosine"}
+                    )
+                    
+                    # Try again with new collection
+                    self.collection.add(
+                        ids=[entry_id],
+                        embeddings=[embedding],
+                        documents=[content],
+                        metadatas=[clean_metadata]
+                    )
+                    logger.info(f"✅ Added entry {entry_id} to recreated vector database")
+                else:
+                    raise dimension_error
+                    
         except Exception as e:
             logger.error(f"Error adding entry to vector database: {e}")
             # Don't raise the exception to prevent breaking entry creation

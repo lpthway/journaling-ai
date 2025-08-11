@@ -442,6 +442,48 @@ async def check_crisis_indicators(
 
 # ==================== CONVERSATION HISTORY ENDPOINTS ====================
 
+@router.get("/conversations")
+async def get_user_conversations(
+    user_id: str,
+    limit: int = 50,
+    include_metadata: bool = True
+) -> Dict[str, Any]:
+    """
+    Get all conversations for a user
+    
+    Returns list of conversation sessions with metadata
+    """
+    try:
+        logger.info(f"📜 Getting conversations for user {user_id}")
+        
+        # Get conversation sessions from enhanced chat service
+        conversations = await enhanced_chat_service.get_user_conversations(user_id, limit)
+        
+        # Format for frontend compatibility
+        formatted_conversations = []
+        for conv in conversations:
+            formatted_conversations.append({
+                "id": conv["session_id"],
+                "session_type": conv.get("session_type", "free_chat"),
+                "title": conv.get("title", f"Chat Session {conv['session_id'][:8]}"),
+                "status": conv.get("status", "active"),
+                "message_count": conv.get("message_count", 0),
+                "created_at": conv.get("started_at"),
+                "last_activity": conv.get("last_activity"),
+                "recent_messages": conv.get("recent_messages", [])
+            })
+        
+        return {
+            "conversations": formatted_conversations,
+            "total_count": len(formatted_conversations),
+            "user_id": user_id,
+            "retrieved_at": datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting user conversations: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conversations: {str(e)}")
+
 @router.get("/conversation/{session_id}/history")
 async def get_conversation_history(
     session_id: str,

@@ -38,8 +38,7 @@ from app.api import health
 from app.api import performance_optimized
 # Advanced AI API routers
 from app.api import advanced_ai, enhanced_chat
-# Temporarily disabled sessions API due to missing legacy dependencies
-# from app.api import sessions
+from app.api import sessions
 
 # Authentication router
 from app.auth import auth_router
@@ -321,8 +320,7 @@ app.include_router(auth_router, prefix=settings.API_V1_STR, tags=["authenticatio
 app.include_router(insights_v2.router, prefix=f"{settings.API_V1_STR}/insights", tags=["insights"])
 app.include_router(entries.router, prefix=f"{settings.API_V1_STR}/entries", tags=["entries"])
 app.include_router(topics.router, prefix=f"{settings.API_V1_STR}/topics", tags=["topics"])
-# Temporarily disabled sessions API due to missing legacy dependencies
-# app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
+app.include_router(sessions.router, prefix=f"{settings.API_V1_STR}/sessions", tags=["sessions"])
 app.include_router(psychology.router, prefix=f"{settings.API_V1_STR}/psychology", tags=["psychology"])
 app.include_router(circuit_breaker.router, tags=["circuit-breakers"])
 

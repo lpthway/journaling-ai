@@ -11,6 +11,7 @@ import SentimentTrendsChart from '../components/Analytics/SentimentTrendsChart';
 import WritingActivityHeatmap from '../components/Analytics/WritingActivityHeatmap';
 import PersonalityProfile from '../components/Dashboard/PersonalityProfile';
 import { analyticsApi } from '../services/analyticsApi';
+import { DEFAULT_USER_ID } from '../config/user';
 
 const Analytics = () => {
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -67,7 +68,7 @@ const Analytics = () => {
 
         {/* Personality Profile - Full Width */}
         <div className="mb-8">
-          <PersonalityProfile userId="1e05fb66-160a-4305-b84a-805c2f0c6910" />
+          <PersonalityProfile userId={DEFAULT_USER_ID} />
         </div>
 
         {/* Additional Analytics Cards - Populated with real data */}

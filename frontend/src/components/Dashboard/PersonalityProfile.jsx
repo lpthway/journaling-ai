@@ -10,9 +10,10 @@ import {
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { advancedAI } from '../../services/api';
+import { DEFAULT_USER_ID } from '../../config/user';
 import LoadingSpinner from '../Common/LoadingSpinner';
 
-const PersonalityProfile = ({ userId = '1e05fb66-160a-4305-b84a-805c2f0c6910' }) => {
+const PersonalityProfile = ({ userId = DEFAULT_USER_ID }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

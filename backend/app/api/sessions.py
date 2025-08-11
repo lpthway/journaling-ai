@@ -99,43 +99,51 @@ async def get_sessions(
 ):
     """Get conversation sessions with optimized bulk loading"""
     try:
-        # Use optimized bulk loading to prevent N+1 queries
-        session_data_list = await session_service.get_sessions_with_recent_messages(
-            user_id="default",  # This would come from auth context
-            limit=limit,
-            status=status.value if status else None,
-            message_limit=3
-        )
+        # Get sessions directly from repository
+        from app.core.database import database
+        from app.repositories.session_repository import SessionRepository
+        
+        async with database.session_factory() as db:
+            session_repo = SessionRepository(db)
+            sessions = await session_repo.get_user_sessions(
+                user_id="00000000-0000-0000-0000-000000000001",  # Use correct user ID from database
+                limit=limit
+            )
         
         session_responses = []
-        for session_data in session_data_list:
-            session_info = session_data['session']
-            recent_messages = session_data['recent_messages']
+        for session in sessions:
+            # Get recent messages for this session
+            recent_messages = await session_repo.get_recent_messages(session.id, count=3)
             
-            session_responses.append(SessionResponse(
-                id=session_info['id'],
-                session_type=session_info['session_type'],
-                title=session_info['title'],
-                description=session_info.get('description'),
-                status=session_info['status'],
-                created_at=session_info['created_at'],
-                updated_at=session_info['updated_at'],
-                last_activity=session_info.get('last_activity'),
-                message_count=session_info.get('message_count', 0),
-                tags=session_info.get('tags', []),
-                metadata=session_info.get('session_metadata', {}),
-                recent_messages=[
-                    MessageResponse(
-                        id=msg['id'],
-                        session_id=session_info['id'],
-                        content=msg['content'],
-                        role=msg['role'],
-                        timestamp=msg['timestamp'],
-                        metadata=msg.get('metadata', {})
-                    )
-                    for msg in recent_messages
-                ]
-            ))
+            try:
+                session_response = SessionResponse(
+                    id=str(session.id),
+                    session_type=SessionType(session.session_type),
+                    title=session.title or f"Chat Session {str(session.id)[:8]}",
+                    description=session.description,
+                    status=SessionStatus(session.status),
+                    created_at=session.created_at,
+                    updated_at=session.updated_at,
+                    last_activity=session.last_activity,
+                    message_count=session.message_count or 0,
+                    tags=session.tags or [],
+                    metadata=session.session_metadata or {},
+                    recent_messages=[
+                        MessageResponse(
+                            id=str(msg.id),
+                            session_id=str(session.id),
+                            content=msg.content or "",
+                            role=MessageRole(msg.role),
+                            timestamp=msg.created_at,
+                            metadata=msg.message_metadata or {}
+                        )
+                        for msg in recent_messages if msg.content  # Only include messages with content
+                    ]
+                )
+                session_responses.append(session_response)
+            except Exception as validation_error:
+                logger.warning(f"Skipping session {session.id} due to validation error: {validation_error}")
+                continue
         
         return session_responses
         
@@ -145,25 +153,58 @@ async def get_sessions(
 
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: str):
-    """Get a specific session with its messages"""
+    """Get a specific session with recent messages"""
     try:
-        session = await session_service.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+        from app.core.database import database
+        from app.repositories.session_repository import SessionRepository
         
-        # Get all messages for this session
-        messages = await session_service.get_session_messages(session_id)
-        
-        return SessionResponse(
-            **session.model_dump(),
-            recent_messages=[MessageResponse(**msg.model_dump()) for msg in messages]
-        )
+        async with database.session_factory() as db:
+            session_repo = SessionRepository(db)
+            
+            # Get session
+            from sqlalchemy import select
+            from app.models.enhanced_models import ChatSession
+            session_query = select(ChatSession).where(ChatSession.id == session_id)
+            session_result = await db.execute(session_query)
+            session = session_result.scalar_one_or_none()
+            
+            if not session:
+                raise HTTPException(status_code=404, detail="Session not found")
+            
+            # Get recent messages
+            recent_messages = await session_repo.get_recent_messages(session.id, count=50)  # Load more messages for chat view
+            
+            return SessionResponse(
+                id=str(session.id),
+                session_type=SessionType(session.session_type),
+                title=session.title or f"Chat Session {str(session.id)[:8]}",
+                description=session.description,
+                status=SessionStatus(session.status),
+                created_at=session.created_at,
+                updated_at=session.updated_at,
+                last_activity=session.last_activity,
+                message_count=session.message_count or 0,
+                tags=session.tags or [],
+                metadata=session.session_metadata or {},
+                recent_messages=[
+                    MessageResponse(
+                        id=str(msg.id),
+                        session_id=str(session.id),
+                        content=msg.content or "",
+                        role=MessageRole(msg.role),
+                        timestamp=msg.created_at,
+                        metadata=msg.message_metadata or {}
+                    )
+                    for msg in recent_messages if msg.content
+                ]
+            )
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve session")
+
 
 @router.put("/{session_id}", response_model=SessionResponse)
 async def update_session(session_id: str, session_update: SessionUpdate):
@@ -268,14 +309,37 @@ async def get_session_messages(
 ):
     """Get messages for a session"""
     try:
-        # Check if session exists
-        session = await session_service.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+        # Get messages directly from repository
+        from app.core.database import database
+        from app.repositories.session_repository import SessionRepository
         
-        messages = await session_service.get_session_messages(session_id, limit)
-        
-        return [MessageResponse(**msg.model_dump()) for msg in messages]
+        async with database.session_factory() as db:
+            session_repo = SessionRepository(db)
+            
+            # Check if session exists
+            from sqlalchemy import select
+            from app.models.enhanced_models import ChatSession
+            session_query = select(ChatSession).where(ChatSession.id == session_id)
+            session_result = await db.execute(session_query)
+            session = session_result.scalar_one_or_none()
+            
+            if not session:
+                raise HTTPException(status_code=404, detail="Session not found")
+            
+            # Get messages for this session
+            messages = await session_repo.get_messages(session_id, limit=limit)
+            
+            return [
+                MessageResponse(
+                    id=str(msg.id),
+                    session_id=str(msg.session_id),
+                    content=msg.content or "",
+                    role=MessageRole(msg.role),
+                    timestamp=msg.created_at,
+                    metadata=msg.message_metadata or {}
+                )
+                for msg in messages if msg.content
+            ]
         
     except HTTPException:
         raise

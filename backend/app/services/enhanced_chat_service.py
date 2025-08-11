@@ -29,6 +29,10 @@ from app.services.ai_intervention_service import ai_intervention_service
 from app.services.advanced_ai_service import advanced_ai_service
 from app.services.llm_service import llm_service
 from app.core.service_interfaces import ServiceRegistry
+from app.repositories.session_repository import SessionRepository
+from app.models.enhanced_models import ChatSession
+from app.core.database import get_db_session
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -349,6 +353,9 @@ class EnhancedChatService:
                 },
                 timestamp=datetime.utcnow()
             )
+            
+            # Persist to database
+            await self._persist_conversation_to_db(user_id, session_id, message, response, conversation_mode)
             
             # Update statistics
             self.chat_stats["messages_processed"] += 1
@@ -1099,7 +1106,116 @@ Response:"""
             
         except Exception as e:
             logger.error(f"❌ Error ending conversation: {e}")
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "message": str(e)}
+    
+    async def get_user_conversations(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get all conversations for a user"""
+        try:
+            # Query the database for chat sessions
+            from app.core.database import database
+            if not database.session_factory:
+                logger.error("Database not initialized")
+                return []
+            
+            async with database.session_factory() as db:
+                session_repo = SessionRepository(db)
+                sessions = await session_repo.get_user_sessions(user_id, limit=limit)
+                
+                conversations = []
+                for session in sessions:
+                    conversations.append({
+                        "session_id": session.id,
+                        "session_type": session.session_type,
+                        "title": session.title or f"Chat Session {session.id[:8]}",
+                        "status": session.status,
+                        "message_count": session.message_count,
+                        "started_at": session.created_at,
+                        "last_activity": session.last_activity,
+                        "recent_messages": []  # Could be populated from messages if needed
+                    })
+                
+                logger.info(f"📜 Retrieved {len(conversations)} conversations for user {user_id}")
+                return conversations
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting user conversations: {e}")
+            return []
+    
+    async def _persist_conversation_to_db(self, user_id: str, session_id: str, user_message: str, 
+                                         ai_response: EnhancedChatResponse, conversation_mode: ConversationMode):
+        """Persist conversation to database"""
+        try:
+            from app.core.database import database
+            if not database.session_factory:
+                logger.error("Database not initialized")
+                return
+            
+            async with database.session_factory() as db:
+                session_repo = SessionRepository(db)
+                
+                # Check if session exists in database directly
+                session_query = select(ChatSession).where(ChatSession.id == session_id)
+                result = await db.execute(session_query)
+                existing_session = result.scalar_one_or_none()
+                
+                if existing_session:
+                    logger.info(f"📋 Found existing session: {session_id}")
+                else:
+                    logger.info(f"📝 Creating new session: {session_id}")
+                    # Session doesn't exist, create it
+                    session_type = self._map_conversation_mode_to_session_type(conversation_mode)
+                    new_session = ChatSession(
+                        id=session_id,
+                        user_id=user_id,
+                        session_type=session_type,
+                        title=f"Chat Session {session_id[:8]}",
+                        status='active',
+                        message_count=0,
+                        last_activity=datetime.utcnow()
+                    )
+                    db.add(new_session)
+                    await db.flush()  # Ensure session is created before adding messages
+                    logger.info(f"✅ Created new chat session: {session_id}")
+                
+                # Add user message
+                await session_repo.add_message(
+                    session_id=session_id,
+                    content=user_message,
+                    role='user'
+                )
+                
+                # Add AI response
+                await session_repo.add_message(
+                    session_id=session_id,
+                    content=ai_response.content,
+                    role='assistant'
+                )
+                
+                await db.commit()
+                logger.info(f"💾 Persisted conversation to database: session {session_id}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error persisting conversation to database: {e}")
+            # Rollback on error
+            try:
+                if 'db' in locals():
+                    await db.rollback()
+            except:
+                pass
+    
+    def _map_conversation_mode_to_session_type(self, mode: ConversationMode) -> str:
+        """Map conversation mode to session type"""
+        mapping = {
+            ConversationMode.SUPPORTIVE_LISTENING: "free_chat",
+            ConversationMode.THERAPEUTIC_GUIDANCE: "reflection_buddy", 
+            ConversationMode.COGNITIVE_REFRAMING: "pattern_detective",
+            ConversationMode.MINDFULNESS_COACHING: "inner_voice",
+            ConversationMode.GOAL_SETTING: "growth_challenge",
+            ConversationMode.CRISIS_SUPPORT: "free_chat",
+            ConversationMode.REFLECTION_FACILITATION: "reflection_buddy",
+            ConversationMode.EMOTIONAL_PROCESSING: "reflection_buddy"
+        }
+        return mapping.get(mode, "free_chat")
 
     def _summarize_emotional_journey(self, context: ConversationContext) -> Dict[str, Any]:
         """Summarize the emotional journey of the conversation"""

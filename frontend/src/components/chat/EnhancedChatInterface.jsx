@@ -14,7 +14,7 @@ import ChatInput from './ChatInput';
 import SessionTypeSelector from './SessionTypeSelector';
 import ContextAwareSuggestions from './ContextAwareSuggestions';
 import LoadingSpinner from '../Common/LoadingSpinner';
-import { sessionAPI, entryAPI } from '../../services/api';
+import { sessionAPI, entryAPI } from '../../services/api.ts';
 
 const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
   const [session, setSession] = useState(null);
@@ -82,7 +82,10 @@ const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
       const sessionData = response.data;
       
       setSession(sessionData);
-      const validMessages = filterValidMessages(sessionData.recent_messages || []);
+      
+      // Load full message history for the session, not just recent_messages
+      const messagesResponse = await sessionAPI.getMessages(id);
+      const validMessages = filterValidMessages(messagesResponse.data || []);
       setMessages(validMessages);
       setShowTypeSelector(false);
       

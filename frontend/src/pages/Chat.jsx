@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 import EnhancedChatInterface from '../components/chat/EnhancedChatInterface';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
-import { sessionAPI } from '../services/api';
+import { sessionAPI } from '../services/api.ts';
 import { formatDate, formatTime } from '../utils/helpers';
 
 const Chat = () => {
@@ -56,6 +56,23 @@ const Chat = () => {
   const handleNewSession = () => {
     navigate('/chat');
     setCurrentSession(null);
+  };
+
+  const handleClearAllSessions = async () => {
+    if (!window.confirm('Are you sure you want to clear ALL conversations? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await sessionAPI.clearAllSessions();
+      setSessions([]);
+      setCurrentSession(null);
+      navigate('/chat');
+      toast.success('All conversations cleared!');
+    } catch (error) {
+      console.error('Error clearing sessions:', error);
+      toast.error('Failed to clear conversations');
+    }
   };
 
   const handleSessionSelect = (session) => {
@@ -128,13 +145,22 @@ const Chat = () => {
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Conversations</h2>
-              <button
-                onClick={handleNewSession}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              >
-                <PlusIcon className="w-4 h-4 mr-1" />
-                New Chat
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleNewSession}
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                >
+                  <PlusIcon className="w-4 h-4 mr-1" />
+                  New Chat
+                </button>
+                <button
+                  onClick={handleClearAllSessions}
+                  className="inline-flex items-center px-2 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                  title="Clear All Sessions"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
           </div>
 

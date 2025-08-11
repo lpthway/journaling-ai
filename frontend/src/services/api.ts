@@ -194,6 +194,24 @@ export const sessionAPI = {
     api.get('/sessions/types/available'),
 };
 
+// Chat API (Enhanced Chat Service)
+export const chatAPI = {
+  getConversations: (userId: string, limit: number = 50): Promise<AxiosResponse<any>> => 
+    api.get('/chat/conversations', { params: { user_id: userId, limit } }),
+  
+  sendMessage: (messageData: any): Promise<AxiosResponse<any>> => 
+    api.post('/chat/message', messageData),
+  
+  getConversationHistory: (sessionId: string, limit: number = 50): Promise<AxiosResponse<any>> => 
+    api.get(`/chat/conversation/${sessionId}/history`, { params: { limit } }),
+  
+  getHealth: (): Promise<AxiosResponse<any>> => 
+    api.get('/chat/health'),
+  
+  getStats: (): Promise<AxiosResponse<any>> => 
+    api.get('/chat/stats'),
+};
+
 // Health check
 export const healthCheck = (): Promise<AxiosResponse<any>> => api.get('/health');
 

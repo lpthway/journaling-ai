@@ -40,8 +40,8 @@ class DataPopulator:
         self.ollama_client = ollama.Client(host="http://localhost:11434")
         self.api_base = "http://localhost:8000/api/v1"
         
-        # Test user ID for populating data
-        self.test_user_id = "1e05fb66-160a-4305-b84a-805c2f0c6910"  # Real user UUID
+        # Test user ID for populating data - must match database default user
+        self.test_user_id = "00000000-0000-0000-0000-000000000001"  # Default user UUID
         
         # Core topics for better organization (limited set to encourage reuse)
         self.core_topics = [

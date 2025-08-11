@@ -1,9 +1,10 @@
 // frontend/src/services/analyticsApi.js
 import api from './api';
+import { DEFAULT_USER_ID } from '../config/user';
 
 class AnalyticsAPI {
   // Get comprehensive writing statistics
-  async getWritingInsights(days = 30, userId = '1e05fb66-160a-4305-b84a-805c2f0c6910') {
+  async getWritingInsights(days = 30, userId = DEFAULT_USER_ID) {
     try {
       const response = await api.get(`/entries/analytics/writing?days=${days}&user_id=${userId}`);
       return response.data;
@@ -14,7 +15,7 @@ class AnalyticsAPI {
   }
 
   // Get mood and emotional patterns  
-  async getEmotionalPatterns(days = 30, userId = '1e05fb66-160a-4305-b84a-805c2f0c6910') {
+  async getEmotionalPatterns(days = 30, userId = DEFAULT_USER_ID) {
     try {
       const response = await api.get(`/entries/analytics/mood?days=${days}&user_id=${userId}`);
       return response.data;
@@ -25,7 +26,7 @@ class AnalyticsAPI {
   }
 
   // Get comprehensive analytics summary (combines multiple endpoints)
-  async getAnalyticsSummary(days = 30, userId = '1e05fb66-160a-4305-b84a-805c2f0c6910') {
+  async getAnalyticsSummary(days = 30, userId = DEFAULT_USER_ID) {
     try {
       const [writingData, moodData] = await Promise.all([
         this.getWritingInsights(days, userId),

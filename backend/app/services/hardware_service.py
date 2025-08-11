@@ -257,8 +257,12 @@ class HardwareService:
         if task not in self.model_configs:
             raise ValueError(f"Unknown task: {task}")
         
-        tier = self.specs.performance_tier
-        config = self.model_configs[task][tier]
+        # Force basic embedding model to match existing ChromaDB dimensions (384)
+        if task == "embeddings":
+            config = self.model_configs[task]["basic"]  # Always use basic 384-dim model
+        else:
+            tier = self.specs.performance_tier
+            config = self.model_configs[task][tier]
         
         # Check if hardware can handle this model
         if (config.prefers_gpu and 
@@ -271,7 +275,8 @@ class HardwareService:
                 logger.warning(f"Using fallback model {config.fallback_model} for {task}")
                 return config.fallback_model, False
         
-        return config.model_name, config.prefers_gpu and self.specs.has_gpu
+        # Force CPU mode due to CUDA memory exhaustion
+        return config.model_name, False  # Always use CPU until GPU memory is freed
     
     def get_all_optimal_models(self) -> Dict[str, Tuple[str, bool]]:
         """Get optimal models for all tasks"""

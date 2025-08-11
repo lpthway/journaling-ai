@@ -276,6 +276,23 @@ class SessionRepository(EnhancedBaseRepository[ChatSession]):
         result = await self.session.execute(query)
         return list(result.scalars().all())
     
+    async def get_user_sessions(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[ChatSession]:
+        """Get all sessions for a user, ordered by last activity."""
+        query = select(ChatSession).where(
+            and_(
+                ChatSession.user_id == user_id,
+                ChatSession.deleted_at.is_(None)
+            )
+        ).order_by(ChatSession.last_activity.desc()).offset(offset).limit(limit)
+        
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+    
     async def update_session_duration(
         self,
         session_id: str,
