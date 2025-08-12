@@ -44,6 +44,9 @@ from app.api import sessions
 # Authentication router
 from app.auth import auth_router
 
+# User data management router
+from app.api import user_data
+
 # Initialize structured logging
 setup_logging(
     log_level=monitoring_settings.log_level,
@@ -360,6 +363,9 @@ app.include_router(enhanced_chat.router, prefix=f"{settings.API_V1_STR}/chat", t
 # Monitoring and health endpoints
 app.include_router(health.router, prefix=f"{settings.API_V1_STR}/health", tags=["health"])
 app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}", tags=["monitoring"])
+
+# User data management router
+app.include_router(user_data.router, prefix=f"{settings.API_V1_STR}", tags=["user-data"])
 
 # Enhanced health check endpoints
 @app.get("/health")
