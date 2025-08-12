@@ -105,7 +105,7 @@ const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
           window.history.replaceState({}, '', '/chat');
         }
         
-        toast.info('Starting a new conversation');
+        toast.success('Starting a new conversation');
         return;
       }
       
