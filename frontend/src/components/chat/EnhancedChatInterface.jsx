@@ -99,8 +99,6 @@ const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
         setSession(null);
         setMessages([]);
         setShowTypeSelector(true);
-        setSelectedConversationType('supportive_listening');
-        setActiveSessionId(null);
         
         // Update URL to remove invalid session ID
         if (window.location.pathname.includes('/chat/')) {
@@ -133,8 +131,6 @@ const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
       setSession(null);
       setMessages([]);
       setShowTypeSelector(true);
-      setSelectedConversationType('supportive_listening');
-      setActiveSessionId(null);
       
       if (window.location.pathname.includes('/chat/')) {
         window.history.replaceState({}, '', '/chat');
