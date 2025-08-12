@@ -122,3 +122,48 @@ export interface SendMessageData {
   content: string;
   metadata?: Record<string, any>;
 }
+
+// Additional API types for comprehensive API
+export interface PerformanceStatus {
+  status: string;
+  uptime: number;
+  memory_usage?: number;
+  response_time?: number;
+}
+
+export interface PersonalityProfile {
+  dimensions: Record<string, number>;
+  traits: string[];
+  insights: string[];
+}
+
+export interface PredictiveAnalysis {
+  predictions: any[];
+  risk_assessment: any;
+  opportunities: string[];
+}
+
+export interface AuthCredentials {
+  email: string;
+  password: string;
+}
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  created_at: string;
+}
+
+export interface PasswordChangeData {
+  current_password: string;
+  new_password: string;
+}
