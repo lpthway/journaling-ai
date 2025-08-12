@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
 import { ChartPieIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { analyticsApi } from '../../services/analyticsApi';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed /* removed user id */ import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const MoodDistributionChart = ({ days = 30, className = "" }) => {
@@ -29,7 +29,7 @@ const MoodDistributionChart = ({ days = 30, className = "" }) => {
       setLoading(true);
       setError(null);
 
-      const moodStats = await analyticsApi.getEmotionalPatterns(days, DEFAULT_USER_ID);
+      const moodStats = await analyticsApi.getEmotionalPatterns(days);
 
       // Transform data to match screenshot format
       if (moodStats.mood_distribution && Object.keys(moodStats.mood_distribution).length > 0) {

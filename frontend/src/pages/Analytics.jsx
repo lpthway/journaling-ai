@@ -11,7 +11,7 @@ import EmotionalPatterns from '../components/Analytics/EmotionalPatterns';
 import ProgressTracking from '../components/Analytics/ProgressTracking';
 import PersonalityProfile from '../components/Dashboard/PersonalityProfile';
 import { analyticsApi } from '../services/analyticsApi';
-import { DEFAULT_USER_ID } from '../config/user';
+// Removed DEFAULT_USER_ID import - using authenticated user
 
 const Analytics = () => {
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -72,7 +72,7 @@ const Analytics = () => {
 
         {/* Personality Profile - Full Width */}
         <div className="mb-8">
-          <PersonalityProfile userId={DEFAULT_USER_ID} />
+          <PersonalityProfile />
         </div>
         
         {/* Loading and Error States */}

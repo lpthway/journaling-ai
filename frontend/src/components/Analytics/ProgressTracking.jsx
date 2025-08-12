@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarDaysIcon, ArrowPathIcon, TrophyIcon } from '@heroicons/react/24/outline';
 import { analyticsApi } from '../../services/analyticsApi';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed /* removed user id */ import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const ProgressTracking = ({ days = 30, className = "" }) => {
@@ -20,7 +20,7 @@ const ProgressTracking = ({ days = 30, className = "" }) => {
       setError(null);
 
       // Get writing activity data to calculate progress
-      const activityData = await analyticsApi.getWritingActivity(days, DEFAULT_USER_ID);
+      const activityData = await analyticsApi.getWritingActivity(days);
       
       if (activityData) {
         // Calculate current week's progress

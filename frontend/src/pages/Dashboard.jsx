@@ -21,7 +21,7 @@ import ErrorState from '../components/Common/ErrorState';
 import MoodIndicator from '../components/Common/MoodIndicator';
 import MoodTimeline from '../components/Dashboard/MoodTimeline';
 import PersonalityProfile from '../components/Dashboard/PersonalityProfile';
-import { DEFAULT_USER_ID } from '../config/user';
+// Removed DEFAULT_USER_ID import - using authenticated user
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -351,7 +351,7 @@ const Dashboard = () => {
           )}
 
           {/* Personality Profile */}
-          <PersonalityProfile userId={DEFAULT_USER_ID} />
+          <PersonalityProfile />
 
           {/* System Performance (if admin/debug mode) */}
           {dashboardData.performance && process.env.NODE_ENV === 'development' && (

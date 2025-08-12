@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChartPieIcon, ArrowPathIcon, HeartIcon } from '@heroicons/react/24/outline';
 import { analyticsApi } from '../../services/analyticsApi';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed /* removed user id */ import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const EmotionalPatterns = ({ days = 30, className = "" }) => {
@@ -19,7 +19,7 @@ const EmotionalPatterns = ({ days = 30, className = "" }) => {
       setLoading(true);
       setError(null);
 
-      const patterns = await analyticsApi.getEmotionalPatterns(days, DEFAULT_USER_ID);
+      const patterns = await analyticsApi.getEmotionalPatterns(days);
       
       if (patterns && patterns.statistics) {
         const stats = patterns.statistics;

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChartBarIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { analyticsApi } from '../../services/analyticsApi';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed /* removed user id */ import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const SentimentTrendsChart = ({ days = 30, className = "" }) => {
@@ -21,7 +21,7 @@ const SentimentTrendsChart = ({ days = 30, className = "" }) => {
       setLoading(true);
       setError(null);
 
-      const sentimentData = await analyticsApi.getEmotionalPatterns(days, DEFAULT_USER_ID);
+      const sentimentData = await analyticsApi.getEmotionalPatterns(days);
 
       // Transform daily trends data for the line chart
       if (sentimentData.daily_trends && sentimentData.daily_trends.length > 0) {

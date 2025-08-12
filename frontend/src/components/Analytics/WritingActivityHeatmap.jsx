@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarIcon, ArrowPathIcon, FireIcon } from '@heroicons/react/24/outline';
 import { entryAPI } from '../../services/api';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed /* removed user id */ import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const WritingActivityHeatmap = ({ className = "" }) => {
@@ -24,8 +24,7 @@ const WritingActivityHeatmap = ({ className = "" }) => {
 
       // Get entries from the last 365 days for the correct user
       const response = await entryAPI.getAll({ 
-        limit: 1000,
-        user_id: DEFAULT_USER_ID 
+        limit: 1000
       });
       const entries = response.data || [];
 

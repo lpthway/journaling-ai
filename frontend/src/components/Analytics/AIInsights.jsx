@@ -13,10 +13,10 @@ import {
   CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 import { advancedAI } from '../../services/api';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed /* removed user id */ import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
-const AIInsights = ({ userId = DEFAULT_USER_ID, className = '' }) => {
+const AIInsights = ({ className = '' }) => {
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

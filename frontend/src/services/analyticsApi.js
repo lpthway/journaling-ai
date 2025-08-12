@@ -1,12 +1,12 @@
 // frontend/src/services/analyticsApi.js
 import api from './api';
-import { DEFAULT_USER_ID } from '../config/user';
+// Removed DEFAULT_USER_ID import - using authenticated user from JWT token
 
 class AnalyticsAPI {
   // Get comprehensive writing statistics
-  async getWritingActivity(days = 30, userId = DEFAULT_USER_ID) {
+  async getWritingActivity(days = 30) {
     try {
-      const response = await api.get(`/entries/analytics/writing?days=${days}&user_id=${userId}`);
+      const response = await api.get(`/entries/analytics/writing?days=${days}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching writing activity:', error);
@@ -15,9 +15,9 @@ class AnalyticsAPI {
   }
 
   // Get mood and emotional patterns  
-  async getEmotionalPatterns(days = 30, userId = DEFAULT_USER_ID) {
+  async getEmotionalPatterns(days = 30) {
     try {
-      const response = await api.get(`/entries/analytics/mood?days=${days}&user_id=${userId}`);
+      const response = await api.get(`/entries/analytics/mood?days=${days}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching emotional patterns:', error);
@@ -26,11 +26,11 @@ class AnalyticsAPI {
   }
 
   // Get comprehensive analytics summary (combines multiple endpoints)
-  async getAnalyticsSummary(days = 30, userId = DEFAULT_USER_ID) {
+  async getAnalyticsSummary(days = 30) {
     try {
       const [writingData, moodData] = await Promise.all([
-        this.getWritingActivity(days, userId),
-        this.getEmotionalPatterns(days, userId)
+        this.getWritingActivity(days),
+        this.getEmotionalPatterns(days)
       ]);
 
       // Transform the data into the format expected by Analytics page cards

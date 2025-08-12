@@ -96,7 +96,6 @@ export const sessionAPI = {
   createSession: (sessionData) => {
     // Convert frontend session data to enhanced chat format
     const enhancedData = {
-      user_id: sessionData.user_id || DEFAULT_USER_ID,
       conversation_mode: sessionData.session_type || 'supportive_listening',
       initial_context: {
         title: sessionData.title || 'Enhanced Chat Session',
@@ -190,7 +189,6 @@ export const sessionAPI = {
   // Enhanced messages
   sendMessage: (sessionId, messageData) => {
     const enhancedMessageData = {
-      user_id: DEFAULT_USER_ID,
       session_id: sessionId,
       message: messageData.content,
       conversation_mode: 'supportive_listening',
@@ -267,27 +265,25 @@ export const performanceAPI = {
 // Advanced AI API
 export const advancedAI = {
   // Personality Analysis
-  getPersonalityProfile: (userId = DEFAULT_USER_ID) => 
+  getPersonalityProfile: () => 
     api.post('/ai/advanced/analysis/personality', {
-      user_id: userId,
       include_detailed_traits: true
     }),
   
-  getPersonalityDimensions: (userId = DEFAULT_USER_ID) => 
-    api.get('/ai/advanced/personality/dimensions', { params: { user_id: userId } }),
+  getPersonalityDimensions: () => 
+    api.get('/ai/advanced/personality/dimensions'),
   
   // Pattern Analysis & Insights
-  getComprehensiveAnalysis: (userId = DEFAULT_USER_ID, options = {}) =>
+  getComprehensiveAnalysis: (options = {}) =>
     api.post('/ai/advanced/analysis/comprehensive', {
-      user_id: userId,
       timeframe: options.timeframe || 'monthly',
       include_predictions: options.include_predictions !== false,
       include_personality: options.include_personality !== false,
       max_entries: options.max_entries || 100
     }),
   
-  getTemporalInsights: (userId = DEFAULT_USER_ID, options = {}) => {
-    const params = { user_id: userId };
+  getTemporalInsights: (options = {}) => {
+    const params = {};
     if (options.timeframe) params.timeframe = options.timeframe;
     if (options.max_entries) params.max_entries = options.max_entries;
     if (options.insight_types) params.insight_types = options.insight_types;
@@ -295,9 +291,8 @@ export const advancedAI = {
     return api.get('/ai/advanced/insights/temporal', { params });
   },
   
-  getPredictiveAnalysis: (userId = DEFAULT_USER_ID, options = {}) =>
+  getPredictiveAnalysis: (options = {}) =>
     api.post('/ai/advanced/analysis/predictive', {
-      user_id: userId,
       prediction_horizon: options.prediction_horizon || 7,
       include_risk_assessment: options.include_risk_assessment !== false,
       include_opportunities: options.include_opportunities !== false

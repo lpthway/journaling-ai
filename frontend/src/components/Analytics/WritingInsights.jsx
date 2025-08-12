@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChartBarIcon, ArrowPathIcon, PencilIcon } from '@heroicons/react/24/outline';
 import { analyticsApi } from '../../services/analyticsApi';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed /* removed user id */ import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 const WritingInsights = ({ days = 30, className = "" }) => {
@@ -21,8 +21,8 @@ const WritingInsights = ({ days = 30, className = "" }) => {
 
       // Get both writing insights and mood data for comprehensive analysis
       const [insights, moodData] = await Promise.all([
-        analyticsApi.getWritingActivity(days, DEFAULT_USER_ID),
-        analyticsApi.getEmotionalPatterns(days, DEFAULT_USER_ID)
+        analyticsApi.getWritingActivity(days),
+        analyticsApi.getEmotionalPatterns(days)
       ]);
       
       if (insights) {

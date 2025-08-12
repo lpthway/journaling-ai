@@ -10,10 +10,10 @@ import {
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { advancedAI } from '../../services/api';
-import { DEFAULT_USER_ID } from '../../config/user';
+// Removed DEFAULT_USER_ID import - using authenticated user
 import LoadingSpinner from '../Common/LoadingSpinner';
 
-const PersonalityProfile = ({ userId = DEFAULT_USER_ID }) => {
+const PersonalityProfile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,14 +21,14 @@ const PersonalityProfile = ({ userId = DEFAULT_USER_ID }) => {
 
   useEffect(() => {
     loadPersonalityProfile();
-  }, [userId]);
+  }, []);
 
   const loadPersonalityProfile = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await advancedAI.getPersonalityProfile(userId);
+      const response = await advancedAI.getPersonalityProfile();
       setProfile(response.data);
       setLastUpdated(new Date(response.data.last_updated));
       
