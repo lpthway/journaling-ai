@@ -252,7 +252,6 @@ export const sessionAPI = {
 
     // Convert frontend session data to enhanced chat format
     const enhancedData = {
-      user_id: sessionData.user_id || DEFAULT_USER_ID,
       conversation_mode: sessionTypeToMode[sessionData.session_type] || 'supportive_listening',
       initial_context: {
         title: sessionData.title || 'Enhanced Chat Session',

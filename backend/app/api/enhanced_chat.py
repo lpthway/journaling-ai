@@ -102,6 +102,7 @@ class HealthResponse(BaseModel):
 @router.post("/message", response_model=ChatResponse)
 async def send_chat_message(
     request: ChatMessageRequest,
+    current_user: CurrentUser,
     background_tasks: BackgroundTasks
 ) -> ChatResponse:
     """
@@ -114,14 +115,14 @@ async def send_chat_message(
     - Advanced conversation analysis
     """
     try:
-        logger.info(f"💬 Processing chat message from user {request.user_id}")
+        logger.info(f"💬 Processing chat message from user {current_user.id}")
         
         # Auto-generate session ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
         
         # Process message through enhanced chat service
         enhanced_response = await enhanced_chat_service.process_chat_message(
-            user_id=request.user_id,
+            user_id=str(current_user.id),
             session_id=session_id,
             message=request.message,
             conversation_mode=request.conversation_mode,
@@ -172,18 +173,21 @@ async def send_chat_message(
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}")
 
 @router.post("/conversation/start", response_model=ConversationSession)
-async def start_conversation(request: StartConversationRequest) -> ConversationSession:
+async def start_conversation(
+    request: StartConversationRequest,
+    current_user: CurrentUser
+) -> ConversationSession:
     """
     Start a new conversation session
     
     Creates a new conversation context with specified mode and initial settings
     """
     try:
-        logger.info(f"💬 Starting new conversation for user {request.user_id}")
+        logger.info(f"💬 Starting new conversation for user {current_user.id}")
         
-        # Start new conversation session
+        # Start new conversation session with authenticated user
         session_id = await enhanced_chat_service.start_new_conversation(
-            user_id=request.user_id,
+            user_id=str(current_user.id),
             mode=request.conversation_mode
         )
         

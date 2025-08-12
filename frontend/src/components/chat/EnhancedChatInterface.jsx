@@ -86,9 +86,10 @@ const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
       // Check if the session exists and has valid data
       const messageData = messagesResponse.data;
       
-      // If no session found or no messages, clear localStorage and create new session
-      if (!messageData || messageData.message_count === 0) {
-        console.log('⚠️ Session not found or empty, clearing localStorage and creating new session');
+      // Only clear localStorage if the session_id doesn't match (invalid session)
+      // Note: message_count === 0 is normal for new sessions
+      if (!messageData || !messageData.session_id || messageData.session_id !== id) {
+        console.log('⚠️ Session not found or invalid, clearing localStorage and creating new session');
         
         // Clear invalid session from localStorage
         const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
