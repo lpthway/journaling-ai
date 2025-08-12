@@ -17,13 +17,13 @@
 ## 📋 Phase 1: Cleanup Duplicates & Infrastructure
 
 ### 1.1 Backup Creation
-- [ ] Create `_backup` directory for all files being modified
-- [ ] Backup duplicate files before removal
+- [x] Create `_backup` directory for all files being modified
+- [x] Backup duplicate files before removal
 
 ### 1.2 Remove Duplicate Files (CAREFUL - Test After Each)
-- [ ] **BACKUP** `src/index.js` → Remove (keep `index.tsx`)
-- [ ] **BACKUP** `src/services/api.js` → Remove (keep `api.ts`) 
-- [ ] **BACKUP** `src/utils/helpers.js` → Remove (keep `helpers.ts`)
+- [x] **BACKUP** `src/index.js` → Remove (keep `index.tsx`)
+- [ ] **MERGE & BACKUP** `src/services/api.js` → Merge with `api.ts` (api.js is more complete!) 
+- [x] **BACKUP** `src/utils/helpers.js` → Remove (keep `helpers.ts`)
 - [ ] Update any imports referencing removed files
 - [ ] **TEST**: Ensure app still starts and basic navigation works
 
