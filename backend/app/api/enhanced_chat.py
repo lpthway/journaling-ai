@@ -46,7 +46,7 @@ class ChatMessageRequest(BaseModel):
 
 class StartConversationRequest(BaseModel):
     """Request to start a new conversation"""
-    user_id: str = Field(..., description="User identifier")
+    user_id: Optional[str] = Field(None, description="User identifier (optional, taken from authentication)")
     conversation_mode: ConversationMode = Field(default=ConversationMode.SUPPORTIVE_LISTENING, description="Conversation mode")
     initial_context: Dict[str, Any] = Field(default_factory=dict, description="Initial conversation context")
 
@@ -195,7 +195,7 @@ async def start_conversation(
         # For now, create a basic response since we don't have a method to get context directly
         response = ConversationSession(
             session_id=session_id,
-            user_id=request.user_id,
+            user_id=str(current_user.id),
             conversation_mode=request.conversation_mode.value,
             current_stage=ConversationStage.OPENING.value,
             turn_count=0,
