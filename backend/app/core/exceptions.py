@@ -103,3 +103,7 @@ class CacheException(JournalingAIException):
 class RepositoryException(DatabaseException):
     """Repository operation errors."""
     pass
+
+class EncryptionException(JournalingAIException):
+    """Encryption and decryption errors."""
+    http_status_code = 500

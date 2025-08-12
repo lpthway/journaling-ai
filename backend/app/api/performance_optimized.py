@@ -12,6 +12,7 @@ from datetime import datetime
 from app.repositories.performance_optimized_repository import performance_repo
 from app.core.database import get_db_session
 from app.core.performance_monitor import performance_monitor
+from app.auth.dependencies import CurrentUser
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/performance", tags=["performance"])
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/performance", tags=["performance"])
 @router.get("/entries/lightweight")
 @performance_monitor.monitor_endpoint("entries_lightweight")
 async def get_entries_lightweight(
-    user_id: str = Query(default="default_user"),  # TODO: Get from auth
+    current_user: CurrentUser,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     include_content: bool = Query(default=False)
@@ -33,7 +34,7 @@ async def get_entries_lightweight(
     """
     try:
         entries = await performance_repo.get_entries_lightweight(
-            user_id=user_id,
+            user_id=str(current_user.id),
             limit=limit,
             offset=offset,
             include_content=include_content
@@ -83,7 +84,7 @@ async def get_entry_content_lazy(
 @router.get("/insights/mood-stats-optimized")
 @performance_monitor.monitor_endpoint("mood_stats_optimized")
 async def get_mood_stats_optimized(
-    user_id: str = Query(default="default_user"),  # TODO: Get from auth
+    current_user: CurrentUser,
     days: int = Query(default=30, ge=1, le=365)
 ):
     """
@@ -95,7 +96,7 @@ async def get_mood_stats_optimized(
     """
     try:
         stats = await performance_repo.get_mood_stats_optimized(
-            user_id=user_id,
+            user_id=str(current_user.id),
             days=days
         )
         
@@ -112,7 +113,7 @@ async def get_mood_stats_optimized(
 @router.get("/topics/with-counts")
 @performance_monitor.monitor_endpoint("topics_with_counts")
 async def get_topics_with_counts(
-    user_id: str = Query(default="default_user")  # TODO: Get from auth
+    current_user: CurrentUser
 ):
     """
     Get topics with entry counts in single query
@@ -122,7 +123,7 @@ async def get_topics_with_counts(
     - Includes last entry date for better UX
     """
     try:
-        topics = await performance_repo.get_topics_with_entry_counts(user_id)
+        topics = await performance_repo.get_topics_with_entry_counts(str(current_user.id))
         
         return JSONResponse({
             "topics": topics,
@@ -137,7 +138,7 @@ async def get_topics_with_counts(
 @router.get("/search/fast")
 @performance_monitor.monitor_endpoint("search_fast")
 async def search_entries_fast(
-    user_id: str = Query(default="default_user"),  # TODO: Get from auth
+    current_user: CurrentUser,
     query: str = Query(..., min_length=2),
     limit: int = Query(default=10, ge=1, le=50)
 ):
@@ -150,7 +151,7 @@ async def search_entries_fast(
     """
     try:
         results = await performance_repo.search_entries_fast(
-            user_id=user_id,
+            user_id=str(current_user.id),
             query=query,
             limit=limit
         )
@@ -173,7 +174,7 @@ async def search_entries_fast(
 @router.get("/sessions/summary")
 @performance_monitor.monitor_endpoint("sessions_summary")
 async def get_session_summaries(
-    user_id: str = Query(default="default_user"),  # TODO: Get from auth
+    current_user: CurrentUser,
     limit: int = Query(default=10, ge=1, le=50)
 ):
     """
@@ -185,7 +186,7 @@ async def get_session_summaries(
     """
     try:
         sessions = await performance_repo.get_session_summary_lightweight(
-            user_id=user_id,
+            user_id=str(current_user.id),
             limit=limit
         )
         

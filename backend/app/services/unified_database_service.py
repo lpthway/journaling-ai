@@ -21,8 +21,7 @@ from app.models.enhanced_models import Entry, ChatSession, ChatMessage, Topic, U
 
 logger = logging.getLogger(__name__)
 
-# Default user UUID for single-user mode
-DEFAULT_USER_UUID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+# User authentication is now required for all operations
 
 class UnifiedDatabaseService:
     """
@@ -43,17 +42,14 @@ class UnifiedDatabaseService:
             logger.debug(f"Counter increment failed for {counter_name}: {e}")  # Non-critical, just debug
     
     def _ensure_uuid(self, user_id: Union[str, uuid.UUID]) -> uuid.UUID:
-        """Convert user_id string to UUID, using default for 'default_user'"""
+        """Convert user_id string to UUID"""
         if isinstance(user_id, uuid.UUID):
             return user_id
-        elif user_id == "default_user":
-            return DEFAULT_USER_UUID
         else:
             try:
                 return uuid.UUID(user_id)
             except ValueError:
-                logger.warning(f"Invalid user_id format: {user_id}, using default")
-                return DEFAULT_USER_UUID
+                raise ValueError(f"Invalid user_id format: {user_id}. Must be a valid UUID.")
     
     async def initialize(self) -> None:
         """Initialize database connections and caching"""
@@ -93,7 +89,7 @@ class UnifiedDatabaseService:
         self,
         title: str,
         content: str,
-        user_id: str = "default_user",
+        user_id: str,
         topic_id: Optional[str] = None,
         mood: Optional[str] = None,
         sentiment_score: Optional[float] = None,
@@ -149,7 +145,7 @@ class UnifiedDatabaseService:
     
     async def get_entries(
         self,
-        user_id: str = "default_user",
+        user_id: str,
         skip: int = 0,
         limit: int = 100,
         topic_id: Optional[str] = None,
@@ -266,7 +262,7 @@ class UnifiedDatabaseService:
         self,
         session_type: str,
         title: str,
-        user_id: str = "default_user",
+        user_id: str,
         description: Optional[str] = None,
         initial_message: str = "Hello! How can I help you today?"
     ) -> ChatSession:
@@ -461,7 +457,7 @@ class UnifiedDatabaseService:
     async def create_topic(
         self,
         topic_data: Dict[str, Any],
-        user_id: str = "default_user"
+        user_id: str
     ) -> Topic:
         """Create a new topic with caching"""
         async with self.get_session() as session:
@@ -502,7 +498,7 @@ class UnifiedDatabaseService:
     
     async def get_topics(
         self,
-        user_id: str = "default_user",
+        user_id: str,
         include_entry_count: bool = True,
         use_cache: bool = True
     ) -> List[Topic]:
