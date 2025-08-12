@@ -78,20 +78,69 @@ const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
   const loadSession = async (id) => {
     try {
       setIsLoading(true);
+      
+      // Load full message history for the session
+      const messagesResponse = await sessionAPI.getMessages(id);
+      console.log('📜 Messages response:', messagesResponse.data);
+      
+      // Check if the session exists and has valid data
+      const messageData = messagesResponse.data;
+      
+      // If no session found or no messages, clear localStorage and create new session
+      if (!messageData || messageData.message_count === 0) {
+        console.log('⚠️ Session not found or empty, clearing localStorage and creating new session');
+        
+        // Clear invalid session from localStorage
+        const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+        const filteredSessions = sessions.filter(s => s.id !== id);
+        localStorage.setItem('chatSessions', JSON.stringify(filteredSessions));
+        
+        // Reset to initial state and show type selector
+        setSession(null);
+        setMessages([]);
+        setShowTypeSelector(true);
+        setSelectedConversationType('supportive_listening');
+        setActiveSessionId(null);
+        
+        // Update URL to remove invalid session ID
+        if (window.location.pathname.includes('/chat/')) {
+          window.history.replaceState({}, '', '/chat');
+        }
+        
+        toast.info('Starting a new conversation');
+        return;
+      }
+      
+      // Session exists, load it normally
       const response = await sessionAPI.getSession(id);
       const sessionData = response.data;
-      
       setSession(sessionData);
       
-      // Load full message history for the session, not just recent_messages
-      const messagesResponse = await sessionAPI.getMessages(id);
-      const validMessages = filterValidMessages(messagesResponse.data || []);
+      // Extract messages from the response structure
+      const messagesArray = messageData.messages || messageData || [];
+      const validMessages = filterValidMessages(messagesArray);
       setMessages(validMessages);
       setShowTypeSelector(false);
       
     } catch (error) {
       console.error('Error loading session:', error);
-      toast.error('Failed to load conversation');
+      
+      // If error loading session, clear it from localStorage and start fresh
+      const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+      const filteredSessions = sessions.filter(s => s.id !== id);
+      localStorage.setItem('chatSessions', JSON.stringify(filteredSessions));
+      
+      setSession(null);
+      setMessages([]);
+      setShowTypeSelector(true);
+      setSelectedConversationType('supportive_listening');
+      setActiveSessionId(null);
+      
+      if (window.location.pathname.includes('/chat/')) {
+        window.history.replaceState({}, '', '/chat');
+      }
+      
+      toast.error('Session not found. Starting a new conversation.');
     } finally {
       setIsLoading(false);
     }

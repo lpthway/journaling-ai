@@ -173,14 +173,186 @@ export const sessionAPI = {
   delete: (id: string): Promise<AxiosResponse<void>> =>
     api.delete(`/sessions/${id}`),
 
-  getMessages: (id: string): Promise<AxiosResponse<Message[]>> =>
-    api.get(`/sessions/${id}/messages`),
+  getMessages: (sessionId: string, params: any = {}): Promise<AxiosResponse<any>> => 
+    api.get(`/chat/conversation/${sessionId}/history`, { params }),
 
-  sendMessage: (id: string, data: SendMessageData): Promise<AxiosResponse<Message>> =>
-    api.post(`/sessions/${id}/messages`, data),
+  sendMessage: (sessionId: string, messageData: any): Promise<any> => {
+    const enhancedMessageData = {
+      user_id: DEFAULT_USER_ID,
+      session_id: sessionId,
+      message: messageData.content,
+      conversation_mode: 'supportive_listening',
+      context_metadata: messageData.context || {}
+    };
+    return api.post('/chat/message', enhancedMessageData).then(response => {
+      const data = response.data;
+      // Convert enhanced chat response to frontend expected format
+      const formattedResponse = {
+        data: {
+          id: data.message_id,
+          role: 'assistant',
+          content: data.content,
+          timestamp: data.timestamp,
+          metadata: {
+            crisis_level: data.crisis_indicators?.length > 0 ? 'HIGH' : 'NONE',
+            emotion_analysis: {
+              primary_emotion: 'supportive',
+              confidence: data.confidence_score
+            },
+            response_time_ms: Math.round((data.processing_metadata?.processing_time_seconds || 0) * 1000),
+            conversation_stage: data.conversation_stage,
+            response_style: data.response_style,
+            therapeutic_techniques: data.therapeutic_techniques,
+            emotional_support_level: data.emotional_support_level
+          }
+        }
+      };
+      
+      // Update session in localStorage
+      try {
+        const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+        const sessionIndex = sessions.findIndex((s: any) => s.id === sessionId || s.session_id === sessionId);
+        if (sessionIndex !== -1) {
+          sessions[sessionIndex].last_activity = new Date().toISOString();
+          sessions[sessionIndex].message_count = (sessions[sessionIndex].message_count || 0) + 1;
+          sessions[sessionIndex].recent_messages = sessions[sessionIndex].recent_messages || [];
+          sessions[sessionIndex].recent_messages.push({
+            role: 'assistant',
+            content: formattedResponse.data.content.substring(0, 100) + '...',
+            timestamp: formattedResponse.data.timestamp
+          });
+          // Keep only last 3 messages for preview
+          sessions[sessionIndex].recent_messages = sessions[sessionIndex].recent_messages.slice(-3);
+          localStorage.setItem('chatSessions', JSON.stringify(sessions));
+        }
+      } catch (error) {
+        console.error('Error updating session:', error);
+      }
+      
+      return formattedResponse;
+    });
+  },
 
   getRecommendedType: (): Promise<AxiosResponse<{ recommended_type: SessionType; reason: string }>> =>
     api.get('/sessions/recommended-type'),
+
+  // Enhanced session management
+  createSession: (sessionData: any): Promise<{ data: any }> => {
+    // Map frontend session types to valid backend conversation modes
+    const sessionTypeToMode: Record<string, string> = {
+      'free_chat': 'supportive_listening',
+      'growth_challenge': 'therapeutic_guidance',
+      'pattern_insights': 'cognitive_reframing',
+      'mindfulness': 'mindfulness_coaching',
+      'goals': 'goal_setting',
+      'crisis': 'crisis_support',
+      'reflection': 'reflection_facilitation',
+      'emotion_processing': 'emotional_processing'
+    };
+
+    // Convert frontend session data to enhanced chat format
+    const enhancedData = {
+      user_id: sessionData.user_id || DEFAULT_USER_ID,
+      conversation_mode: sessionTypeToMode[sessionData.session_type] || 'supportive_listening',
+      initial_context: {
+        title: sessionData.title || 'Enhanced Chat Session',
+        metadata: sessionData.metadata || {},
+        frontend_integration: true
+      }
+    };
+    return api.post('/chat/conversation/start', enhancedData).then(response => {
+      // Convert enhanced chat response to frontend expected format
+      const data = response.data;
+      const sessionInfo = {
+        id: data.session_id,
+        session_id: data.session_id,
+        title: sessionData.title || 'Enhanced Chat Session',
+        session_type: sessionData.session_type || 'supportive_listening',
+        conversation_mode: sessionData.session_type || 'supportive_listening',
+        status: 'active',
+        message_count: 0,
+        recent_messages: [],
+        created_at: new Date().toISOString(),
+        last_activity: new Date().toISOString()
+      };
+      
+      // Store session in localStorage
+      try {
+        const existingSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+        existingSessions.unshift(sessionInfo); // Add to beginning
+        localStorage.setItem('chatSessions', JSON.stringify(existingSessions.slice(0, 100))); // Keep max 100
+        console.log('💾 Stored new session in localStorage:', sessionInfo.id, 'Total sessions:', existingSessions.length);
+      } catch (error) {
+        console.error('Error storing session:', error);
+      }
+      
+      return { data: sessionInfo };
+    });
+  },
+
+  // Missing methods that were causing errors
+  getSessions: (params: any = {}): Promise<{ data: Session[] }> => {
+    // Get sessions from localStorage since enhanced chat doesn't have session listing yet
+    try {
+      const storedSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+      console.log('📋 Retrieved sessions from localStorage:', storedSessions.length, 'sessions');
+      // Sort by last activity, most recent first
+      const sortedSessions = storedSessions.sort((a: any, b: any) => 
+        new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime()
+      );
+      return Promise.resolve({ data: sortedSessions.slice(0, params.limit || 50) });
+    } catch (error) {
+      console.error('Error getting sessions from storage:', error);
+      return Promise.resolve({ data: [] });
+    }
+  },
+
+  getAvailableTypes: (): Promise<AxiosResponse<any>> =>
+    api.get('/sessions/types/available'),
+
+  // Enhanced session methods from original API
+  getSession: (sessionId: string): Promise<AxiosResponse<any>> =>
+    api.get(`/chat/conversation/${sessionId}/history`),
+
+  getSuggestions: (sessionId: string): Promise<{ data: any[] }> => {
+    // Return context-aware suggestions - will be handled by ContextAwareSuggestions component
+    return Promise.resolve({ data: [] });
+  },
+
+  // Session management
+  pauseSession: (sessionId: string): Promise<{ data: { status: string } }> => 
+    Promise.resolve({ data: { status: 'paused' } }),
+  
+  resumeSession: (sessionId: string): Promise<{ data: { status: string } }> => 
+    Promise.resolve({ data: { status: 'active' } }),
+
+  endSession: (sessionId: string): Promise<{ data: { success: boolean } }> => {
+    // Remove from localStorage
+    try {
+      const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+      const filteredSessions = sessions.filter((s: any) => s.id !== sessionId && s.session_id !== sessionId);
+      localStorage.setItem('chatSessions', JSON.stringify(filteredSessions));
+    } catch (error) {
+      console.error('Error removing session from storage:', error);
+    }
+    
+    return api.post(`/chat/conversation/${sessionId}/end`).catch(error => {
+      // Even if API call fails, we've removed it from localStorage
+      console.warn('Could not end conversation on server:', error);
+      return Promise.resolve({ data: { success: true } });
+    });
+  },
+
+  clearAllSessions: (): Promise<{ data: { success: boolean } }> => {
+    // Clear all chat data (for cleanup)
+    try {
+      localStorage.removeItem('chatSessions');
+      return Promise.resolve({ data: { success: true } });
+    } catch (error) {
+      console.error('Error clearing chat sessions:', error);
+      return Promise.resolve({ data: { success: false } });
+    }
+  },
 
   streamMessage: (sessionId: string, content: string): Promise<Response> => {
     const url = `${API_BASE_URL}/chat/stream`;
@@ -202,12 +374,6 @@ export const sessionAPI = {
 
 // Chat API
 export const chatAPI = {
-  sendMessage: (sessionId: string, content: string, metadata?: Record<string, any>): Promise<AxiosResponse<Message>> =>
-    api.post('/chat/message', {
-      session_id: sessionId,
-      content,
-      metadata
-    }),
 
   getSession: (sessionId: string): Promise<AxiosResponse<Session>> =>
     api.get(`/chat/sessions/${sessionId}`),

@@ -26,6 +26,9 @@ from app.services.enhanced_chat_service import (
     EnhancedChatResponse
 )
 
+# Auth imports
+from app.auth.dependencies import CurrentUser
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -487,6 +490,7 @@ async def get_user_conversations(
 @router.get("/conversation/{session_id}/history")
 async def get_conversation_history(
     session_id: str,
+    current_user: CurrentUser,
     limit: int = 50,
     include_metadata: bool = False
 ) -> Dict[str, Any]:
@@ -498,23 +502,15 @@ async def get_conversation_history(
     try:
         logger.info(f"📜 Getting conversation history for session {session_id}")
         
-        # This would retrieve from conversation context
-        # For now, provide a template response
-        history = {
-            "session_id": session_id,
-            "message_count": 0,
-            "messages": [],
-            "conversation_metadata": {
-                "total_turns": 0,
-                "conversation_mode": "supportive_listening",
-                "current_stage": "opening",
-                "key_topics": [],
-                "emotional_progression": []
-            } if include_metadata else {},
-            "retrieved_at": datetime.utcnow()
-        }
+        # Get conversation history from the enhanced chat service
+        history = await enhanced_chat_service.get_conversation_history(
+            session_id=session_id,
+            user_id=str(current_user.id),
+            limit=limit,
+            include_metadata=include_metadata
+        )
         
-        logger.info(f"✅ Retrieved conversation history for session {session_id}")
+        logger.info(f"✅ Retrieved conversation history for session {session_id}: {len(history.get('messages', []))} messages")
         return history
         
     except Exception as e:

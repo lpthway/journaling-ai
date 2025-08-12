@@ -30,7 +30,7 @@ from app.services.advanced_ai_service import advanced_ai_service
 from app.services.llm_service import llm_service
 from app.core.service_interfaces import ServiceRegistry
 from app.repositories.session_repository import SessionRepository
-from app.models.enhanced_models import ChatSession
+from app.models.enhanced_models import ChatSession, ChatMessage
 from app.core.database import get_db_session
 from sqlalchemy import select
 
@@ -1140,6 +1140,122 @@ Response:"""
         except Exception as e:
             logger.error(f"❌ Error getting user conversations: {e}")
             return []
+    
+    async def get_conversation_history(self, session_id: str, user_id: str, limit: int = 50, include_metadata: bool = False) -> Dict[str, Any]:
+        """
+        Get conversation history for a specific session
+        
+        Args:
+            session_id: The session ID to get history for
+            user_id: The user ID to ensure session ownership
+            limit: Maximum number of messages to return
+            include_metadata: Whether to include conversation metadata
+            
+        Returns:
+            Dictionary containing conversation history with messages and metadata
+        """
+        try:
+            from app.core.database import database
+            from app.models.enhanced_models import ChatMessage, ChatSession
+            
+            if not database.session_factory:
+                logger.error("Database not initialized")
+                return {
+                    "session_id": session_id,
+                    "message_count": 0,
+                    "messages": [],
+                    "conversation_metadata": {},
+                    "retrieved_at": datetime.utcnow()
+                }
+            
+            async with database.get_session() as db_session:
+                # Get session info first - MUST belong to the user
+                session_result = await db_session.execute(
+                    select(ChatSession).where(
+                        ChatSession.id == uuid.UUID(session_id),
+                        ChatSession.user_id == uuid.UUID(user_id)
+                    )
+                )
+                session = session_result.scalar_one_or_none()
+                
+                if not session:
+                    logger.warning(f"Session {session_id} not found for user {user_id}")
+                    return {
+                        "session_id": session_id,
+                        "message_count": 0,
+                        "messages": [],
+                        "conversation_metadata": {},
+                        "retrieved_at": datetime.utcnow()
+                    }
+                
+                # Get messages for this session
+                messages_result = await db_session.execute(
+                    select(ChatMessage)
+                    .where(ChatMessage.session_id == uuid.UUID(session_id))
+                    .order_by(ChatMessage.timestamp.asc())
+                    .limit(limit)
+                )
+                messages = messages_result.scalars().all()
+                
+                # Format messages for frontend
+                formatted_messages = []
+                for msg in messages:
+                    formatted_message = {
+                        "id": str(msg.id),
+                        "role": msg.role,
+                        "content": msg.content,
+                        "timestamp": msg.timestamp.isoformat(),
+                        "metadata": {
+                            "word_count": msg.word_count,
+                            "response_time_ms": msg.response_time_ms,
+                            "processing_time_ms": msg.processing_time_ms
+                        }
+                    }
+                    
+                    # Add additional metadata if available
+                    if hasattr(msg, 'emotion_analysis') and msg.emotion_analysis:
+                        formatted_message["metadata"]["emotion_analysis"] = msg.emotion_analysis
+                    if hasattr(msg, 'therapeutic_techniques') and msg.therapeutic_techniques:
+                        formatted_message["metadata"]["therapeutic_techniques"] = msg.therapeutic_techniques
+                    if hasattr(msg, 'crisis_level') and msg.crisis_level:
+                        formatted_message["metadata"]["crisis_level"] = msg.crisis_level
+                        
+                    formatted_messages.append(formatted_message)
+                
+                # Build conversation metadata
+                conversation_metadata = {}
+                if include_metadata:
+                    conversation_metadata = {
+                        "total_turns": len([m for m in messages if m.role == "user"]),
+                        "conversation_mode": session.session_type or "supportive_listening",
+                        "session_title": session.title,
+                        "session_status": session.status,
+                        "started_at": session.created_at.isoformat() if session.created_at else None,
+                        "last_activity": session.last_activity.isoformat() if session.last_activity else None,
+                        "total_duration_minutes": session.total_duration_minutes or 0
+                    }
+                
+                history = {
+                    "session_id": session_id,
+                    "message_count": len(formatted_messages),
+                    "messages": formatted_messages,
+                    "conversation_metadata": conversation_metadata,
+                    "retrieved_at": datetime.utcnow().isoformat()
+                }
+                
+                logger.info(f"✅ Retrieved conversation history for session {session_id}: {len(formatted_messages)} messages")
+                return history
+                
+        except Exception as e:
+            logger.error(f"❌ Error getting conversation history for session {session_id}: {e}")
+            return {
+                "session_id": session_id,
+                "message_count": 0,
+                "messages": [],
+                "conversation_metadata": {},
+                "retrieved_at": datetime.utcnow().isoformat(),
+                "error": str(e)
+            }
     
     async def _persist_conversation_to_db(self, user_id: str, session_id: str, user_message: str, 
                                          ai_response: EnhancedChatResponse, conversation_mode: ConversationMode):
