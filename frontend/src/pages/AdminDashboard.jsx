@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
+import CreateUserModal from '../components/Admin/CreateUserModal';
 
 const AdminDashboard = () => {
   const { user, token, isAdmin } = useAuth();
@@ -8,6 +9,7 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (isAdmin) {
@@ -53,6 +55,18 @@ const AdminDashboard = () => {
     } catch (err) {
       setError('Action failed');
       console.error('User action error:', err);
+    }
+  };
+
+  const handleCreateUser = async (userData) => {
+    try {
+      await authAPI.admin.createUser(userData);
+      // Reload dashboard data to show new user
+      await loadDashboardData();
+      setError(null);
+    } catch (err) {
+      console.error('Create user error:', err);
+      throw new Error(err.response?.data?.detail || 'Failed to create user');
     }
   };
 
@@ -126,8 +140,14 @@ const AdminDashboard = () => {
 
         {/* Users Management */}
         <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-xl font-semibold text-gray-900">User Management</h2>
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              + Create User
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -225,6 +245,13 @@ const AdminDashboard = () => {
             </table>
           </div>
         </div>
+
+        {/* Create User Modal */}
+        <CreateUserModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={handleCreateUser}
+        />
       </div>
     </div>
   );
