@@ -40,7 +40,15 @@ export const AuthProvider = ({ children }) => {
         console.log('🔍 Auth status data:', data);
         if (data.authenticated) {
           console.log('✅ Setting user:', data.user);
-          setUser(data.user);
+          console.log('🔍 User permissions:', data.user?.permissions);
+          console.log('🔍 Response permissions:', data.permissions);
+          console.log('🔍 User role:', data.user?.role);
+          // Add permissions to user object
+          const userWithPermissions = {
+            ...data.user,
+            permissions: data.permissions
+          };
+          setUser(userWithPermissions);
         } else {
           console.log('❌ Not authenticated, logging out');
           logout();
@@ -148,6 +156,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERUSER' || user?.role === 'admin' || user?.role === 'superuser' || user?.is_superuser || (user?.permissions && user.permissions.includes('admin'));
+  
+  console.log('🔍 isAdmin check:', {
+    user: !!user,
+    role: user?.role,
+    permissions: user?.permissions,
+    is_superuser: user?.is_superuser,
+    finalIsAdmin: isAdmin
+  });
+
   const value = {
     user,
     token,
@@ -156,7 +174,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     register,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'ADMIN' || user?.role === 'SUPERUSER' || user?.is_superuser
+    isAdmin
   };
 
   return (

@@ -9,7 +9,6 @@ import ErrorBoundary from './components/Common/ErrorBoundary';
 import Dashboard from './pages/Dashboard';
 import Journal from './pages/Journal';
 import Topics from './pages/Topics';
-import Insights from './pages/Insights';
 import Analytics from './pages/Analytics';
 import Chat from './pages/Chat';
 import EntryDetail from './pages/EntryDetail';
@@ -93,14 +92,6 @@ const AppContent: React.FC = () => {
             }
           />
           <Route 
-            path="insights" 
-            element={
-              <ErrorBoundary>
-                <Insights />
-              </ErrorBoundary>
-            }
-          />
-          <Route 
             path="analytics" 
             element={
               <ErrorBoundary>
@@ -132,16 +123,17 @@ const AppContent: React.FC = () => {
               </ErrorBoundary>
             }
           />
-          {/* Admin Routes */}
-          <Route 
-            path="admin" 
-            element={
-              <ProtectedRoute adminRequired={true}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
         </Route>
+        
+        {/* Admin Routes - Outside Layout for full-page admin interface */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute adminRequired={true}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Default redirect */}
         <Route path="*" element={<Navigate to="/login" replace />} />

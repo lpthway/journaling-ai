@@ -6,8 +6,9 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
     username: '',
     email: '',
     password: '',
+    password_confirm: '',
     display_name: '',
-    role: 'USER',
+    role: 'user',
     is_active: true
   });
   const [loading, setLoading] = useState(false);
@@ -26,6 +27,19 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
     setLoading(true);
     setError(null);
 
+    // Client-side password validation
+    if (formData.password !== formData.password_confirm) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      setLoading(false);
+      return;
+    }
+
     try {
       await onSubmit(formData);
       // Reset form and close modal
@@ -33,8 +47,9 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
         username: '',
         email: '',
         password: '',
+        password_confirm: '',
         display_name: '',
-        role: 'USER',
+        role: 'user',
         is_active: true
       });
       onClose();
@@ -91,10 +106,12 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
               id="email"
               name="email"
               required
+              placeholder="user@example.com"
               value={formData.email}
               onChange={handleInputChange}
               className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
+            <p className="mt-1 text-xs text-gray-500">Use a valid email domain (.com, .org, etc.)</p>
           </div>
 
           <div>
@@ -106,11 +123,30 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
               id="password"
               name="password"
               required
-              minLength="6"
+              minLength="8"
               value={formData.password}
               onChange={handleInputChange}
               className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
+          </div>
+
+          <div>
+            <label htmlFor="password_confirm" className="block text-sm font-medium text-gray-700">
+              Confirm Password *
+            </label>
+            <input
+              type="password"
+              id="password_confirm"
+              name="password_confirm"
+              required
+              minLength="8"
+              value={formData.password_confirm}
+              onChange={handleInputChange}
+              className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+            {formData.password && formData.password_confirm && formData.password !== formData.password_confirm && (
+              <p className="mt-1 text-sm text-red-600">Passwords do not match</p>
+            )}
           </div>
 
           <div>
@@ -138,9 +174,9 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
               onChange={handleInputChange}
               className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="USER">User</option>
-              <option value="ADMIN">Admin</option>
-              <option value="SUPERUSER">Super User</option>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="superuser">Super User</option>
             </select>
           </div>
 
@@ -168,7 +204,7 @@ const CreateUserModal = ({ isOpen, onClose, onSubmit }) => {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (formData.password && formData.password_confirm && formData.password !== formData.password_confirm)}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Creating...' : 'Create User'}

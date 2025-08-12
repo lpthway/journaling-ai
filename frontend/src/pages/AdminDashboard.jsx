@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
 import CreateUserModal from '../components/Admin/CreateUserModal';
+import { 
+  HomeIcon, 
+  ArrowRightOnRectangleIcon,
+  UserIcon 
+} from '@heroicons/react/24/outline';
 
 const AdminDashboard = () => {
-  const { user, token, isAdmin } = useAuth();
+  const { user, token, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +30,7 @@ const AdminDashboard = () => {
       
       // Load security stats
       const statsResponse = await authAPI.admin.getSecurityStats();
+      console.log('Security stats response:', statsResponse.data);
       setStats(statsResponse.data);
 
       // Load users list
@@ -60,14 +68,24 @@ const AdminDashboard = () => {
 
   const handleCreateUser = async (userData) => {
     try {
+      console.log('Creating user with data:', userData);
       await authAPI.admin.createUser(userData);
       // Reload dashboard data to show new user
       await loadDashboardData();
       setError(null);
     } catch (err) {
       console.error('Create user error:', err);
-      throw new Error(err.response?.data?.detail || 'Failed to create user');
+      console.error('Error response:', err.response?.data);
+      const errorMsg = err.response?.data?.detail || 
+                      err.response?.data?.error || 
+                      (err.response?.data?.details ? JSON.stringify(err.response.data.details) : 'Failed to create user');
+      throw new Error(errorMsg);
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
   };
 
   if (!isAdmin) {
@@ -93,12 +111,50 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600">Manage users, sessions, and security</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Admin Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
+              <span className="text-sm text-gray-500">|</span>
+              <Link 
+                to="/"
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <HomeIcon className="w-4 h-4 mr-2" />
+                Back to App
+              </Link>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 text-sm text-gray-700">
+                <UserIcon className="h-4 w-4" />
+                <span>{user?.display_name || user?.username}</span>
+                <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                  Super Admin
+                </span>
+              </div>
+              
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+              >
+                <ArrowRightOnRectangleIcon className="w-4 h-4 mr-2" />
+                Logout
+              </button>
+            </div>
+          </div>
         </div>
+      </header>
+
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900">System Overview</h2>
+            <p className="text-gray-600">Manage users, sessions, and security</p>
+          </div>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
@@ -132,7 +188,10 @@ const AdminDashboard = () => {
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-lg font-medium text-gray-900">Admin Users</h3>
               <p className="text-3xl font-bold text-purple-600">
-                {(stats.user_counts_by_role?.ADMIN || 0) + (stats.user_counts_by_role?.SUPERUSER || 0)}
+                {(() => {
+                  console.log('user_counts_by_role:', stats.user_counts_by_role);
+                  return (stats.user_counts_by_role?.admin || 0) + (stats.user_counts_by_role?.superuser || 0);
+                })()}
               </p>
             </div>
           </div>
@@ -252,6 +311,7 @@ const AdminDashboard = () => {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateUser}
         />
+        </div>
       </div>
     </div>
   );
