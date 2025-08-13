@@ -25,6 +25,11 @@ from app.services.enhanced_chat_service import (
     ConversationStage,
     EnhancedChatResponse
 )
+from app.auth.dependencies import get_current_user
+from app.auth.models import AuthUser
+
+# Type alias for current user dependency
+CurrentUser = Depends(get_current_user)
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +39,6 @@ router = APIRouter()
 
 class ChatMessageRequest(BaseModel):
     """Request for chat message processing"""
-    user_id: str = Field(..., description="User identifier")
     session_id: Optional[str] = Field(None, description="Conversation session ID (auto-generated if not provided)")
     message: str = Field(..., description="User message content", min_length=1, max_length=2000)
     conversation_mode: ConversationMode = Field(default=ConversationMode.SUPPORTIVE_LISTENING, description="Conversation mode")
@@ -43,7 +47,6 @@ class ChatMessageRequest(BaseModel):
 
 class StartConversationRequest(BaseModel):
     """Request to start a new conversation"""
-    user_id: str = Field(..., description="User identifier")
     conversation_mode: ConversationMode = Field(default=ConversationMode.SUPPORTIVE_LISTENING, description="Conversation mode")
     initial_context: Dict[str, Any] = Field(default_factory=dict, description="Initial conversation context")
 
@@ -99,6 +102,7 @@ class HealthResponse(BaseModel):
 @router.post("/message", response_model=ChatResponse)
 async def send_chat_message(
     request: ChatMessageRequest,
+    current_user: CurrentUser,
     background_tasks: BackgroundTasks
 ) -> ChatResponse:
     """
@@ -111,14 +115,14 @@ async def send_chat_message(
     - Advanced conversation analysis
     """
     try:
-        logger.info(f"💬 Processing chat message from user {request.user_id}")
+        logger.info(f"💬 Processing chat message from user {current_user.id}")
         
         # Auto-generate session ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
         
         # Process message through enhanced chat service
         enhanced_response = await enhanced_chat_service.process_chat_message(
-            user_id=request.user_id,
+            user_id=str(current_user.id),
             session_id=session_id,
             message=request.message,
             conversation_mode=request.conversation_mode,
@@ -145,7 +149,7 @@ async def send_chat_message(
         # Schedule background analytics
         background_tasks.add_task(
             _log_chat_analytics, 
-            request.user_id, 
+            str(current_user.id), 
             session_id, 
             len(request.message),
             enhanced_response.confidence_score
@@ -155,11 +159,11 @@ async def send_chat_message(
         if enhanced_response.crisis_indicators:
             background_tasks.add_task(
                 _log_crisis_intervention,
-                request.user_id,
+                str(current_user.id),
                 session_id,
                 enhanced_response.crisis_indicators
             )
-            logger.warning(f"🚨 Crisis indicators detected for user {request.user_id}: {enhanced_response.crisis_indicators}")
+            logger.warning(f"🚨 Crisis indicators detected for user {current_user.id}: {enhanced_response.crisis_indicators}")
         
         logger.info(f"✅ Chat response generated (confidence: {enhanced_response.confidence_score:.2f})")
         return response
@@ -169,18 +173,18 @@ async def send_chat_message(
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}")
 
 @router.post("/conversation/start", response_model=ConversationSession)
-async def start_conversation(request: StartConversationRequest) -> ConversationSession:
+async def start_conversation(request: StartConversationRequest, current_user: CurrentUser) -> ConversationSession:
     """
     Start a new conversation session
     
     Creates a new conversation context with specified mode and initial settings
     """
     try:
-        logger.info(f"💬 Starting new conversation for user {request.user_id}")
+        logger.info(f"💬 Starting new conversation for user {current_user.id}")
         
         # Start new conversation session
         session_id = await enhanced_chat_service.start_new_conversation(
-            user_id=request.user_id,
+            user_id=str(current_user.id),
             mode=request.conversation_mode
         )
         
@@ -188,7 +192,7 @@ async def start_conversation(request: StartConversationRequest) -> ConversationS
         # For now, create a basic response since we don't have a method to get context directly
         response = ConversationSession(
             session_id=session_id,
-            user_id=request.user_id,
+            user_id=str(current_user.id),
             conversation_mode=request.conversation_mode.value,
             current_stage=ConversationStage.OPENING.value,
             turn_count=0,
@@ -444,7 +448,7 @@ async def check_crisis_indicators(
 
 @router.get("/conversations")
 async def get_user_conversations(
-    user_id: str,
+    current_user: CurrentUser,
     limit: int = 50,
     include_metadata: bool = True
 ) -> Dict[str, Any]:
@@ -454,10 +458,10 @@ async def get_user_conversations(
     Returns list of conversation sessions with metadata
     """
     try:
-        logger.info(f"📜 Getting conversations for user {user_id}")
+        logger.info(f"📜 Getting conversations for user {current_user.id}")
         
         # Get conversation sessions from enhanced chat service
-        conversations = await enhanced_chat_service.get_user_conversations(user_id, limit)
+        conversations = await enhanced_chat_service.get_user_conversations(str(current_user.id), limit)
         
         # Format for frontend compatibility
         formatted_conversations = []
@@ -487,6 +491,7 @@ async def get_user_conversations(
 @router.get("/conversation/{session_id}/history")
 async def get_conversation_history(
     session_id: str,
+    current_user: CurrentUser,
     limit: int = 50,
     include_metadata: bool = False
 ) -> Dict[str, Any]:
