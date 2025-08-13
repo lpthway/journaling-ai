@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth.dependencies import CurrentUser, require_permissions
+from ..auth.dependencies import CurrentUser
 from ..core.database import get_db_session
 from ..core.exceptions import DatabaseException, ValidationException
 from ..models.enhanced_models import Entry, Topic, ChatSession, ChatMessage

@@ -120,7 +120,7 @@ class AuditEvent(AuditBase):
     compliance_tags: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     
     # Additional context data
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
+    event_metadata: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     
     # Data sensitivity markers
     contains_pii: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
@@ -162,7 +162,7 @@ class AuditEvent(AuditBase):
         Index('ix_audit_events_classification', 'data_classification', 'timestamp'),
         
         # JSONB indexes for metadata queries
-        Index('ix_audit_events_metadata_gin', 'metadata', postgresql_using='gin'),
+        Index('ix_audit_events_metadata_gin', 'event_metadata', postgresql_using='gin'),
         Index('ix_audit_events_compliance_gin', 'compliance_tags', postgresql_using='gin'),
     )
     

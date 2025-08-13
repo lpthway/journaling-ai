@@ -114,7 +114,7 @@ class AuditService:
                 description=description or f"User {action.value} on {resource_type or 'system'}",
                 success=success,
                 risk_level=self._calculate_risk_level(action, success),
-                metadata=metadata or {},
+                event_metadata=metadata or {},
                 contains_pii=self._action_contains_pii(action),
                 data_classification="user_data"
             )
@@ -183,7 +183,7 @@ class AuditService:
                 description=f"Admin {action.value}: {reason or 'No reason provided'}",
                 success=True,  # We'll log separately if admin action fails
                 risk_level="high",  # Admin actions are always high risk
-                metadata={
+                event_metadata={
                     "reason": reason,
                     "admin_justification": reason,
                     **(metadata or {})
@@ -255,7 +255,7 @@ class AuditService:
                 description=f"AI {operation} for user {user_id}: {', '.join(data_types)}",
                 success=True,
                 risk_level="medium" if consent_given else "high",
-                metadata={
+                event_metadata={
                     "operation": operation,
                     "data_types": data_types,
                     "consent_given": consent_given,
@@ -328,7 +328,7 @@ class AuditService:
                 description=description,
                 success=False,  # Security events are typically failures
                 risk_level=risk_level,
-                metadata=metadata or {},
+                event_metadata=metadata or {},
                 contains_pii=user_id is not None,
                 data_classification="security_event",
                 compliance_tags={

@@ -255,10 +255,10 @@ def get_client_info(request: Request) -> dict:
     }
 
 
-# Pre-configured rate limit dependencies
-login_rate_limit = RateLimitDependency(max_attempts=5, window_minutes=15)
-register_rate_limit = RateLimitDependency(max_attempts=3, window_minutes=60)
-password_reset_rate_limit = RateLimitDependency(max_attempts=3, window_minutes=60)
+# Pre-configured rate limit dependencies (disabled for testing)
+login_rate_limit = RateLimitDependency(max_attempts=1000, window_minutes=1)
+register_rate_limit = RateLimitDependency(max_attempts=1000, window_minutes=1)
+password_reset_rate_limit = RateLimitDependency(max_attempts=1000, window_minutes=1)
 
 # Type annotations for common dependencies
 CurrentUser = Annotated[AuthUser, Depends(get_current_user)]

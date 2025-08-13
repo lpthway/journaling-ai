@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 from app.models.topic import Topic, TopicCreate, TopicUpdate, TopicResponse
 from app.services.unified_database_service import unified_db_service
+from app.auth.dependencies import CurrentUser
 import logging
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,11 @@ def _convert_topic_to_response(db_topic) -> dict:
     }
 
 @router.post("/", response_model=TopicResponse)
-async def create_topic(topic: TopicCreate):
+async def create_topic(topic: TopicCreate, current_user: CurrentUser):
     """Create a new topic"""
     try:
-        db_topic = await unified_db_service.create_topic(topic.model_dump())
+        topic_data = topic.model_dump()
+        db_topic = await unified_db_service.create_topic(**topic_data, user_id=str(current_user.id))
         return TopicResponse.model_validate(_convert_topic_to_response(db_topic))
         
     except Exception as e:
@@ -60,10 +62,10 @@ async def create_topic(topic: TopicCreate):
         raise HTTPException(status_code=500, detail="Failed to create topic")
 
 @router.get("/", response_model=List[TopicResponse])
-async def get_topics():
+async def get_topics(current_user: CurrentUser):
     """Get all topics"""
     try:
-        topics = await unified_db_service.get_topics()
+        topics = await unified_db_service.get_topics(user_id=str(current_user.id))
         return [TopicResponse.model_validate(_convert_topic_to_response(topic)) for topic in topics]
         
     except Exception as e:
