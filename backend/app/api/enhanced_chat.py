@@ -99,8 +99,8 @@ class HealthResponse(BaseModel):
 @router.post("/message", response_model=ChatResponse)
 async def send_chat_message(
     request: ChatMessageRequest,
-    current_user: AuthUser = Depends(get_current_user),
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: AuthUser = Depends(get_current_user)
 ) -> ChatResponse:
     """
     Send a message and receive an enhanced AI response
@@ -170,7 +170,10 @@ async def send_chat_message(
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}")
 
 @router.post("/conversation/start", response_model=ConversationSession)
-async def start_conversation(request: StartConversationRequest, current_user: AuthUser = Depends(get_current_user)) -> ConversationSession:
+async def start_conversation(
+    request: StartConversationRequest, 
+    current_user: AuthUser = Depends(get_current_user)
+) -> ConversationSession:
     """
     Start a new conversation session
     
@@ -445,9 +448,9 @@ async def check_crisis_indicators(
 
 @router.get("/conversations")
 async def get_user_conversations(
-    current_user: AuthUser = Depends(get_current_user),
     limit: int = 50,
-    include_metadata: bool = True
+    include_metadata: bool = True,
+    current_user: AuthUser = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get all conversations for a user
@@ -488,9 +491,9 @@ async def get_user_conversations(
 @router.get("/conversation/{session_id}/history")
 async def get_conversation_history(
     session_id: str,
-    current_user: AuthUser = Depends(get_current_user),
     limit: int = 50,
-    include_metadata: bool = False
+    include_metadata: bool = False,
+    current_user: AuthUser = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get conversation history for a session
