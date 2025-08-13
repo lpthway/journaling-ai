@@ -14,7 +14,7 @@ import ChatInput from './ChatInput';
 import SessionTypeSelector from './SessionTypeSelector';
 import ContextAwareSuggestions from './ContextAwareSuggestions';
 import LoadingSpinner from '../Common/LoadingSpinner';
-import { sessionAPI, entryAPI } from '../../services/api.ts';
+import { sessionAPI, entryAPI } from '../../services/api';
 
 const EnhancedChatInterface = ({ sessionId = null, onSessionChange }) => {
   const [session, setSession] = useState(null);

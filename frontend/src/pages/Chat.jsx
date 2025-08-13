@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 import EnhancedChatInterface from '../components/chat/EnhancedChatInterface';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
-import { sessionAPI } from '../services/api.ts';
+import { sessionAPI } from '../services/api';
 import { formatDate, formatTime } from '../utils/helpers';
 
 const Chat = () => {

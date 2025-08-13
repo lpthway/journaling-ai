@@ -545,10 +545,19 @@ class AuthService:
             expires_delta=access_token_expires
         )
         
-        # Generate refresh token
+        # Generate refresh token with unique identifier to prevent duplicates
         refresh_token_expires = timedelta(days=30 if remember_me else 7)
+        
+        # Add unique timestamp to prevent duplicate tokens
+        import time
+        refresh_token_data = {
+            **token_data,
+            "iat": int(time.time()),  # Issued at timestamp for uniqueness
+            "jti": f"{user.id}_{int(time.time() * 1000000)}"  # Unique token identifier
+        }
+        
         refresh_token_jwt = jwt_manager.create_refresh_token(
-            data=token_data,
+            data=refresh_token_data,
             expires_delta=refresh_token_expires
         )
         
