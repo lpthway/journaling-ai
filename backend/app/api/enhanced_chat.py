@@ -28,9 +28,6 @@ from app.services.enhanced_chat_service import (
 from app.auth.dependencies import get_current_user
 from app.auth.models import AuthUser
 
-# Type alias for current user dependency
-CurrentUser = Depends(get_current_user)
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -102,7 +99,7 @@ class HealthResponse(BaseModel):
 @router.post("/message", response_model=ChatResponse)
 async def send_chat_message(
     request: ChatMessageRequest,
-    current_user: CurrentUser,
+    current_user: AuthUser = Depends(get_current_user),
     background_tasks: BackgroundTasks
 ) -> ChatResponse:
     """
@@ -173,7 +170,7 @@ async def send_chat_message(
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}")
 
 @router.post("/conversation/start", response_model=ConversationSession)
-async def start_conversation(request: StartConversationRequest, current_user: CurrentUser) -> ConversationSession:
+async def start_conversation(request: StartConversationRequest, current_user: AuthUser = Depends(get_current_user)) -> ConversationSession:
     """
     Start a new conversation session
     
@@ -448,7 +445,7 @@ async def check_crisis_indicators(
 
 @router.get("/conversations")
 async def get_user_conversations(
-    current_user: CurrentUser,
+    current_user: AuthUser = Depends(get_current_user),
     limit: int = 50,
     include_metadata: bool = True
 ) -> Dict[str, Any]:
@@ -491,7 +488,7 @@ async def get_user_conversations(
 @router.get("/conversation/{session_id}/history")
 async def get_conversation_history(
     session_id: str,
-    current_user: CurrentUser,
+    current_user: AuthUser = Depends(get_current_user),
     limit: int = 50,
     include_metadata: bool = False
 ) -> Dict[str, Any]:
