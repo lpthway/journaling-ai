@@ -53,16 +53,19 @@ class SessionService:
             logger.error(f"Error getting session {session_id}: {e}")
             return None
     
-    async def create_session(self, session_data: SessionCreate, user_id: str = None) -> Session:
+    async def create_session(self, session_data: SessionCreate, user_id: str) -> Session:
         """Create a new session"""
         try:
             # Use the unified database service to create session
             title = session_data.title or f"New {session_data.session_type.replace('_', ' ').title()}"
             
+            if not user_id:
+                raise ValueError("user_id is required for session creation")
+            
             chat_session = await self.db.create_session(
                 session_type=session_data.session_type.value,
                 title=title,
-                user_id=user_id or "00000000-0000-0000-0000-000000000001",  # Use provided user ID
+                user_id=user_id,  # Use provided user ID (required)
                 description=session_data.description,
                 initial_message="Hello! How can I help you today?"
             )
@@ -230,6 +233,36 @@ class SessionService:
                 ]
         except Exception as e:
             logger.error(f"Error getting recent messages for session {session_id}: {e}")
+            return []
+
+    async def get_user_sessions(self, user_id: str, limit: int = 50) -> List[Session]:
+        """Get sessions for a specific user"""
+        try:
+            async with database.get_session() as db:
+                session_repo = SessionRepository(db)
+                
+                # Get user sessions from database
+                db_sessions = await session_repo.get_user_sessions(user_id=user_id, limit=limit)
+                
+                # Convert to Session models
+                return [
+                    Session(
+                        id=str(session.id),
+                        session_type=session.session_type,
+                        title=session.title or f"Chat Session {str(session.id)[:8]}",
+                        description=session.description,
+                        status=session.status,
+                        created_at=session.created_at,
+                        updated_at=session.updated_at,
+                        last_activity=session.last_activity,
+                        message_count=session.message_count or 0,
+                        tags=session.tags or [],
+                        metadata=session.session_metadata or {}
+                    )
+                    for session in db_sessions
+                ]
+        except Exception as e:
+            logger.error(f"Error getting user sessions for {user_id}: {e}")
             return []
 
 # Global session service instance

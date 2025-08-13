@@ -390,7 +390,7 @@ class UnifiedDatabaseService:
     
     async def get_mood_statistics(
         self,
-        user_id: str = "1e05fb66-160a-4305-b84a-805c2f0c6910",  # Use real user UUID
+        user_id: str,  # Required user ID
         days: int = 30,
         use_cache: bool = True
     ) -> Dict[str, Any]:
@@ -421,7 +421,7 @@ class UnifiedDatabaseService:
     
     async def get_writing_statistics(
         self,
-        user_id: str = "1e05fb66-160a-4305-b84a-805c2f0c6910",  # Use real user UUID
+        user_id: str,  # Required user ID
         days: int = 30,
         use_cache: bool = True
     ) -> Dict[str, Any]:

@@ -300,8 +300,8 @@ async def send_message(session_id: str, message_data: MessageCreate, current_use
         
         # Invalidate analytics cache for session update
         try:
-            # Get user_id for cache invalidation (assuming default user for now)
-            await entry_analytics_processor.invalidate_analytics_cache("default_user")
+            # Get user_id for cache invalidation  
+            await entry_analytics_processor.invalidate_analytics_cache(str(current_user.id))
             logger.debug(f"Invalidated analytics cache for session update {session_id}")
         except Exception as e:
             # Don't let cache invalidation errors break session operations

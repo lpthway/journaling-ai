@@ -137,7 +137,7 @@ async def create_entry(
             
             # Check for crisis indicators using AI intervention service
             intervention_assessment = await ai_intervention_service.assess_crisis_level(
-                entry.content, user_context={"user_id": "default_user"}
+                entry.content, user_context={"user_id": str(current_user.id)}
             )
             
             # Log crisis assessment results

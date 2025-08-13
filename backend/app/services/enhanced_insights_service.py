@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 class EnhancedInsightsService:
     """Enhanced insights service that includes both journal entries and chat conversations"""
     
-    async def analyze_all_content(self, question: str, days: int = 30) -> Dict[str, Any]:
+    async def analyze_all_content(self, question: str, user_id: str, days: int = 30) -> Dict[str, Any]:
         """Analyze both journal entries and chat conversations to answer a question"""
         try:
             # Get journal entries
-            journal_entries = await self.get_journal_entries(days)
+            journal_entries = await self.get_journal_entries(user_id, days)
             
             # Get chat conversations
-            chat_conversations = await self.get_chat_conversations(days)
+            chat_conversations = await self.get_chat_conversations(user_id, days)
             
             # Search for relevant content using vector search
             relevant_journal = await vector_service.search_entries(question, limit=10)
-            relevant_chat = await self.search_chat_content(question, limit=10)
+            relevant_chat = await self.search_chat_content(question, user_id, limit=10)
             
             # Combine and analyze all content
             all_content = self.combine_content(
@@ -59,14 +59,14 @@ class EnhancedInsightsService:
             logger.error(f"Error in enhanced insights analysis: {e}")
             raise
     
-    async def get_comprehensive_mood_analysis(self, days: int = 30) -> Dict[str, Any]:
+    async def get_comprehensive_mood_analysis(self, user_id: str, days: int = 30) -> Dict[str, Any]:
         """Get mood analysis from both journal entries and chat conversations"""
         try:
             # Analyze journal entry moods (existing functionality)
-            journal_mood_stats = await unified_db_service.get_mood_statistics(days)
+            journal_mood_stats = await unified_db_service.get_mood_statistics(user_id, days)
             
             # Analyze chat conversation sentiments
-            chat_sentiments = await self.analyze_chat_sentiments(days)
+            chat_sentiments = await self.analyze_chat_sentiments(user_id, days)
             
             # Combine both analyses
             combined_analysis = await self.combine_mood_analyses(
@@ -80,14 +80,14 @@ class EnhancedInsightsService:
             logger.error(f"Error in comprehensive mood analysis: {e}")
             raise
     
-    async def generate_enhanced_coaching_suggestions(self, days: int = 7) -> List[str]:
+    async def generate_enhanced_coaching_suggestions(self, user_id: str, days: int = 7) -> List[str]:
         """Generate coaching suggestions based on both journal entries and chat conversations"""
         try:
             # Get recent journal entries
-            journal_entries = await self.get_journal_entries(days)
+            journal_entries = await self.get_journal_entries(user_id, days)
             
             # Get recent chat conversations
-            chat_conversations = await self.get_chat_conversations(days)
+            chat_conversations = await self.get_chat_conversations(user_id, days)
             
             # Convert to analysis format
             combined_content = []
@@ -136,10 +136,10 @@ class EnhancedInsightsService:
             logger.error(f"Error generating enhanced coaching suggestions: {e}")
             return ["Continue reflecting through both journaling and conversations to gain deeper insights."]
     
-    async def analyze_conversation_patterns(self, days: int = 30) -> Dict[str, Any]:
+    async def analyze_conversation_patterns(self, user_id: str, days: int = 30) -> Dict[str, Any]:
         """Analyze patterns in chat conversations"""
         try:
-            conversations = await self.get_chat_conversations(days)
+            conversations = await self.get_chat_conversations(user_id, days)
             
             if not conversations:
                 return {
@@ -194,17 +194,17 @@ class EnhancedInsightsService:
     
     # Helper methods
     
-    async def get_journal_entries(self, days: int) -> List:
-        """Get journal entries from the last N days"""
+    async def get_journal_entries(self, user_id: str, days: int) -> List:
+        """Get journal entries from the last N days for a specific user"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        return await unified_db_service.get_entries(date_from=start_date, date_to=end_date, limit=100)
+        return await unified_db_service.get_entries(user_id=user_id, date_from=start_date, date_to=end_date, limit=100)
     
-    async def get_chat_conversations(self, days: int) -> List[Dict]:
+    async def get_chat_conversations(self, user_id: str, days: int) -> List[Dict]:
         """Get chat conversations from the last N days"""
         try:
-            # Get sessions from the last N days
-            sessions = await session_service.get_sessions(limit=50)
+            # Get sessions from the last N days for this user
+            sessions = await session_service.get_user_sessions(user_id=user_id, limit=50)
             
             conversations = []
             end_date = datetime.now()
@@ -239,10 +239,10 @@ class EnhancedInsightsService:
             logger.error(f"Error getting chat conversations: {e}")
             return []
     
-    async def search_chat_content(self, query: str, limit: int = 10) -> List[Dict]:
+    async def search_chat_content(self, query: str, user_id: str, limit: int = 10) -> List[Dict]:
         """Search through chat conversations for relevant content"""
         try:
-            conversations = await self.get_chat_conversations(30)  # Last 30 days
+            conversations = await self.get_chat_conversations(user_id, 30)  # Last 30 days
             relevant_chats = []
             
             for conv in conversations:
@@ -277,10 +277,10 @@ class EnhancedInsightsService:
             logger.error(f"Error searching chat content: {e}")
             return []
     
-    async def analyze_chat_sentiments(self, days: int) -> Dict[str, Any]:
+    async def analyze_chat_sentiments(self, user_id: str, days: int) -> Dict[str, Any]:
         """Analyze sentiments from chat conversations"""
         try:
-            conversations = await self.get_chat_conversations(days)
+            conversations = await self.get_chat_conversations(user_id, days)
             
             sentiment_data = {
                 'mood_distribution': {},
@@ -399,13 +399,12 @@ class EnhancedInsightsService:
         
         return combined
 
-# Global instance
-async def get_detailed_sources(self, question: str, days: int = 30) -> Dict[str, Any]:
+    async def get_detailed_sources(self, question: str, user_id: str, days: int = 30) -> Dict[str, Any]:
         """Get detailed source information for the insights response"""
         try:
             # Get relevant content
             relevant_journal = await vector_service.search_entries(question, limit=10)
-            relevant_chat = await self.search_chat_content(question, limit=10)
+            relevant_chat = await self.search_chat_content(question, user_id, limit=10)
             
             detailed_sources = {
                 'journal_entries': [],
