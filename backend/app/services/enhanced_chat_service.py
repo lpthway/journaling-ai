@@ -1126,7 +1126,7 @@ Response:"""
                     conversations.append({
                         "session_id": session.id,
                         "session_type": session.session_type,
-                        "title": session.title or f"Chat Session {session.id[:8]}",
+                        "title": session.title or f"Chat Session {str(session.id)[:8]}",
                         "status": session.status,
                         "message_count": session.message_count,
                         "started_at": session.created_at,

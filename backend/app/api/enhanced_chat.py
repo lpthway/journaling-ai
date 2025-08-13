@@ -469,7 +469,7 @@ async def get_user_conversations(
             formatted_conversations.append({
                 "id": conv["session_id"],
                 "session_type": conv.get("session_type", "free_chat"),
-                "title": conv.get("title", f"Chat Session {conv['session_id'][:8]}"),
+                "title": conv.get("title", f"Chat Session {str(conv['session_id'])[:8]}"),
                 "status": conv.get("status", "active"),
                 "message_count": conv.get("message_count", 0),
                 "created_at": conv.get("started_at"),
@@ -480,7 +480,7 @@ async def get_user_conversations(
         return {
             "conversations": formatted_conversations,
             "total_count": len(formatted_conversations),
-            "user_id": user_id,
+            "user_id": str(current_user.id),
             "retrieved_at": datetime.utcnow()
         }
         
