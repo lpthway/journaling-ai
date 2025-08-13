@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
+from app.auth.dependencies import CurrentUser
 from app.models.session import (
     Session, SessionCreate, SessionUpdate, SessionResponse,
     MessageCreate, MessageResponse, MessageRole, SessionStatus, SessionType
@@ -62,14 +63,14 @@ async def auto_tag_conversation(session_id: str):
         logger.error(f"Error auto-tagging conversation {session_id}: {e}")
 
 @router.post("/", response_model=SessionResponse)
-async def create_session(session_data: SessionCreate):
+async def create_session(session_data: SessionCreate, current_user: CurrentUser):
     """Create a new conversation session"""
     try:
         logger.info(f"Creating session with data: {session_data}")
         logger.info(f"Session type: {session_data.session_type}")
         
         # Create the session
-        session = await session_service.create_session(session_data)
+        session = await session_service.create_session(session_data, user_id=str(current_user.id))
         
         # Generate opening message from AI
         opening_message = await conversation_service.generate_opening_message(
@@ -99,6 +100,7 @@ async def create_session(session_data: SessionCreate):
 
 @router.get("/", response_model=List[SessionResponse])
 async def get_sessions(
+    current_user: CurrentUser,
     limit: int = Query(20, ge=1, le=100),
     status: Optional[SessionStatus] = Query(None)
 ):
@@ -111,7 +113,7 @@ async def get_sessions(
         async with database.session_factory() as db:
             session_repo = SessionRepository(db)
             sessions = await session_repo.get_user_sessions(
-                user_id="00000000-0000-0000-0000-000000000001",  # Use correct user ID from database
+                user_id=str(current_user.id),  # Use authenticated user ID
                 limit=limit
             )
         
@@ -157,7 +159,7 @@ async def get_sessions(
         raise HTTPException(status_code=500, detail="Failed to retrieve sessions")
 
 @router.get("/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: str):
+async def get_session(session_id: str, current_user: CurrentUser):
     """Get a specific session with recent messages"""
     try:
         from app.core.database import database
@@ -249,7 +251,7 @@ async def delete_session(session_id: str):
         raise HTTPException(status_code=500, detail="Failed to delete session")
 
 @router.post("/{session_id}/messages", response_model=MessageResponse)
-async def send_message(session_id: str, message_data: MessageCreate):
+async def send_message(session_id: str, message_data: MessageCreate, current_user: CurrentUser):
     """Send a message in a conversation session"""
     try:
         # Check if session exists

@@ -177,7 +177,7 @@ async def create_entry(
                 title=entry.title,
                 content=entry.content,
                 user_id=str(current_user.id),  # Use authenticated user ID
-                topic_id=entry.topic_id,
+                topic_id=entry.topic_id if entry.topic_id else None,
                 mood=mood if mood else None,
                 sentiment_score=sentiment_score,
                 tags=final_tags

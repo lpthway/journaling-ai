@@ -53,7 +53,7 @@ class SessionService:
             logger.error(f"Error getting session {session_id}: {e}")
             return None
     
-    async def create_session(self, session_data: SessionCreate) -> Session:
+    async def create_session(self, session_data: SessionCreate, user_id: str = None) -> Session:
         """Create a new session"""
         try:
             # Use the unified database service to create session
@@ -62,7 +62,7 @@ class SessionService:
             chat_session = await self.db.create_session(
                 session_type=session_data.session_type.value,
                 title=title,
-                user_id="00000000-0000-0000-0000-000000000001",  # Use correct user ID
+                user_id=user_id or "00000000-0000-0000-0000-000000000001",  # Use provided user ID
                 description=session_data.description,
                 initial_message="Hello! How can I help you today?"
             )
