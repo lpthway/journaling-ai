@@ -10,7 +10,8 @@ from sqlalchemy import select, func, and_, or_, desc, text, asc, column
 from sqlalchemy.orm import selectinload, load_only
 from contextlib import asynccontextmanager
 
-from app.models.enhanced_models import Entry, Topic, User, Session as ChatSession
+from app.models.enhanced_models import Entry, Topic, ChatSession
+from app.auth.models import AuthUser
 from app.core.database import get_db_session
 
 logger = logging.getLogger(__name__)

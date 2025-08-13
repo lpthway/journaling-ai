@@ -6,7 +6,8 @@ from sqlalchemy import select, func, and_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.enhanced_models import Entry, User
+from app.models.enhanced_models import Entry
+from app.auth.models import AuthUser
 from app.repositories.base import BaseRepository
 
 class JournalEntryRepository(BaseRepository[Entry]):

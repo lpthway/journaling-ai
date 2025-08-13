@@ -26,114 +26,12 @@ from typing import Dict, Any, List, Optional
 from enum import Enum
 import uuid
 
-class Base(AsyncAttrs, DeclarativeBase):
-    """Enhanced base class with common patterns for all models."""
-    
-    # Common audit fields
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        server_default=func.now(),
-        nullable=False,
-        index=True
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False
-    )
-    
-    # Soft deletion support
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        index=True
-    )
-    
-    @hybrid_property
-    def is_active(self) -> bool:
-        """Check if record is not soft-deleted."""
-        return self.deleted_at is None
+from .base import Base
 
-# User Management (Future-proofing for authentication)
-class User(Base):
-    """
-    User model with comprehensive profile and preference management.
-    
-    Designed for scalability with authentication, personalization,
-    and advanced user analytics capabilities.
-    """
-    __tablename__ = "users"
-    
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), 
-        primary_key=True, 
-        default=uuid.uuid4,
-        index=True
-    )
-    
-    # Core user information
-    username: Mapped[str] = mapped_column(
-        String(50), 
-        unique=True, 
-        nullable=False,
-        index=True
-    )
-    email: Mapped[Optional[str]] = mapped_column(
-        String(255), 
-        unique=True, 
-        nullable=True,
-        index=True
-    )
-    
-    # Profile information
-    display_name: Mapped[Optional[str]] = mapped_column(String(100))
-    timezone: Mapped[str] = mapped_column(String(50), default="UTC")
-    language: Mapped[str] = mapped_column(String(10), default="en")
-    
-    # User preferences (JSONB for flexibility)
-    preferences: Mapped[Dict[str, Any]] = mapped_column(
-        JSONB, 
-        nullable=False, 
-        default=dict
-    )
-    
-    # Psychology and coaching preferences
-    psychology_profile: Mapped[Dict[str, Any]] = mapped_column(
-        JSONB,
-        nullable=False,
-        default=dict
-    )
-    
-    # Account status
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    
-    # Relationships
-    entries: Mapped[List["Entry"]] = relationship(
-        "Entry", 
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
-    sessions: Mapped[List["ChatSession"]] = relationship(
-        "ChatSession",
-        back_populates="user", 
-        cascade="all, delete-orphan"
-    )
-    topics: Mapped[List["Topic"]] = relationship(
-        "Topic",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
-    
-    # Indexes for performance
-    __table_args__ = (
-        Index('ix_users_active_created', 'is_active', 'created_at'),
-        Index('ix_users_preferences_gin', 'preferences', postgresql_using='gin'),
-    )
-    
-    def __repr__(self) -> str:
-        return f"<User(id={self.id}, username={self.username})>"
+# Import here to avoid circular dependencies
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..auth.models import AuthUser
 
 # Topic Management with Enhanced Features
 class Topic(Base):
@@ -171,7 +69,7 @@ class Topic(Base):
     # User association
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
         nullable=False
     )
     
@@ -186,7 +84,7 @@ class Topic(Base):
     usage_statistics: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="topics")
+    user: Mapped["AuthUser"] = relationship("AuthUser", back_populates="topics")
     parent: Mapped[Optional["Topic"]] = relationship(
         "Topic", 
         remote_side=[id], 
@@ -261,12 +159,12 @@ class EntryTemplate(Base):
     # Owner (optional for public templates)
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("auth_users.id", ondelete="SET NULL"),
         nullable=True
     )
     
     # Relationships
-    created_by: Mapped[Optional["User"]] = relationship("User")
+    created_by: Mapped[Optional["AuthUser"]] = relationship("AuthUser")
     
     __table_args__ = (
         Index('ix_templates_category_public', 'category', 'is_public'),
@@ -308,7 +206,7 @@ class Entry(Base):
     # User and topic associations
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
         nullable=False
     )
     topic_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -358,7 +256,7 @@ class Entry(Base):
     analysis_results: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="entries")
+    user: Mapped["AuthUser"] = relationship("AuthUser", back_populates="entries")
     topic: Mapped[Optional["Topic"]] = relationship("Topic", back_populates="entries")
     template: Mapped[Optional["EntryTemplate"]] = relationship("EntryTemplate")
     parent_entry: Mapped[Optional["Entry"]] = relationship(
@@ -436,7 +334,7 @@ class ChatSession(Base):
     # User association
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
         nullable=False
     )
     
@@ -462,7 +360,7 @@ class ChatSession(Base):
     session_metadata: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="sessions")
+    user: Mapped["AuthUser"] = relationship("AuthUser", back_populates="sessions")
     messages: Mapped[List["ChatMessage"]] = relationship(
         "ChatMessage",
         back_populates="session",

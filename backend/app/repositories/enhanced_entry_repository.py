@@ -12,7 +12,8 @@ from sqlalchemy.orm import selectinload
 from contextlib import asynccontextmanager
 
 from app.repositories.base_cached_repository import EnhancedBaseRepository
-from app.models.enhanced_models import Entry, Topic, User
+from app.models.enhanced_models import Entry, Topic
+from app.auth.models import AuthUser
 from app.decorators.cache_decorators import cached, cache_invalidate, timed_operation, CachePatterns
 from app.core.exceptions import RepositoryException, NotFoundException
 from app.core.performance_monitor import performance_monitor

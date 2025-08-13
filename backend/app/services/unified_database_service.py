@@ -17,7 +17,8 @@ from app.core.service_interfaces import service_registry
 from app.core.cache_patterns import CacheKeyBuilder, CacheDomain, CacheTTL, CachePatterns
 from app.services.redis_service_simple import simple_redis_service
 from app.repositories.base_cached_repository import RepositoryFactory
-from app.models.enhanced_models import Entry, ChatSession, ChatMessage, Topic, User
+from app.models.enhanced_models import Entry, ChatSession, ChatMessage, Topic
+from app.auth.models import AuthUser
 
 logger = logging.getLogger(__name__)
 

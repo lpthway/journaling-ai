@@ -14,7 +14,8 @@ from sqlalchemy import select, func, and_, desc, text, or_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 import logging
-from ..models.enhanced_models import ChatSession, ChatMessage, User
+from ..models.enhanced_models import ChatSession, ChatMessage
+from ..auth.models import AuthUser
 from .enhanced_base import EnhancedBaseRepository
 
 logger = logging.getLogger(__name__)

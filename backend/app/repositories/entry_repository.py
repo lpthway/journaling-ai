@@ -13,7 +13,8 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select, func, and_, or_, text, desc
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
-from ..models.enhanced_models import Entry, Topic, User
+from ..models.enhanced_models import Entry, Topic
+from ..auth.models import AuthUser
 from .enhanced_base import EnhancedBaseRepository
 
 class EntryRepository(EnhancedBaseRepository[Entry]):

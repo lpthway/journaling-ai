@@ -29,6 +29,7 @@ from app.services.advanced_ai_service import (
 )
 from app.services.unified_database_service import unified_db_service
 from app.core.exceptions import JournalingAIException
+from app.auth.dependencies import CurrentUser
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,6 @@ class AdvancedAnalysisRequest(BaseModel):
 
 class PersonalityAnalysisRequest(BaseModel):
     """Request for personality analysis"""
-    user_id: str = Field(..., description="User identifier")
     include_detailed_traits: bool = Field(default=True, description="Include detailed trait analysis")
     min_entries_required: int = Field(default=10, description="Minimum entries required", ge=5)
 
@@ -238,7 +238,7 @@ async def get_comprehensive_analysis(
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @router.post("/analysis/personality", response_model=PersonalityResponse)
-async def get_personality_analysis(request: PersonalityAnalysisRequest) -> PersonalityResponse:
+async def get_personality_analysis(request: PersonalityAnalysisRequest, current_user: CurrentUser) -> PersonalityResponse:
     """
     Generate detailed personality profile from journal entries
     
@@ -250,10 +250,10 @@ async def get_personality_analysis(request: PersonalityAnalysisRequest) -> Perso
     - Strengths and growth areas
     """
     try:
-        logger.info(f"🎭 Starting personality analysis for user {request.user_id}")
+        logger.info(f"🎭 Starting personality analysis for user {current_user.id}")
         
         # Fetch user entries
-        entries = await _fetch_user_entries(request.user_id, 200)  # More entries for personality analysis
+        entries = await _fetch_user_entries(str(current_user.id), 200)  # More entries for personality analysis
         
         if len(entries) < request.min_entries_required:
             raise HTTPException(

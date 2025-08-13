@@ -12,7 +12,7 @@ from typing import Optional, List
 from enum import Enum as PyEnum
 import uuid
 
-from ..models.enhanced_models import Base
+from ..models.base import Base
 
 
 class UserRole(PyEnum):
@@ -109,6 +109,23 @@ class AuthUser(Base):
     refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
         "RefreshToken",
         back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    
+    # Relationships with user data (added for enhanced models)
+    entries: Mapped[List["Entry"]] = relationship(
+        "Entry",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    topics: Mapped[List["Topic"]] = relationship(
+        "Topic", 
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    sessions: Mapped[List["ChatSession"]] = relationship(
+        "ChatSession",
+        back_populates="user", 
         cascade="all, delete-orphan"
     )
     
