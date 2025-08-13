@@ -39,7 +39,6 @@ router = APIRouter()
 
 class AdvancedAnalysisRequest(BaseModel):
     """Request for advanced AI analysis"""
-    user_id: str = Field(..., description="User identifier")
     timeframe: AnalysisTimeframe = Field(default=AnalysisTimeframe.MONTHLY, description="Analysis timeframe")
     include_predictions: bool = Field(default=True, description="Include predictive analysis")
     include_personality: bool = Field(default=True, description="Include personality profiling")
@@ -52,7 +51,6 @@ class PersonalityAnalysisRequest(BaseModel):
 
 class PredictiveAnalysisRequest(BaseModel):
     """Request for predictive analysis"""
-    user_id: str = Field(..., description="User identifier") 
     prediction_horizon: int = Field(default=7, description="Days to predict ahead", ge=1, le=30)
     include_risk_assessment: bool = Field(default=True, description="Include risk factor analysis")
     include_opportunities: bool = Field(default=True, description="Include opportunity identification")
@@ -114,6 +112,7 @@ class HealthCheckResponse(BaseModel):
 @router.post("/analysis/comprehensive", response_model=AdvancedAnalysisResponse)
 async def get_comprehensive_analysis(
     request: AdvancedAnalysisRequest,
+    current_user: CurrentUser,
     background_tasks: BackgroundTasks
 ) -> AdvancedAnalysisResponse:
     """
@@ -127,10 +126,10 @@ async def get_comprehensive_analysis(
     """
     try:
         start_time = datetime.utcnow()
-        logger.info(f"🧠 Starting comprehensive AI analysis for user {request.user_id}")
+        logger.info(f"🧠 Starting comprehensive AI analysis for user {current_user.id}")
         
         # Fetch user entries
-        entries = await _fetch_user_entries(request.user_id, request.max_entries)
+        entries = await _fetch_user_entries(str(current_user.id), request.max_entries)
         
         if len(entries) < 5:
             raise HTTPException(
@@ -140,7 +139,7 @@ async def get_comprehensive_analysis(
         
         # Perform temporal pattern analysis
         temporal_insights = await advanced_ai_service.analyze_temporal_patterns(
-            request.user_id, entries, request.timeframe
+            str(current_user.id), entries, request.timeframe
         )
         
         # Convert insights to response format
@@ -164,7 +163,7 @@ async def get_comprehensive_analysis(
         if request.include_personality and len(entries) >= 10:
             try:
                 personality_profile = await advanced_ai_service.generate_personality_profile(
-                    request.user_id, entries
+                    str(current_user.id), entries
                 )
                 personality_response = PersonalityResponse(
                     dimensions={dim.name.lower(): score for dim, score in personality_profile.dimensions.items()},
@@ -186,7 +185,7 @@ async def get_comprehensive_analysis(
         if request.include_predictions and len(entries) >= 15:
             try:
                 predictive_analysis = await advanced_ai_service.generate_predictive_analysis(
-                    request.user_id, entries, prediction_horizon=7
+                    str(current_user.id), entries, prediction_horizon=7
                 )
                 predictive_response = PredictionResponse(
                     predicted_mood_trends=predictive_analysis.predicted_mood_trends,
@@ -226,9 +225,9 @@ async def get_comprehensive_analysis(
         )
         
         # Schedule background analytics update
-        background_tasks.add_task(_update_user_analytics, request.user_id, len(entries))
+        background_tasks.add_task(_update_user_analytics, str(current_user.id), len(entries))
         
-        logger.info(f"✅ Comprehensive analysis completed for user {request.user_id} in {processing_time:.2f}s")
+        logger.info(f"✅ Comprehensive analysis completed for user {current_user.id} in {processing_time:.2f}s")
         return response
         
     except HTTPException:
@@ -263,7 +262,7 @@ async def get_personality_analysis(request: PersonalityAnalysisRequest, current_
         
         # Generate personality profile
         personality_profile = await advanced_ai_service.generate_personality_profile(
-            request.user_id, entries
+            str(current_user.id), entries
         )
         
         # Debug: Check what type personality_profile is
@@ -288,7 +287,7 @@ async def get_personality_analysis(request: PersonalityAnalysisRequest, current_
             last_updated=personality_profile.last_updated
         )
         
-        logger.info(f"✅ Personality analysis completed for user {request.user_id} (confidence: {personality_profile.confidence_score:.2f})")
+        logger.info(f"✅ Personality analysis completed for user {current_user.id} (confidence: {personality_profile.confidence_score:.2f})")
         return response
         
     except HTTPException:
@@ -298,7 +297,7 @@ async def get_personality_analysis(request: PersonalityAnalysisRequest, current_
         raise HTTPException(status_code=500, detail=f"Personality analysis failed: {str(e)}")
 
 @router.post("/analysis/predictive", response_model=PredictionResponse)
-async def get_predictive_analysis(request: PredictiveAnalysisRequest) -> PredictionResponse:
+async def get_predictive_analysis(request: PredictiveAnalysisRequest, current_user: CurrentUser) -> PredictionResponse:
     """
     Generate predictive analysis and forecasts
     
@@ -310,10 +309,10 @@ async def get_predictive_analysis(request: PredictiveAnalysisRequest) -> Predict
     - Personalized recommendations
     """
     try:
-        logger.info(f"🔮 Starting predictive analysis for user {request.user_id}")
+        logger.info(f"🔮 Starting predictive analysis for user {current_user.id}")
         
         # Fetch user entries (more recent entries weighted higher)
-        entries = await _fetch_user_entries(request.user_id, 150)
+        entries = await _fetch_user_entries(str(current_user.id), 150)
         
         if len(entries) < 10:
             raise HTTPException(
@@ -323,7 +322,7 @@ async def get_predictive_analysis(request: PredictiveAnalysisRequest) -> Predict
         
         # Generate predictive analysis
         predictive_analysis = await advanced_ai_service.generate_predictive_analysis(
-            request.user_id, entries, request.prediction_horizon
+            str(current_user.id), entries, request.prediction_horizon
         )
         
         # Build response
@@ -337,7 +336,7 @@ async def get_predictive_analysis(request: PredictiveAnalysisRequest) -> Predict
             created_at=predictive_analysis.created_at
         )
         
-        logger.info(f"✅ Predictive analysis completed for user {request.user_id} ({request.prediction_horizon} day horizon)")
+        logger.info(f"✅ Predictive analysis completed for user {current_user.id} ({request.prediction_horizon} day horizon)")
         return response
         
     except HTTPException:

@@ -26,10 +26,49 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor for error handling and token refresh
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      // Try to refresh token
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (refreshToken) {
+        try {
+          const response = await fetch('http://localhost:8000/api/v1/auth/refresh', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              refresh_token: refreshToken
+            }),
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            localStorage.setItem('auth_token', data.access_token);
+            localStorage.setItem('refresh_token', data.refresh_token);
+            
+            // Retry original request with new token
+            originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+            return api(originalRequest);
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+        }
+      }
+      
+      // If refresh fails, logout
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
+      window.location.href = '/login';
+    }
+    
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
